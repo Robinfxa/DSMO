@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../links/app_links.dart';
 import '../notify/notify_channel.dart' show NotifyTap;
@@ -155,6 +156,9 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
       return;
     }
     _key = key;
+    // Opaque, in the app's own colour: a page that fails to draw shows as an empty
+    // page (or its error text) instead of a black screen.
+    final background = Theme.of(context).scaffoldBackgroundColor;
     final old = _proxy;
     _proxy = null;
     _bridge?.dispose();
@@ -179,7 +183,15 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
       );
       _bridge = bridge;
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      await controller.setBackgroundColor(Colors.transparent);
+      await controller.setBackgroundColor(background);
+      // chrome://inspect works on the installed app (HANDOFF.md › 装好后检查一遍).
+      if (controller.platform is AndroidWebViewController) await AndroidWebViewController.enableDebugging(true);
+      // The page's own errors reach `adb logcat` (tag flutter, prefix dsmo-page).
+      await controller.setOnConsoleMessage((m) {
+        if (m.level == JavaScriptLogLevel.error || m.level == JavaScriptLogLevel.warning) {
+          debugPrint('dsmo-page ${m.level.name}: ${m.message}');
+        }
+      });
       await controller.addJavaScriptChannel('ApiDemoNative', onMessageReceived: (m) => unawaited(bridge.handle(m.message)));
       await controller.setNavigationDelegate(
         NavigationDelegate(
@@ -191,6 +203,16 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
             final uri = Uri.tryParse(req.url);
             if (uri != null && uri.scheme == 'dshgo') ref.read(appLinksProvider).add(uri);
             return NavigationDecision.prevent;
+          },
+          onWebResourceError: (error) {
+            // No URL here: the first one carries the proxy's per-launch secret.
+            debugPrint('dsmo-page load error ${error.errorCode} ${error.errorType?.name} mainFrame=${error.isForMainFrame}: ${error.description}');
+            if ((error.isForMainFrame ?? false) && mounted && identical(_bridge, bridge)) {
+              setState(() => _error = '${error.description}（${error.errorCode}）');
+            }
+          },
+          onHttpError: (error) {
+            debugPrint('dsmo-page http ${error.response?.statusCode} ${error.request?.uri.path}');
           },
           onPageFinished: (_) {
             if (_pageSession case final id?) unawaited(bridge.event('openSession', {'sessionId': id}));

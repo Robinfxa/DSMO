@@ -27,6 +27,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 
 /// Where the page's assets live in the Flutter bundle.
@@ -268,6 +269,8 @@ class ApiDemoProxy {
   }
 
   Future<void> _fail(HttpRequest r, int status, String message) async {
+    // Path only: /__enter's query is the per-launch secret.
+    debugPrint('dsmo-proxy $status ${r.method} ${r.uri.path}: $message');
     try {
       r.response
         ..statusCode = status
