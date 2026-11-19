@@ -1,0 +1,50 @@
+From de1318a75d7dd79e6ecc7754bbdcc397225e6da1 Mon Sep 17 00:00:00 2001
+From: DSMO <dsmo@users.noreply.github.com>
+Date: Thu, 19 Nov 2026 04:20:26 -0500
+Subject: [PATCH] DSMO: startup steps and Dart errors in logcat
+
+A launch that never got past the splash on a Galaxy S21 left nothing
+to read in logcat: StartupTrace prints only on iOS, and AppErrorLog
+keeps errors in memory. Both now also go to debugPrint (tag flutter),
+the trace once per distinct step.
+---
+ app/lib/diagnostics/app_error_log.dart | 2 ++
+ app/lib/launch/startup_trace.dart      | 7 +++++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/app/lib/diagnostics/app_error_log.dart b/app/lib/diagnostics/app_error_log.dart
+index 563ed1e..758cada 100644
+--- a/app/lib/diagnostics/app_error_log.dart
++++ b/app/lib/diagnostics/app_error_log.dart
+@@ -55,6 +55,8 @@ class AppErrorLog {
+     if (_recording) return;
+     _recording = true;
+     try {
++      // DSMO: release builds print nothing of these; logcat should have them.
++      debugPrint('[dsh-error] ${source.name}: ${_text(error, 400)}\n${_text(stack, 1200)}');
+       final record = AppErrorRecord(
+         at: _clock(),
+         source: source,
+diff --git a/app/lib/launch/startup_trace.dart b/app/lib/launch/startup_trace.dart
+index 0eeccbe..8b6a573 100644
+--- a/app/lib/launch/startup_trace.dart
++++ b/app/lib/launch/startup_trace.dart
+@@ -19,8 +19,15 @@ abstract final class StartupTrace {
+ 
+   static bool _over = false;
+   static String? _last;
++  static String? _lastLogged;
+ 
+   static void mark(String stage) {
++    // DSMO: the steps reach logcat on Android too (a launch that never gets past the
++    // splash left nothing to read there).
++    if (!_on && stage != _lastLogged) {
++      _lastLogged = stage;
++      debugPrint('[dsh-startup] $stage');
++    }
+     if (!_on || _over || stage == _last) return;
+     _last = stage;
+     debugPrint('[dsh-startup] $stage');
+-- 
+2.50.1 (Apple Git-155)
+
