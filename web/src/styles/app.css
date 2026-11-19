@@ -341,7 +341,8 @@ button.lrow-main:hover .lrow-title { color: var(--dsw-alias-brand-text); }
 .read-list li::before { content: counter(n); flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; background: var(--dsw-specific-selector); font-size: 12px; text-align: center; color: var(--dsw-alias-label-secondary); }
 .s-results { display: flex; flex-direction: column; min-height: 120px; max-height: 320px; margin: 12px -8px 0; overflow-y: auto; }
 .toast.has-act { display: flex; align-items: center; gap: 12px; pointer-events: auto; text-align: left; }
-.toast-act { flex-shrink: 0; padding: 0; border: none; background: transparent; font-weight: 500; color: var(--dsw-static-blue-400); }
+.toast-act { flex-shrink: 0; min-height: 36px; margin: -8px -10px -8px 0; padding: 0 10px; border: none; border-radius: 10px; background: transparent; font: inherit; font-weight: 500; color: var(--dsw-static-blue-400); cursor: pointer; }
+.toast-act:active { background: rgba(255, 255, 255, .12); }
 
 /* ---------- 全部功能：其余页面 ---------- */
 .dock { position: relative; }

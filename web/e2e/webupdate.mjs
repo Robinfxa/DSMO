@@ -68,6 +68,17 @@ await row('使用新界面').click();
 await page.waitForTimeout(300);
 check(await page.evaluate(() => window.__applied === true), 'switches to it');
 
+// the prompt after an automatic download: its 刷新 can be tapped, and it stays long enough to
+await page.evaluate(() => ((window.__applied = false), window.__apiDemo.event('webUpdate.ready', { version: 'fed9876' })));
+await page.waitForTimeout(5000);
+check(await page.isVisible('.toast .toast-act'), 'prompt still there after 5 s');
+const box = await page.locator('.toast .toast-act').boundingBox();
+check(box && box.height >= 36, `刷新 is big enough to tap (${box && Math.round(box.height)} px)`);
+await shot('03-prompt');
+await page.tap('.toast .toast-act');
+await page.waitForTimeout(300);
+check(await page.evaluate(() => window.__applied === true), 'tapping 刷新 switches');
+
 await browser.close();
 if (errors.length) {
   console.error(errors.join('\n'));

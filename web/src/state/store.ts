@@ -667,7 +667,7 @@ export function showToast(text: string, action?: string, onAction?: () => void) 
   toast.value = t;
   toastTimer = setTimeout(() => {
     if (toast.value?.id === t.id) toast.value = null;
-  }, action ? 4000 : 1800);
+  }, action ? 8000 : 1800); // time to read it and reach the button
 }
 
 /** Phone layout: full-screen pages (设置 and its sub-pages, 搜索, 账号). */

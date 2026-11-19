@@ -107,7 +107,7 @@ export function App() {
           <Overlays />
         </div>
         {toast.value && (
-          <div class="toast m-toast" role="status" key={toast.value.id}>
+          <div class={`toast m-toast ${toast.value.action ? 'has-act' : ''}`} role="status" key={toast.value.id}>
             {toast.value.text}
             {toast.value.action && (
               <button
