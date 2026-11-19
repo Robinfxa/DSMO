@@ -121,7 +121,7 @@ export function SkillsPage() {
                         {s.name}
                         {plugin && <em class="tm-badge">来自「{plugin}」</em>}
                       </div>
-                      <div class="plg-row-s">{s.description || `${Object.keys(s.files).length} 个文件`}</div>
+                      <div class="plg-row-s sk-clamp">{s.description || `${Object.keys(s.files).length} 个文件`}</div>
                     </div>
                     <div class="plg-row-e">
                       <UseButton name={s.name} />
@@ -164,10 +164,10 @@ export function SkillsPage() {
   );
 }
 
-/** A skill this page can't edit: what it does, where it comes from, and 使用. */
+/** A skill this page can't edit: what it does, where it comes from, and 使用; tap for all of it. */
 function SkillRow({ s }: { s: SkillInfo }) {
   return (
-    <div class="plg-row static">
+    <div class="plg-row" role="button" tabIndex={0} onClick={() => openPage(`skill-info:${s.name}`)}>
       <span class="plg-tile">
         <MIc n="bolt" />
       </span>
@@ -176,10 +176,46 @@ function SkillRow({ s }: { s: SkillInfo }) {
           {s.name}
           {s.source && SOURCE[s.source] && <em class="tm-badge">{SOURCE[s.source]}</em>}
         </div>
-        <div class="plg-row-s wrap">{s.description}</div>
+        <div class="plg-row-s sk-clamp">{s.description}</div>
       </div>
       <div class="plg-row-e">
         <UseButton name={s.name} />
+      </div>
+    </div>
+  );
+}
+
+/** 查看详情 for a built-in or project skill (or one on a remote host): read-only. */
+export function SkillInfoPage({ name }: { name: string }) {
+  const [data, setData] = useState<Listing | null>(listing.value);
+  useEffect(() => {
+    if (!data?.engine?.some((x) => x.name === name)) load().then(setData, () => setData(listing.value ?? { mine: null, engine: null }));
+  }, [name]);
+  const s = data?.engine?.find((x) => x.name === name);
+  if (!data) return <div class="plg-empty-line">正在读取…</div>;
+  if (!s) return <div class="plg-empty-line">这个技能已经不在了</div>;
+  const where = s.source === 'user' ? '这台主机上你自己的技能' : s.source === 'project' ? '当前工作区里的技能' : s.source === 'plugin' ? '引擎插件带的技能' : '引擎内置的技能';
+  return (
+    <div class="plg">
+      <div class="plg-group sk-form">
+        <div class="sk-field">
+          <span>名字</span>
+          <code class="sk-name">/{s.name}</code>
+        </div>
+        <div class="sk-field">
+          <span>什么时候用</span>
+          <p class="sk-text">{s.description || '（没有写）'}</p>
+        </div>
+        <div class="sk-field">
+          <span>来源</span>
+          <p class="sk-text">{where}，这里只能查看和使用。</p>
+          {s.path && <code class="sk-path">{s.path}</code>}
+        </div>
+      </div>
+      <div class="plg-actions">
+        <button class="plg-btn pri" type="button" onClick={() => useSkill(s.name)}>
+          在对话里用
+        </button>
       </div>
     </div>
   );

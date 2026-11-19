@@ -25,7 +25,7 @@ import { AccessPage, EnginePage, HostEditPage, HostsPage, NotifySettingsPage, Ph
 import { A11yRestorePage, AndroidShellPage, PhoneDndPage, PhoneLogPage } from './host/phone';
 import { PresetsPage, TeamPage } from './agents';
 import { PersonaPage } from './persona';
-import { SkillEditPage, SkillsPage } from './skills';
+import { SkillEditPage, SkillInfoPage, SkillsPage } from './skills';
 import { imported } from '../../history/imported';
 import { exportConversations, exportFileName } from '../../history/export';
 import { ShareImportPage, ShareOpenPage, ShareOutPage, ShareProfilePage } from '../../share/pages';
@@ -108,6 +108,10 @@ export const PAGES: Record<string, PageDef> = {
 /** Pages with a parameter: `plugin:<id>` (detail) and `plugin-manage:<id>` (its 管理 page). */
 function pageDef(id: string | undefined): PageDef | undefined {
   if (!id) return undefined;
+  if (id.startsWith('skill-info:')) {
+    const name = id.slice('skill-info:'.length);
+    return { title: name, body: () => <SkillInfoPage name={name} /> };
+  }
   if (id.startsWith('skill:')) {
     const name = id.slice('skill:'.length);
     return { title: name === 'new' ? '新建技能' : name, body: () => <SkillEditPage name={name} /> };

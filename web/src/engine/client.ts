@@ -34,6 +34,8 @@ export interface SkillInfo {
   name: string;
   description: string;
   source?: string;
+  /** Its SKILL.md on the host, when the engine says. */
+  path?: string;
 }
 export interface JobInfo {
   jobId: string;
@@ -622,7 +624,7 @@ export class DshClient {
     return list(v.skills)
       .map((s) => obj(s))
       .filter((s) => str(s.name))
-      .map((s) => ({ name: str(s.name)!, description: str(s.description) ?? '', source: str(s.source) ?? str(s.scope) }));
+      .map((s) => ({ name: str(s.name)!, description: str(s.description) ?? '', source: str(s.source) ?? str(s.scope), path: str(s.path) }));
   }
   watchJobs(sessionId: string, onJobs: (jobs: JobInfo[]) => void): () => void {
     const s = this.mux.open(

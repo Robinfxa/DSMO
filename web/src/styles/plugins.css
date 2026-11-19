@@ -508,3 +508,6 @@ body:not(.is-m) .plg-card { width: calc((100% - 24px) / 3); }
 .sk-field .sk-desc { min-height: 0; }
 .sk-field .ske-body { min-height: 260px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 14px; line-height: 21px; }
 .sk-name { font-size: 15px; }
+.plg-row-s.sk-clamp { display: -webkit-box; overflow: hidden; white-space: normal; text-overflow: clip; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.sk-text { margin: 0; color: var(--c-fg); font-size: 15px; line-height: 23px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sk-path { color: var(--c-faint); font-size: 12px; line-height: 17px; overflow-wrap: anywhere; }

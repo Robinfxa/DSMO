@@ -41,8 +41,24 @@ await page.click('.m-frow:has-text("技能")');
 await page.waitForTimeout(700);
 check(JSON.stringify(await names('我的技能')) === '["weekly-report"]', 'mine: the user skill');
 const builtIn = await names('内置和项目里的');
-check(builtIn.includes('pdf') && builtIn.includes('xlsx') && !builtIn.includes('weekly-report'), `built-in, read-only: ${builtIn.join(' ')}`);
+check(builtIn.includes('pdf') && builtIn.includes('docx') && !builtIn.includes('weekly-report'), `built-in, read-only: ${builtIn.join(' ')}`);
 await shot('01-list');
+
+// a long description: two lines in the list, all of it on 查看详情
+const rowH = await page.$eval('.plg-row:has-text("docx") .plg-row-s', (e) => e.getBoundingClientRect().height);
+check(rowH < 40, `long description clamps to two lines in the list (${Math.round(rowH)} px)`);
+await page.click('.plg-row:has-text("docx")');
+await page.waitForTimeout(450);
+check((await page.textContent('.sk-text')).includes('只要 PDF 或纯文本时不要用'), '详情 shows the whole description');
+check((await page.textContent('.sk-path')) === '/root/.dsh/engine/skills/docx/SKILL.md', '详情 shows where it lives');
+await shot('01b-info');
+await page.click('.plg-btn.pri:has-text("在对话里用")');
+await page.waitForTimeout(400);
+check((await page.inputValue('#input')) === '/docx ', '详情 › 在对话里用');
+await page.click('[aria-label="打开边栏"]');
+await page.waitForTimeout(400);
+await page.click('.m-frow:has-text("技能")');
+await page.waitForTimeout(600);
 
 // edit and save
 await page.click('.plg-row:has-text("weekly-report")');

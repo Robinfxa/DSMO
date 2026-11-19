@@ -1024,5 +1024,12 @@ function EFFORTS() {
 const SKILLS = [
   { name: 'pdf', description: '读取、合并、拆分 PDF', source: 'bundled' },
   { name: 'xlsx', description: '生成和整理表格', source: 'bundled' },
+  {
+    name: 'docx',
+    description:
+      '创建、读取和修改 Word 文档（.docx）：从零写报告和信件，按模板填内容，修改已有文档时保留原来的格式，处理修订和批注，插入表格、图片、页眉页脚和目录。用户提到 Word、.docx、合同、报告排版，或者要一份可以打印、发给别人改的文档时使用；只要 PDF 或纯文本时不要用。',
+    source: 'bundled',
+    path: '/root/.dsh/engine/skills/docx/SKILL.md',
+  },
   { name: 'weekly-report', description: '把一周的提交整理成周报', source: 'project' },
 ];
