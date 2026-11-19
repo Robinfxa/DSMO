@@ -71,3 +71,39 @@ export function optionsOf(p: ApiDemoManifest): { key: string; title: string; sub
   for (const k of p.layout?.hide ?? []) out.push({ key: `hide:${k}`, title: HIDE_LABEL[k] ?? k, sub: '' });
   return out;
 }
+
+/** 发现 › 精选, in this order (those in the catalog). */
+export const FEATURED = ['@api-demo/quick-prompts', '@api-demo/usage-today', '@api-demo/skin-midnight', '@api-demo/skill-code-review', '@api-demo/auto-daily-plan'];
+
+/** Entries a category shelf shows on 发现 before 全部 ›. */
+export const SHELF = 3;
+
+/** Search over what a person would type: name, what it does, its category, author, contained skills and tasks. Every word must match. */
+export function matches(p: ApiDemoManifest, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = [
+    p.title,
+    p.summary,
+    p.description,
+    catInfo(categoryOf(p)).title,
+    p.official ? '官方' : p.author,
+    p.id,
+    ...(p.skills ?? []).map((k) => k.name),
+    ...(p.schedules ?? []).map((t) => t.title),
+    ...(p.slots ?? []).map((x) => x.title),
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase();
+  return words.every((w) => hay.includes(w));
+}
+
+/** How well a match matches, for ordering results: every word in the name, then in name + summary or category, then anywhere. */
+export function relevance(p: ApiDemoManifest, query: string): number {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const has = (text: string) => words.every((w) => text.toLowerCase().includes(w));
+  if (has(p.title)) return 3;
+  if (has(`${p.title}\n${p.summary}\n${catInfo(categoryOf(p)).title}`)) return 2;
+  return 1;
+}

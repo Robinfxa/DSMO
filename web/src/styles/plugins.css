@@ -471,3 +471,29 @@ body.is-m .imp-bar > span { background: var(--m-accent); }
 .tm-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 28px; text-align: center; }
 .tm-empty-t { font-size: 17px; font-weight: 600; }
 .tm-empty-s { color: var(--c-sub); font-size: 14px; line-height: 21px; }
+
+/* 插件 › 发现: search, category chips, 精选 cards, category shelves */
+.plg-find { margin: 6px 0 4px; }
+.plg-find input::-webkit-search-cancel-button { display: none; }
+.plg-find-x { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-right: -6px; padding: 0; border: 0; border-radius: 14px; background: none; color: var(--c-sub); cursor: pointer; }
+.plg-find-x svg { width: 16px; height: 16px; }
+.plg-chips { display: flex; gap: 8px; margin: 10px -16px 0; padding: 2px 16px; overflow-x: auto; scrollbar-width: none; }
+.plg-chips::-webkit-scrollbar { display: none; }
+.plg-chips button { flex-shrink: 0; height: 34px; padding: 0 14px; border: 0; border-radius: 17px; background: var(--c-fill); color: var(--c-fg); font: inherit; font-size: 14px; cursor: pointer; }
+body:not(.is-m) .plg-chips button { box-shadow: inset 0 0 0 1px var(--c-line); background: none; }
+.plg-chips button[aria-selected="true"], body:not(.is-m) .plg-chips button[aria-selected="true"] { background: var(--c-fg); color: var(--c-card); box-shadow: none; }
+.plg-cards { display: flex; gap: 12px; margin: 0 -16px; padding: 0 16px 4px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 16px; scrollbar-width: none; }
+.plg-cards::-webkit-scrollbar { display: none; }
+.plg-card { display: flex; flex-direction: column; flex-shrink: 0; width: 232px; padding: 16px; border-radius: var(--c-radius); background: var(--c-card); scroll-snap-align: start; cursor: pointer; }
+body:not(.is-m) .plg-card { box-shadow: inset 0 0 0 1px var(--c-line); }
+.plg-card:active { background: var(--c-fill); }
+.plg-card-h { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.plg-card-h .plg-get:not(.done) { height: 30px; padding: 0 14px; border-radius: 15px; background: var(--c-fill); font-weight: 500; }
+.plg-card-t { font-size: 17px; font-weight: 600; line-height: 24px; }
+.plg-card-s { display: -webkit-box; flex: 1; overflow: hidden; margin-top: 4px; color: var(--c-sub); font-size: 13px; line-height: 19px; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.plg-card-c { margin-top: 10px; color: var(--c-faint); font-size: 12px; }
+.plg-shelf-h { display: flex; align-items: center; justify-content: space-between; }
+body:not(.is-m) .plg-cards { flex-wrap: wrap; margin: 0; padding: 0; overflow: visible; }
+body:not(.is-m) .plg-card { width: calc((100% - 24px) / 3); }
+.plg-more { display: inline-flex; align-items: center; gap: 2px; height: 32px; margin-bottom: 4px; padding: 0 6px 0 10px; border: 0; background: none; color: var(--c-accent); font: inherit; font-size: 14px; cursor: pointer; }
+.plg-more svg { width: 16px; height: 16px; }

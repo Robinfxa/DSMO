@@ -30,7 +30,7 @@ import {
   trialSkin,
   type ApiDemoManifest,
 } from './frontend';
-import { CATEGORIES, PERM_INFO, TIER_INFO, catInfo, categoryOf, hasToggle, optionsOf } from './meta';
+import { CATEGORIES, FEATURED, PERM_INFO, SHELF, TIER_INFO, catInfo, categoryOf, hasToggle, matches, optionsOf, relevance, type Category } from './meta';
 import { MARKET_TIER } from './official';
 import { AutomationPreview, EnginePreview, LayoutPreview, SkillPreview, SkinPreview, SkinSwatch, ToolsPreview, themeNow } from './preview';
 import { describeTiming, runSchedule, scheduleState, setScheduleTime, skillsInstallable } from './automation';
@@ -127,9 +127,17 @@ function Row({ p, end }: { p: ApiDemoManifest; end?: preact.ComponentChildren })
 }
 
 // ---------------------------------------------------------------- 插件 page
+//
+// A market page that stays short however many plugins there are: a search box,
+// category chips, then (under 全部) 精选 cards and one shelf per category with at
+// most SHELF entries and 全部 ›. A category or a search shows a flat list.
+
+const query = signal('');
+const cat = signal<Category | 'all'>('all');
 
 export function PluginsPage() {
   const mine = installed.value;
+  const q = query.value;
   return (
     <div class="plg">
       <div class="plg-seg" role="tablist">
@@ -144,27 +152,128 @@ export function PluginsPage() {
           </button>
         ))}
       </div>
+      <label class="hist-find plg-find">
+        <MIc n="search" />
+        <input type="search" placeholder={tab.value === 'discover' ? '搜索插件、技能、皮肤' : '搜索已安装的插件'} value={q} onInput={(e) => (query.value = (e.target as HTMLInputElement).value)} enterKeyHint="search" />
+        {q && (
+          <button class="plg-find-x" type="button" aria-label="清除搜索" onClick={() => (query.value = '')}>
+            <MIc n="x" />
+          </button>
+        )}
+      </label>
       <Banners />
       {tab.value === 'discover' ? <Discover /> : <Installed />}
     </div>
   );
 }
 
+function Chips({ plugins }: { plugins: ApiDemoManifest[] }) {
+  const present = CATEGORIES.filter((c) => plugins.some((p) => categoryOf(p) === c.id));
+  if (present.length < 2) return null;
+  return (
+    <div class="plg-chips" role="tablist" aria-label="分类">
+      {[{ id: 'all' as const, title: '全部' }, ...present].map((c) => (
+        <button type="button" role="tab" key={c.id} aria-selected={cat.value === c.id} onClick={() => (cat.value = c.id)}>
+          {c.title}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function List({ plugins, end }: { plugins: ApiDemoManifest[]; end?: (p: ApiDemoManifest) => preact.ComponentChildren }) {
+  return (
+    <div class="plg-group">
+      {plugins.map((p) => (
+        <Row p={p} key={p.id} end={end?.(p)} />
+      ))}
+    </div>
+  );
+}
+
+function NoMatch({ q }: { q: string }) {
+  return (
+    <div class="plg-empty">
+      <span>没有找到「{q.trim()}」</span>
+      <button class="plg-text-btn" type="button" onClick={() => (query.value = '')}>
+        清除搜索
+      </button>
+    </div>
+  );
+}
+
+function FeatureCard({ p }: { p: ApiDemoManifest }) {
+  return (
+    <div class="plg-card" role="button" tabIndex={0} onClick={() => openPlugin(p.id)} onKeyDown={(e) => e.key === 'Enter' && openPlugin(p.id)}>
+      <div class="plg-card-h">
+        <PluginTile p={p} size="lg" />
+        <div class="plg-row-e" onClick={(e) => e.stopPropagation()}>
+          <GetButton p={p} />
+        </div>
+      </div>
+      <div class="plg-card-t">{p.title}</div>
+      <div class="plg-card-s">{p.summary}</div>
+      <div class="plg-card-c">{catInfo(categoryOf(p)).title}</div>
+    </div>
+  );
+}
+
 function Discover() {
   const all = catalogPlugins.value;
+  const q = query.value.trim();
+  if (q) {
+    const found = all.filter((p) => matches(p, q)).sort((a, b) => relevance(b, q) - relevance(a, q));
+    return found.length ? (
+      <section class="plg-sec">
+        <h2 class="plg-sec-t">{found.length} 个结果</h2>
+        <List plugins={found} />
+      </section>
+    ) : (
+      <NoMatch q={q} />
+    );
+  }
+  const c = cat.value;
+  if (c !== 'all') {
+    const list = all.filter((p) => categoryOf(p) === c);
+    return (
+      <>
+        <Chips plugins={all} />
+        <section class="plg-sec">
+          <h2 class="plg-sec-t">{catInfo(c).desc}</h2>
+          {list.length ? <List plugins={list} /> : <div class="plg-group"><div class="plg-empty-line">暂时没有。</div></div>}
+        </section>
+      </>
+    );
+  }
+  const featured = FEATURED.map((id) => all.find((p) => p.id === id)).filter((p): p is ApiDemoManifest => !!p);
   return (
     <>
-      {CATEGORIES.map((c) => {
-        const list = all.filter((p) => categoryOf(p) === c.id);
+      <Chips plugins={all} />
+      {featured.length > 0 && (
+        <section class="plg-sec">
+          <h2 class="plg-sec-t">精选</h2>
+          <div class="plg-cards">
+            {featured.map((p) => (
+              <FeatureCard p={p} key={p.id} />
+            ))}
+          </div>
+        </section>
+      )}
+      {CATEGORIES.map((ci) => {
+        const list = all.filter((p) => categoryOf(p) === ci.id);
+        if (!list.length) return null;
         return (
-          <section class="plg-sec" key={c.id}>
-            <h2 class="plg-sec-t">{c.title}</h2>
-            <div class="plg-group">
-              {list.map((p) => (
-                <Row p={p} key={p.id} />
-              ))}
-              {!list.length && <div class="plg-empty-line">{c.id === 'engine' ? '暂时没有。主机上已装的引擎插件在「已安装」里。' : '暂时没有。'}</div>}
+          <section class="plg-sec" key={ci.id}>
+            <div class="plg-shelf-h">
+              <h2 class="plg-sec-t">{ci.title}</h2>
+              {list.length > SHELF && (
+                <button class="plg-more" type="button" onClick={() => (cat.value = ci.id)}>
+                  全部 {list.length}
+                  <MIc n="chevron" />
+                </button>
+              )}
             </div>
+            <List plugins={list.slice(0, SHELF)} />
           </section>
         );
       })}
@@ -174,12 +283,16 @@ function Discover() {
 }
 
 function Installed() {
-  const mine = installed.value.map((x) => findPlugin(x.id)).filter((p): p is ApiDemoManifest => !!p);
-  const fromMarket = new Set(mine.map((p) => p.engine?.package).filter(Boolean));
-  const host = contributions.value.filter((h) => !fromMarket.has(h.pkg));
+  const q = query.value.trim();
+  const all = installed.value.map((x) => findPlugin(x.id)).filter((p): p is ApiDemoManifest => !!p);
+  const mine = all.filter((p) => matches(p, q));
+  const fromMarket = new Set(all.map((p) => p.engine?.package).filter(Boolean));
+  const host = contributions.value.filter((h) => !fromMarket.has(h.pkg) && (!q || `${h.title}\n${h.pkg}`.toLowerCase().includes(q.toLowerCase())));
+  const toggle = (p: ApiDemoManifest) => (hasToggle(p) ? <Switch on={isEnabled(p.id)} label={`启用${p.title}`} onChange={(v) => void setPluginEnabled(p.id, v)} /> : <MIc n="chevron" />);
+  if (q && !mine.length && !host.length) return <NoMatch q={q} />;
   return (
     <>
-      {!mine.length && (
+      {!all.length && !q && (
         <div class="plg-empty">
           <span>还没有装插件</span>
           <button class="plg-text-btn" type="button" onClick={() => (tab.value = 'discover')}>
@@ -193,48 +306,42 @@ function Installed() {
         return (
           <section class="plg-sec" key={c.id}>
             <h2 class="plg-sec-t">{c.title}</h2>
-            <div class="plg-group">
-              {list.map((p) => (
-                <Row
-                  key={p.id}
-                  p={p}
-                  end={hasToggle(p) ? <Switch on={isEnabled(p.id)} label={`启用${p.title}`} onChange={(v) => void setPluginEnabled(p.id, v)} /> : <MIc n="chevron" />}
-                />
-              ))}
-            </div>
+            <List plugins={list} end={toggle} />
           </section>
         );
       })}
-      <section class="plg-sec">
-        <h2 class="plg-sec-t">主机上的引擎插件</h2>
-        <div class="plg-group">
-          {host.map((h) => (
-            <div class="plg-row static" key={h.pkg}>
-              <span class="plg-tile">
-                <MIc n="server" />
-              </span>
-              <div class="plg-row-m">
-                <div class="plg-row-t">{h.title}</div>
-                <div class="plg-row-s">
-                  {[
-                    h.composerActions.length && `${h.composerActions.length} 个输入框按钮`,
-                    h.messageActions.length && `${h.messageActions.length} 个消息动作`,
-                    h.strips.length && '状态条',
-                    h.panels.length && `${h.panels.length} 个面板`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ') || h.pkg}
+      {(!q || host.length > 0) && (
+        <section class="plg-sec">
+          <h2 class="plg-sec-t">主机上的引擎插件</h2>
+          <div class="plg-group">
+            {host.map((h) => (
+              <div class="plg-row static" key={h.pkg}>
+                <span class="plg-tile">
+                  <MIc n="server" />
+                </span>
+                <div class="plg-row-m">
+                  <div class="plg-row-t">{h.title}</div>
+                  <div class="plg-row-s">
+                    {[
+                      h.composerActions.length && `${h.composerActions.length} 个输入框按钮`,
+                      h.messageActions.length && `${h.messageActions.length} 个消息动作`,
+                      h.strips.length && '状态条',
+                      h.panels.length && `${h.panels.length} 个面板`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || h.pkg}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-          {!host.length && <div class="plg-empty-line">这台主机没有带界面的引擎插件。</div>}
-          <button class="plg-link" type="button" onClick={() => openFeature('cordis')}>
-            <span>在主机上安装和管理引擎插件</span>
-            <MIc n="chevron" />
-          </button>
-        </div>
-      </section>
+            ))}
+            {!host.length && <div class="plg-empty-line">这台主机没有带界面的引擎插件。</div>}
+            <button class="plg-link" type="button" onClick={() => openFeature('cordis')}>
+              <span>在主机上安装和管理引擎插件</span>
+              <MIc n="chevron" />
+            </button>
+          </div>
+        </section>
+      )}
     </>
   );
 }
