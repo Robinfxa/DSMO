@@ -28,7 +28,13 @@ dsh="$work/dsh-go"
 
 echo "→ dsh-Go @ ${base:0:7}"
 if [ ! -d "$dsh/.git" ]; then
-  git clone "${DSH_GO_REPO:-https://github.com/ccch1mneyyy/dsh-go.git}" "$dsh"
+  # The folder may already hold restored caches (CI restores runtime/.cache into it),
+  # which `git clone` refuses: clone beside it and move the repository in.
+  rm -rf "$dsh.clone"
+  git clone --no-checkout "${DSH_GO_REPO:-https://github.com/ccch1mneyyy/dsh-go.git}" "$dsh.clone"
+  mkdir -p "$dsh"
+  mv "$dsh.clone/.git" "$dsh/.git"
+  rm -rf "$dsh.clone"
 fi
 cd "$dsh"
 if git log -1 --format=%s | grep -qE '^(API Demo|DSMO): overlay files'; then
