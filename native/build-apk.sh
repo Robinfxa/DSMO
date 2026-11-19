@@ -54,6 +54,10 @@ if [ "${SKIP_TOOLCHAIN:-0}" != 1 ]; then
   bash tooling/setup-toolchain.sh
   # shellcheck disable=SC1091
   source tooling/env.sh
+  # dsh-Go's tawcroot build takes ANDROID_NDK_HOME before the SDK it was just given, and CI
+  # images preset it to their own NDK (another version; on GitHub's runners we also delete it
+  # for disk space). The toolchain above installed the pinned NDK under \$ANDROID_HOME/ndk.
+  unset ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK ANDROID_NDK_LATEST_HOME
 fi
 flutter --version | head -1
 java -version 2>&1 | head -1
