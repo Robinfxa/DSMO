@@ -47,6 +47,15 @@ jobs:
             build-apk/dsh-go/runtime/.cache
           key: dshgo-${{ hashFiles('native/BASE') }}
 
+      # One debug signing key for every build: without it each runner makes its own, and a new
+      # APK can't install over the last one (the phone has to uninstall it first). It is the
+      # standard Android debug key (password "android"), not a release key.
+      - name: Keep the debug signing key between builds
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: dsmo-debug-keystore-v1
+
       - name: Pre-download Flutter from official CDN
         run: |
           mkdir -p ~/dev/.downloads
