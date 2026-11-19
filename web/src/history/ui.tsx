@@ -11,7 +11,7 @@ import { backPage, confirm, draft, drawerOpen, errText, newChat, openPage, pages
 import { fmtTime } from '../ui/common';
 import { renderMarkdown } from '../ui/md';
 import { MIc } from '../ui/mobile/MIc';
-import { SOURCE_NAME, clearImported, deleteImported, getImported, imported, saveImported, toMarkdown, type ImportedChat } from './imported';
+import { SOURCE_NAME, clearImported, deleteImported, getImported, imported, isTitlesOnlyExport, saveImported, toMarkdown, type ImportedChat } from './imported';
 import { importRun, nativeImportSupported, previewImport, runImport, stopImport, type ChatFeed, type ImportPreview } from './native';
 import { readAllChats } from './stream';
 
@@ -41,8 +41,10 @@ export async function importHistory() {
     const p = await previewImport(each(true));
     if (shown >= 0) toast.value = null;
     if (!p.count) {
+      // DSMO's old export held titles only: say so instead of 「没有对话」.
+      const old = files.length === 1 && files[0].size < 4 * 1024 * 1024 && (await files[0].text().then((t) => isTitlesOnlyExport(JSON.parse(t))).catch(() => false));
       release();
-      return showToast('没有在文件里找到对话');
+      return showToast(old ? '这是旧版导出的文件，只有标题没有内容。请在「导出所有历史对话」重新导出一次再导入' : '没有在文件里找到对话');
     }
     const sources = p.sources.map((s) => SOURCE_NAME[s]).join('、');
     const unread = unreadable ? `另有 ${unreadable} 项读不出来。` : '';

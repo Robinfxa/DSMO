@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 import { parseFiles } from '../src/history/stream';
+import { isTitlesOnlyExport } from '../src/history/imported';
 import { source } from './stream-source';
 
 /** One conversation file as chat.deepseek.com exports it. */
@@ -26,6 +27,7 @@ describe('DeepSeek website export (chat_sessions/<id>.json)', () => {
   const zip = zipSync({
     'deepseek_data/chat_session_index.json': strToU8(JSON.stringify([{ id: 'abc', updated_at: '2026-03-02T10:01:05+08:00' }])),
     'deepseek_data/user.json': strToU8(JSON.stringify({ name: 'x' })),
+    'deepseek_data/manifest.json': strToU8(JSON.stringify({ export_format_version: 1 })),
     'deepseek_data/chat_sessions/abc.json': strToU8(JSON.stringify(session('  早安  \n 闲聊 '))),
     'deepseek_data/chat_sessions/def.json': strToU8(JSON.stringify(session('第二个'))),
   });
@@ -72,5 +74,14 @@ describe('DSMO export read back', () => {
     expect(chats).toHaveLength(1);
     expect(chats[0].id).toBe('api-demo:s-1');
     expect(chats[0].messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+  });
+});
+
+describe('DSMO’s old titles-only export', () => {
+  it('is recognised, so the import can say to export again', () => {
+    expect(isTitlesOnlyExport([{ id: 's1', title: '猫', updatedAt: 1 }, { id: 's2', title: '', updatedAt: 2 }])).toBe(true);
+    expect(isTitlesOnlyExport([{ sessionId: 's1', header: {}, events: [] }])).toBe(false);
+    expect(isTitlesOnlyExport([{ id: 'c', title: 't', updatedAt: 1, messages: [] }])).toBe(false);
+    expect(isTitlesOnlyExport({ id: 's1', updatedAt: 1 })).toBe(false);
   });
 });

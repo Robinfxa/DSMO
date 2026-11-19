@@ -239,8 +239,19 @@ export function parseJson(v: unknown, file?: string): ImportedChat[] {
   return out;
 }
 
+/**
+ * DSMO's export from before it wrote messages: `[{id, title, updatedAt}]`, titles only.
+ * Nothing in it can be imported; the person needs to export again.
+ */
+export function isTitlesOnlyExport(v: unknown): boolean {
+  return Array.isArray(v) && v.length > 0 && v.every((x) => {
+    const o = obj(x);
+    return typeof o.id === 'string' && 'updatedAt' in o && !('messages' in o) && !('events' in o) && !('mapping' in o);
+  });
+}
+
 /** Files in an export that hold no conversations (DeepSeek's index and account files): skipped, not counted as unreadable. */
-export const NOT_CONVERSATIONS = /(?:^|\/)(?:chat_session_index|user|users|shared_conversations|message_feedback|model_comparisons)\.json$/i;
+export const NOT_CONVERSATIONS = /(?:^|\/)(?:chat_session_index|manifest|user|users|shared_conversations|message_feedback|model_comparisons)\.json$/i;
 const isConversationList = (v: unknown) => Array.isArray(obj(v).conversations) || Array.isArray(obj(v).items);
 
 // ---------------------------------------------------------------- storage (IndexedDB on this device)
