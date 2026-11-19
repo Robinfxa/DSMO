@@ -37,7 +37,8 @@ await page.click('.m-row:has-text("插件") >> nth=-1');
 await page.waitForTimeout(700);
 await shot('01-discover');
 
-check((await page.$$('.plg-card')).length === 5, '精选: five cards');
+const cards = await page.$$eval('.plg-card-t', (e) => e.map((x) => x.textContent));
+check(cards.length === 7 && cards[0] === '人设库' && cards[1] === '长期记忆', `精选 follows the market's list: ${cards.join(' ')}`);
 const chips = await page.$$eval('.plg-chips button', (b) => b.map((x) => x.textContent));
 check(chips[0] === '全部' && chips.includes('技能') && chips.includes('引擎'), `chips: ${chips.join(' ')}`);
 

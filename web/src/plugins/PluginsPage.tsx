@@ -30,8 +30,8 @@ import {
   trialSkin,
   type ApiDemoManifest,
 } from './frontend';
-import { CATEGORIES, FEATURED, PERM_INFO, SHELF, TIER_INFO, catInfo, categoryOf, hasToggle, matches, optionsOf, relevance, type Category } from './meta';
-import { MARKET_TIER } from './official';
+import { CATEGORIES, PERM_INFO, SHELF, TIER_INFO, catInfo, categoryOf, hasToggle, matches, optionsOf, relevance, type Category } from './meta';
+import { FEATURED, MARKET_TIER } from './official';
 import { AutomationPreview, EnginePreview, LayoutPreview, SkillPreview, SkinPreview, SkinSwatch, ToolsPreview, themeNow } from './preview';
 import { describeTiming, runSchedule, scheduleState, setScheduleTime, skillsInstallable } from './automation';
 import { local } from '../bridge/native';

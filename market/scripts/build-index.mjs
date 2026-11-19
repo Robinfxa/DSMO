@@ -32,6 +32,9 @@ for (const f of readdirSync(join(market, 'plugins')).filter((x) => x.endsWith('.
   const integrity = 'sha256-' + createHash('sha256').update(JSON.stringify(manifest)).digest('base64');
   out.push({ tier: tierOf(manifest), integrity, manifest });
 }
+// 发现 › 精选: the market decides what is recommended, in this order; every id must be listed.
+const featured = policy.featured ?? [];
+for (const id of featured) if (!out.some((p) => p.manifest.id === id)) { console.error(`✗ policy.featured: ${id} 不在市场里`); bad = true; }
 if (bad) process.exit(1);
-writeFileSync(join(market, 'index.json'), JSON.stringify({ v: 1, plugins: out }, null, 2) + '\n');
+writeFileSync(join(market, 'index.json'), JSON.stringify({ v: 1, featured, plugins: out }, null, 2) + '\n');
 console.log(`market/index.json: ${out.length} 个插件`);

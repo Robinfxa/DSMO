@@ -1,5 +1,14 @@
 {
   "v": 1,
+  "featured": [
+    "@api-demo/persona-library",
+    "@api-demo/memory-share",
+    "@api-demo/quick-prompts",
+    "@api-demo/usage-today",
+    "@api-demo/skin-midnight",
+    "@api-demo/skill-code-review",
+    "@api-demo/auto-daily-plan"
+  ],
   "plugins": [
     {
       "tier": 2,

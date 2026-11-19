@@ -6,12 +6,12 @@
 
 ```
 market/
-  policy.json          官方名单、是否只收官方
+  policy.json          官方名单、是否只收官方、「发现 › 精选」推荐哪些（featured，按顺序）
   plugins/<名字>.json   一个上架条目：{ package, version（固定）, source }
   scripts/rules.mjs    审核规则（App 运行时也执行同样的硬规定）
   scripts/check.mjs    node market/scripts/check.mjs <插件目录>…
   scripts/build-index.mjs  生成 index.json
-  index.json           App 打包时内置的索引：{ v, plugins:[{ tier, integrity, manifest }] }
+  index.json           App 打包时内置的索引：{ v, featured, plugins:[{ tier, integrity, manifest }] }
 ```
 
 `integrity` 是清单（含内联的面板 HTML）的 SHA-256，App 以后从网络更新索引时用它校验。

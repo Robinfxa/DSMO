@@ -72,9 +72,6 @@ export function optionsOf(p: ApiDemoManifest): { key: string; title: string; sub
   return out;
 }
 
-/** 发现 › 精选, in this order (those in the catalog). */
-export const FEATURED = ['@api-demo/quick-prompts', '@api-demo/usage-today', '@api-demo/skin-midnight', '@api-demo/skill-code-review', '@api-demo/auto-daily-plan'];
-
 /** Entries a category shelf shows on 发现 before 全部 ›. */
 export const SHELF = 3;
 
