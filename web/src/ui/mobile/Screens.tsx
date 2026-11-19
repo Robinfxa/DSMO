@@ -29,6 +29,7 @@ import {
   showToast,
   topSessions,
   visibleSessions,
+  webUpdateReady,
 } from '../../state/store';
 import { Protected } from '../Protected';
 import { REGIONS } from '../regions';
@@ -172,6 +173,48 @@ function Row({ icon, label, value, onClick, danger, chevron = true, right }: { i
   );
 }
 
+/** 界面更新: the hot-updated page (web_update.dart), checked and switched to by hand. */
+function WebUpdateRows() {
+  const serving = nativeInfo.value?.webVersion;
+  const [state, setState] = useState<'idle' | 'checking' | 'latest' | 'failed' | 'applying'>('idle');
+  const ready = webUpdateReady.value;
+  const check = async () => {
+    setState('checking');
+    try {
+      const r = await native.checkWebUpdate();
+      if (r && r.latest !== r.serving) webUpdateReady.value = r.latest;
+      setState(r && r.latest !== r.serving ? 'idle' : 'latest');
+    } catch {
+      setState('failed');
+    }
+  };
+  const apply = async () => {
+    setState('applying');
+    try {
+      if (!(await native.applyWebUpdate())) throw new Error('not switched');
+    } catch {
+      setState('idle');
+      showToast('没能切换，下次打开 App 时会用新的');
+    }
+  };
+  const busy = state === 'checking' || state === 'applying';
+  return (
+    <>
+      <Row icon="info" label="界面版本" value={!serving || serving === 'apk' ? '安装包自带' : serving} />
+      {ready && state !== 'checking' ? (
+        <Row icon="download" label={state === 'applying' ? '正在切换…' : '使用新界面'} value={ready === 'new' ? undefined : ready} onClick={busy ? undefined : () => void apply()} />
+      ) : (
+        <Row
+          icon="refresh"
+          label="检查界面更新"
+          value={{ idle: undefined, checking: '正在检查…', latest: '已是最新', failed: '没连上，再试一次', applying: undefined }[state]}
+          onClick={busy ? undefined : () => void check()}
+        />
+      )}
+    </>
+  );
+}
+
 function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange: (v: boolean) => void }) {
   return (
     <button class="m-switch" type="button" role="switch" aria-checked={on} aria-label={label} onClick={(e) => (e.stopPropagation(), onChange(!on))}>
@@ -244,24 +287,8 @@ function SettingsHome() {
       </Group>
       <Group title="关于">
         <Row icon="info" label="版本" value={`${nativeInfo.value?.appVersion && nativeInfo.value.appVersion !== 'web' ? nativeInfo.value.appVersion : '0.1.0'} · ${__BUILD__}`} />
-        {nativeInfo.value?.inApp && (
-          <Row
-            icon="download"
-            label="界面版本"
-            value={nativeInfo.value.webVersion === 'apk' || !nativeInfo.value.webVersion ? '安装包自带' : nativeInfo.value.webVersion}
-            onClick={() =>
-              void native
-                .checkWebUpdate()
-                .then((r) => {
-                  if (!r) return;
-                  if (r.latest !== r.serving) showToast('界面有更新', '刷新', () => void native.applyWebUpdate());
-                  else showToast('界面已是最新');
-                })
-                .catch(() => showToast('检查失败，稍后再试'))
-            }
-          />
-        )}
-        <Row icon="download" label="检查更新" onClick={() => toPage('update')} />
+        {nativeInfo.value?.inApp && <WebUpdateRows />}
+        <Row icon="download" label={nativeInfo.value?.inApp ? '检查 App 更新' : '检查更新'} onClick={() => toPage('update')} />
         <Row icon="doc" label="开源许可" onClick={() => pushScreen('licenses')} />
       </Group>
       {acc?.configured && acc.writable && (

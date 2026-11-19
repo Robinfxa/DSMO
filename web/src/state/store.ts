@@ -120,6 +120,8 @@ export const questions = signal<QuestionRequest[]>([]);
 export const pages = signal<string[]>([]);
 export const overlays = signal<Overlay[]>([]);
 export const toast = signal<Toast | null>(null);
+/** A newer page downloaded by the hot update (web_update.dart), not yet in use. */
+export const webUpdateReady = signal<string | null>(null);
 export const renaming = signal<string | null>(null);
 export const drawerOpen = signal(false);
 export const draft = signal('');
