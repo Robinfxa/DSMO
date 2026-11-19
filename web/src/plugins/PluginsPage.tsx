@@ -32,6 +32,7 @@ import {
 } from './frontend';
 import { CATEGORIES, PERM_INFO, SHELF, TIER_INFO, catInfo, categoryOf, hasToggle, matches, optionsOf, relevance, type Category } from './meta';
 import { FEATURED, MARKET_TIER } from './official';
+import { POSITIONS, clashesOf, loadHostBundles, setPersonaSkipBots } from './conflicts';
 import { AutomationPreview, EnginePreview, LayoutPreview, SkillPreview, SkinPreview, SkinSwatch, ToolsPreview, themeNow } from './preview';
 import { describeTiming, runSchedule, scheduleState, setScheduleTime, skillsInstallable } from './automation';
 import { local } from '../bridge/native';
@@ -47,6 +48,65 @@ function afterInstall(title: string, outcome: InstallOutcome) {
       .then(() => showToast('引擎正在重启'))
       .catch((e) => showToast(errText(e)));
   }, false);
+}
+
+/** Installs after saying what it would clash with (conflicts.ts), if anything. */
+function installChecked(p: ApiDemoManifest, go: () => void) {
+  const c = clashesOf(p);
+  if (!c.length) return go();
+  confirm(`「${p.title}」可能和${[...new Set(c.map((x) => `「${x.with}」`))].join('、')}冲突`, c.map((x) => x.text).join('\n\n'), '仍然安装', go, false);
+}
+
+/** 可能冲突: what else writes where this plugin does, and the fix where there is one. */
+function ClashCard({ p }: { p: ApiDemoManifest }) {
+  const c = clashesOf(p);
+  const inst = isInstalled(p.id);
+  const [busy, setBusy] = useState(false);
+  if (!c.length) return null;
+  return (
+    <section class="plg-sec">
+      <h2 class="plg-sec-t">可能冲突</h2>
+      <div class="plg-group plg-clash">
+        {c.map((x, i) => (
+          <div class="plg-row static" key={i}>
+            <span class="plg-tile warn">
+              <MIc n="info" />
+            </span>
+            <div class="plg-row-m">
+              <div class="plg-row-t">
+                和「{x.with}」
+                <em class="tm-badge warn">{POSITIONS[x.position].title}</em>
+              </div>
+              <div class="plg-row-s wrap">{x.text}</div>
+              {x.fix === 'persona-skip-bots' &&
+                (inst ? (
+                  <button
+                    class="plg-btn plg-clash-fix"
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await setPersonaSkipBots(true);
+                        showToast('Bot 的对话里不再用人设');
+                      } catch (e) {
+                        showToast(errText(e));
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    {busy ? '正在设置…' : 'Bot 的对话里不用人设'}
+                  </button>
+                ) : (
+                  <div class="plg-row-s wrap">装好后，可以在「人设」里设成 Bot 的对话不用人设。</div>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 const tab = signal<'discover' | 'installed'>('discover');
@@ -85,16 +145,18 @@ function GetButton({ p }: { p: ApiDemoManifest }) {
       class="plg-get"
       type="button"
       disabled={busy}
-      onClick={async (e) => {
+      onClick={(e) => {
         e.stopPropagation();
-        setBusy(true);
-        try {
-          afterInstall(p.title, await installPlugin(p.id));
-        } catch (err) {
-          showToast(errText(err));
-        } finally {
-          setBusy(false);
-        }
+        installChecked(p, async () => {
+          setBusy(true);
+          try {
+            afterInstall(p.title, await installPlugin(p.id));
+          } catch (err) {
+            showToast(errText(err));
+          } finally {
+            setBusy(false);
+          }
+        });
       }}
     >
       {busy ? '安装中' : '获取'}
@@ -116,7 +178,10 @@ function Row({ p, end }: { p: ApiDemoManifest; end?: preact.ComponentChildren })
     <div class="plg-row" role="button" tabIndex={0} onClick={() => openPlugin(p.id)} onKeyDown={(e) => e.key === 'Enter' && openPlugin(p.id)}>
       <PluginTile p={p} />
       <div class="plg-row-m">
-        <div class="plg-row-t">{p.title}</div>
+        <div class="plg-row-t">
+          {p.title}
+          {isEnabled(p.id) && clashesOf(p).length > 0 && <em class="tm-badge warn">可能冲突</em>}
+        </div>
         <div class="plg-row-s">{p.summary}</div>
       </div>
       <div class="plg-row-e" onClick={(e) => e.stopPropagation()}>
@@ -136,6 +201,7 @@ const query = signal('');
 const cat = signal<Category | 'all'>('all');
 
 export function PluginsPage() {
+  useEffect(() => void loadHostBundles(), []);
   const mine = installed.value;
   const q = query.value;
   return (
@@ -353,12 +419,14 @@ export function PluginDetailPage({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const trying = trialSkin.value === id;
   useEffect(() => () => void (trialSkin.value === id && setTrialSkin(null)), [id]);
+  useEffect(() => void loadHostBundles(), [id]);
   if (!p) return <div class="plg-empty-line">这个插件已经不在市场里了。</div>;
   const c = categoryOf(p);
   const inst = isInstalled(id);
   const tier = MARKET_TIER[id];
   const paras = (p.description ?? p.summary).split(/\n\s*\n/);
-  const install = async () => {
+  const install = () => installChecked(p, () => void doInstall());
+  const doInstall = async () => {
     setBusy(true);
     try {
       const outcome = await installPlugin(id);
@@ -422,6 +490,8 @@ export function PluginDetailPage({ id }: { id: string }) {
       </div>
       {trying && <p class="plg-note">正在试用，离开这一页后恢复。</p>}
       {c === 'skills' && !inst && !skillsInstallable() && <p class="plg-note">技能只能装到这台手机上的引擎，先在边栏切回本机。</p>}
+
+      <ClashCard p={p} />
 
       <div class="plg-text">
         {paras.map((x, i) => (

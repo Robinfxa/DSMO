@@ -67,6 +67,10 @@ await page.waitForTimeout(600);
 await page.click('.plg-row:has-text("长期记忆")');
 await page.waitForTimeout(500);
 await page.click('.plg-btn.pri.wide:has-text("安装")');
+await page.waitForTimeout(300);
+// the prototype has a DS Bot team: installing asks first (e2e/conflicts.mjs covers that)
+check((await page.textContent('.m-alert')).includes('冲突'), 'asks about the clash with DS Bot');
+await page.click('.m-alert-btns button:has-text("仍然安装")');
 check(await toastIs('已安装「长期记忆」'), 'installed from the market');
 for (let i = 0; i < 2; i++) {
   await page.click('[aria-label="返回"] >> nth=-1');

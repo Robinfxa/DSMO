@@ -9,6 +9,7 @@ import './styles/plugins.css';
 import { App } from './ui/App';
 import { boot } from './state/store';
 import { loadInstalled, settleEngineSetups } from './plugins/frontend';
+import { watchConflicts } from './plugins/conflicts';
 import { onNative } from './bridge/native';
 import { startGuard } from './plugins/guard';
 import { loadContributions, setDshGoTransport } from './plugins/dshgo';
@@ -20,6 +21,7 @@ async function main() {
   }
   render(<App />, document.getElementById('app')!);
   await loadInstalled();
+  void watchConflicts();
   await loadVersions();
   void loadImported();
   startGuard();

@@ -16,7 +16,10 @@
 
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
+import { dsBot } from '../../bots/store';
+import { personaSkipBots, setPersonaSkipBots } from '../../plugins/conflicts';
 import { backPage, confirm, errText, openPage, showToast } from '../../state/store';
+import { Switch } from '../common';
 import { MIc } from '../mobile/MIc';
 
 const BASE = '/api/dsh-persona-dafeiyu';
@@ -230,6 +233,7 @@ export function PersonaPage() {
           );
         })}
       </div>
+      {(dsBot.value.team?.bots.length ?? 0) > 0 && <BotsSwitch />}
       <div class="plg-actions">
         <button class="plg-btn pri wide" type="button" onClick={() => openPage('persona-edit:new')}>
           <MIc n="plus" />
@@ -238,6 +242,37 @@ export function PersonaPage() {
       </div>
       <p class="plg-note foot">可以照模板写，也可以把别处写好的人设整段粘贴进来，最多 {MAX_CHARS.toLocaleString()} 字。</p>
     </div>
+  );
+}
+
+/** 和 DS Bot：each Bot has its own role; the persona would go into its conversations too. */
+function BotsSwitch() {
+  const [busy, setBusy] = useState(false);
+  const on = personaSkipBots.value;
+  const set = async (v: boolean) => {
+    setBusy(true);
+    try {
+      await setPersonaSkipBots(v);
+      showToast(v ? 'Bot 的对话里不再用人设' : 'Bot 的对话也会用人设');
+    } catch (e) {
+      showToast(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section class="plg-sec">
+      <h2 class="plg-sec-t">和 DS Bot</h2>
+      <div class="plg-group">
+        <div class="plg-row static">
+          <div class="plg-row-m">
+            <div class="plg-row-t">Bot 的对话里不用人设</div>
+            <div class="plg-row-s wrap">{on ? '每个 Bot 按自己的角色和说明来，人设只用在你自己的对话里。' : '现在人设也会加进 Bot 的对话，可能盖过 Bot 自己的角色和说明。'}</div>
+          </div>
+          <Switch on={on} label="Bot 的对话里不用人设" disabled={busy} onChange={(v) => void set(v)} />
+        </div>
+      </div>
+    </section>
   );
 }
 

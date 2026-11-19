@@ -9,6 +9,8 @@ export const HIDEABLE = new Set([
 export const SLOTS = new Set(['sider.features', 'composer.buttons']);
 export const KINDS = new Set(['skin', 'layout', 'slot', 'panel', 'engine', 'skill', 'schedule']);
 export const PERMISSIONS = new Set(['storage', 'engine.read', 'session.prompt', 'network']);
+/** Shared places a plugin writes to, so the app can tell two that clash (web/src/plugins/conflicts.ts). */
+export const AFFECTS = new Set(['prompt.persona', 'prompt.memory']);
 const PROTECTED_WORDS = /approval|permission|login|api-?key|credential|protected/i;
 const CATEGORIES = new Set(['appearance', 'interface', 'tools', 'skills', 'automation', 'engine']);
 const LIMITS = { description: 2000, manifestBytes: 64 * 1024, panelBytes: 256 * 1024, cssBytes: 16 * 1024, title: 24, summary: 200, slotTitle: 12 };
@@ -38,6 +40,7 @@ export function checkManifest(m, { panelHtml = {} } = {}) {
   // Store-page fields (all optional).
   if (m.category !== undefined && !CATEGORIES.has(m.category)) e('category 只能是 appearance / interface / tools / skills / automation / engine');
   if (m.description !== undefined && (typeof m.description !== 'string' || m.description.length > LIMITS.description)) e(`description 超过 ${LIMITS.description} 字`);
+  if (m.affects !== undefined && (!Array.isArray(m.affects) || m.affects.some((a) => !AFFECTS.has(a)))) e('affects 只能是 prompt.persona / prompt.memory');
   if (m.highlights !== undefined && (!Array.isArray(m.highlights) || m.highlights.length > 5 || m.highlights.some((h) => typeof h !== 'string' || h.length > 40))) e('highlights 最多 5 条，每条 40 字以内');
 
   // Hard rule 1: skins only touch design tokens; custom CSS may not name protected zones.

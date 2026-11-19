@@ -527,3 +527,11 @@ body:not(.is-m) .plg-card { width: calc((100% - 24px) / 3); }
 .ps-text { max-height: 60vh; margin: 0; padding: 14px 16px; overflow: auto; font: inherit; font-size: 15px; line-height: 24px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .sk-field .ps-edit { min-height: 340px; font-size: 15px; line-height: 23px; }
 .sk-field > small.ps-over { color: #e5484d; }
+
+/* 可能冲突 */
+.plg-tile.warn { color: #d9822b; }
+.plg-clash .plg-row { align-items: flex-start; }
+.plg-clash .plg-row-s.wrap { margin-top: 4px; line-height: 20px; }
+.plg-clash-fix { height: 36px; margin-top: 10px; padding: 0 16px; font-size: 14px; }
+.plg-note.warn p { margin: 0; }
+.plg-note.warn p + p { margin-top: 6px; }

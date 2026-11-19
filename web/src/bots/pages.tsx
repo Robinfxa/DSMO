@@ -5,6 +5,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { approvals, askText, backPage, confirm, errText, openPage, openSession, pages, showToast } from '../state/store';
 import { ApprovalCard } from '../ui/Chat';
 import { Switch } from '../ui/common';
+import { installed } from '../plugins/frontend';
+import { personaSkipBots } from '../plugins/conflicts';
 import { renderMarkdown } from '../ui/md';
 import { MIc } from '../ui/mobile/MIc';
 import {
@@ -129,6 +131,30 @@ export const homeSub = () => {
   return [`${st.team.bots.length} 个 Bot`, st.team.rooms.length ? `${st.team.rooms.length} 个群聊` : null].filter(Boolean).join(' · ');
 };
 
+/** A persona or memory plugin that also reaches the Bots' conversations (plugins/conflicts.ts). */
+function PluginClashNote() {
+  const on = (id: string) => installed.value.some((x) => x.id === id && x.enabled);
+  const lines: preact.ComponentChildren[] = [];
+  if (on('@api-demo/persona-library') && !personaSkipBots.value)
+    lines.push(
+      <>
+        「人设库」开着：人设也会加进 Bot 的对话，可能盖过 Bot 自己的角色和说明。
+        <button class="plg-text-btn" type="button" onClick={() => openPage('persona')}>
+          去设置
+        </button>
+      </>,
+    );
+  if (on('@api-demo/memory-share')) lines.push(<>「长期记忆」开着：你的长期记忆也会加进 Bot 的对话，Bot 记下的事也可能存进去。</>);
+  if (!lines.length) return null;
+  return (
+    <div class="plg-note warn">
+      {lines.map((l, i) => (
+        <p key={i}>{l}</p>
+      ))}
+    </div>
+  );
+}
+
 export function BotsHomePage() {
   const st = dsBot.value;
   const team = st.team;
@@ -141,6 +167,7 @@ export function BotsHomePage() {
   const rooms = [...team.rooms].sort((a, b) => latest(b.id, b.createdAt) - latest(a.id, a.createdAt));
   return (
     <div class="plg">
+      <PluginClashNote />
       <section class="plg-sec">
         <h2 class="plg-sec-t">Bot</h2>
         <div class="plg-group">
