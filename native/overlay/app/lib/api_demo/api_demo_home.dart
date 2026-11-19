@@ -103,6 +103,11 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // A phone stays upright, like the chat apps it sits beside; tablets still turn.
+    final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+    if (view != null && view.physicalSize.shortestSide / view.devicePixelRatio < 600) {
+      unawaited(SystemChrome.setPreferredOrientations(const [DeviceOrientation.portraitUp]));
+    }
     _pageSession = widget.initial?.sessionId;
     dsBotTapHandler = _botTap;
     final router = ref.read(linkRouterProvider);
@@ -132,6 +137,8 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Back to dsh-Go's own: every orientation (its native interface turns).
+    unawaited(SystemChrome.setPreferredOrientations(const []));
     if (dsBotTapHandler == _botTap) dsBotTapHandler = null;
     for (final off in _off) {
       off();
@@ -201,6 +208,8 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
       _bridge = bridge;
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       await controller.setBackgroundColor(background);
+      // An app page, not a document: no pinch or double-tap zoom (the viewport says so too).
+      await controller.enableZoom(false);
       // chrome://inspect works on the installed app (HANDOFF.md › 装好后检查一遍).
       if (controller.platform is AndroidWebViewController) await AndroidWebViewController.enableDebugging(true);
       // The page's own errors reach `adb logcat` (tag flutter, prefix dsmo-page).

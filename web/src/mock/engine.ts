@@ -357,17 +357,33 @@ export class MockEngine {
 
   // ------------------------------------------------------------------ turns
 
-  private userMessage(text: string, requestId: string) {
-    return { role: 'user', content: [{ type: 'text', text }], source: { kind: 'user', rpcId: requestId, clientTimeZone: 'Asia/Shanghai' }, id: uuid() };
+  private userMessage(text: string, requestId: string, images: unknown[] = []) {
+    return { role: 'user', content: [...(text ? [{ type: 'text', text }] : []), ...images], source: { kind: 'user', rpcId: requestId, clientTimeZone: 'Asia/Shanghai' }, id: uuid() };
   }
 
-  private startTurn(s: MockSession, text: string, requestId: string) {
+  /** Bytes behind the log's image references (`session/attachment`), as the engine keeps them. */
+  private readonly attachments = new Map<string, { mediaType: string; data: string }>();
+
+  /** Prompt images as the log records them: a durable reference, no bytes. */
+  private storeImages(content: unknown): unknown[] {
+    return list(content)
+      .map(obj)
+      .filter((p) => p.type === 'image' && typeof p.data === 'string')
+      .map((p) => {
+        const attachmentId = `att-${uuid()}`;
+        const mediaType = str(p.mediaType) ?? 'image/png';
+        this.attachments.set(attachmentId, { mediaType, data: p.data as string });
+        return { type: 'image', attachment: { attachmentId, mediaType, bytes: Math.floor(((p.data as string).length * 3) / 4), ...(str(p.name) ? { name: str(p.name) } : {}) } };
+      });
+  }
+
+  private startTurn(s: MockSession, text: string, requestId: string, images: unknown[] = []) {
     s.turn++;
     const turn = s.turn;
     this.setRunning(s, true);
     this.append(s, 'turn/start', { turn });
     this.append(s, 'step/start', { turn, step: 1 });
-    this.append(s, 'user/message', this.userMessage(text, requestId));
+    this.append(s, 'user/message', this.userMessage(text, requestId, images));
     if (!s.title) {
       s.title = text.length > 16 ? text.slice(0, 16) + '…' : text;
       this.append(s, 'session/title', { title: s.title, messageSeqs: [s.log.length - 1], source: { kind: 'fallback' } });
@@ -514,10 +530,10 @@ export class MockEngine {
     this.append(s, 'turn/end', { turn, reason: kind === 'aborted' ? { kind: 'aborted', reason: { kind: 'user' } } : { kind: 'completed' } });
     this.setRunning(s, false);
     this.emit('api-session/added', [this.summary(s)]);
-    const queued = s.inbox['next-turn'].shift() as { text: string; requestId: string } | undefined;
+    const queued = s.inbox['next-turn'].shift() as { text: string; requestId: string; images?: unknown[] } | undefined;
     if (queued) {
       this.append(s, 'agent/inbox/spliced', { target: 'next-turn', start: 0, removedCount: 1, inserted: [] });
-      this.later(s, 300, () => this.startTurn(s, queued.text, queued.requestId));
+      this.later(s, 300, () => this.startTurn(s, queued.text, queued.requestId, queued.images));
     }
   }
 
@@ -628,11 +644,12 @@ export class MockEngine {
         const s = this.need(req.sessionId);
         const text = list(req.content).map((p) => str(obj(p).text) ?? '').join('');
         const requestId = str(req.requestId) ?? uuid();
+        const images = this.storeImages(req.content);
         if (s.running) {
           const target = req.mode === 'steer' ? 'next-step' : 'next-turn';
-          const msg = { ...this.userMessage(text, requestId), text, requestId };
+          const msg = { ...this.userMessage(text, requestId, images), text, requestId, images };
           (s.inbox[target] as unknown[]).push(msg);
-          this.append(s, 'agent/inbox/spliced', { target, start: s.inbox[target].length - 1, removedCount: 0, inserted: [this.userMessage(text, requestId)] });
+          this.append(s, 'agent/inbox/spliced', { target, start: s.inbox[target].length - 1, removedCount: 0, inserted: [this.userMessage(text, requestId, images)] });
           if (target === 'next-step') {
             // Picked up at the next step boundary: echo it into the log soon.
             this.later(s, 900, () => {
@@ -640,13 +657,20 @@ export class MockEngine {
               if (i < 0) return;
               s.inbox['next-step'].splice(i, 1);
               this.append(s, 'agent/inbox/spliced', { target: 'next-step', start: i, removedCount: 1, inserted: [] });
-              this.append(s, 'user/message', this.userMessage(text, requestId));
+              this.append(s, 'user/message', this.userMessage(text, requestId, images));
             });
           }
           return null;
         }
-        this.startTurn(s, text, requestId);
+        this.startTurn(s, text, requestId, images);
         return null;
+      }
+      case 'session/attachment': {
+        this.need(req.sessionId);
+        const id = str(obj(req.attachment).attachmentId) ?? str(req.attachmentId) ?? '';
+        const a = this.attachments.get(id);
+        if (!a) throw new DshRemoteError('session/attachment-invalid', 'No such attachment in this session.');
+        return { attachment: { attachmentId: id, mediaType: a.mediaType }, data: a.data };
       }
       case 'session/cancel':
         this.cancelTurn(this.need(req.sessionId));

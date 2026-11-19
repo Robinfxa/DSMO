@@ -8,7 +8,8 @@ import { bool, int, list, obj, objOrNull, str, strList, type Obj } from './json'
 export type Part =
   | { type: 'text'; text: string }
   | { type: 'reasoning'; text: string }
-  | { type: 'image'; mimeType?: string; data?: string; receiptId?: string; name?: string }
+  /** In the log, `attachment` is a durable reference: bytes come from `session/attachment`. */
+  | { type: 'image'; mimeType?: string; data?: string; receiptId?: string; name?: string; attachment?: Obj; width?: number; height?: number }
   | { type: 'file'; name?: string; path?: string; receiptId?: string; mimeType?: string; size?: number }
   | { type: 'tool-call'; id: string; name: string; arguments: string }
   | { type: 'unknown'; raw: Obj };
@@ -20,10 +21,28 @@ export function parsePart(v: unknown): Part {
       return { type: 'text', text: str(m.text) ?? '' };
     case 'reasoning':
       return { type: 'reasoning', text: str(m.text) ?? '' };
-    case 'image':
-      return { type: 'image', mimeType: str(m.mediaType) ?? str(m.mimeType), data: str(m.data), receiptId: str(m.receiptId), name: str(m.name) };
-    case 'file':
-      return { type: 'file', name: str(m.name) ?? str(m.fileName), path: str(m.path), receiptId: str(m.receiptId), mimeType: str(m.mimeType), size: int(m.size) };
+    case 'image': {
+      const a = objOrNull(m.attachment);
+      return {
+        type: 'image',
+        mimeType: str(m.mediaType) ?? str(m.mimeType) ?? str(a?.mediaType),
+        data: str(m.data),
+        receiptId: str(m.receiptId),
+        name: str(m.name) ?? str(a?.name),
+        ...(a && str(a.attachmentId) ? { attachment: a, width: int(a.width), height: int(a.height) } : {}),
+      };
+    }
+    case 'file': {
+      const a = objOrNull(m.attachment) ?? {};
+      return {
+        type: 'file',
+        name: str(m.name) ?? str(m.fileName) ?? str(a.name) ?? str(a.fileName),
+        path: str(m.path) ?? str(a.path),
+        receiptId: str(m.receiptId),
+        mimeType: str(m.mimeType) ?? str(a.mediaType) ?? str(a.mimeType),
+        size: int(m.size) ?? int(a.bytes) ?? int(a.size),
+      };
+    }
     case 'tool-call':
       return {
         type: 'tool-call',

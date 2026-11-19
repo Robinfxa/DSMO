@@ -673,6 +673,25 @@ export class DshClient {
   }
 
   /** The raw session log as a downloadable JSON file. */
+  /**
+   * An image from the conversation's log (`session/attachment`). Hosts from before
+   * whole-reference reads refuse `attachment` as invalid input; they take the id.
+   */
+  async attachment(sessionId: string, ref: Record<string, unknown>): Promise<{ mediaType: string; data: string }> {
+    const read = async (whole: boolean) => obj(await this.call('session/attachment', { request: whole ? { sessionId, attachment: ref } : { sessionId, attachmentId: ref.attachmentId } }));
+    let v: Record<string, unknown>;
+    try {
+      v = await read(this.wholeAttachmentRefs !== false);
+    } catch (e) {
+      if (this.wholeAttachmentRefs !== undefined || !(e instanceof DshRemoteError) || !['gateway/arguments-invalid', 'gateway/input-invalid'].includes(e.code)) throw e;
+      v = await read(false);
+      this.wholeAttachmentRefs = false;
+    }
+    this.wholeAttachmentRefs ??= true;
+    return { mediaType: str(obj(v.attachment).mediaType) ?? str(ref.mediaType) ?? 'image/png', data: str(v.data) ?? '' };
+  }
+  private wholeAttachmentRefs: boolean | undefined;
+
   async exportLog(sessionId: string): Promise<Blob> {
     const res = await fetch(`/api/session.export?sessionId=${encodeURIComponent(sessionId)}&includeDescendants=true`, { credentials: 'same-origin' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

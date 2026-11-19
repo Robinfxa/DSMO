@@ -92,7 +92,8 @@ export type Overlay =
   | { kind: 'plugin'; id: string }
   | { kind: 'panel'; pluginId: string; panel: string }
   | { kind: 'dshgo'; pkg: string; id: string }
-  | { kind: 'text'; title: string; body: string; mono?: boolean };
+  | { kind: 'text'; title: string; body: string; mono?: boolean }
+  | { kind: 'image'; src: string; alt: string };
 
 export interface Toast {
   id: number;
@@ -608,11 +609,12 @@ export async function deleteAll() {
 
 export function currentSelection(): { provider: string; model: string; effort?: string } | null {
   txVersion.value;
+  // The latest model/selection in the log first: the projections come with the
+  // snapshot and go stale after a switch (dsh-Go's chat_state._trackModel, same order).
+  for (const e of [...(transcript?.events ?? [])].reverse()) if (e.kind === 'model' && e.provider) return { provider: e.provider, model: e.model ?? '', effort: e.effort };
   const p = transcript?.projections as any;
   const sel = p?.modelSelection?.next ?? p?.modelSelection?.lastUsed;
   if (sel?.provider) return { provider: sel.provider, model: sel.model, effort: sel.reasoningEffort };
-  // Latest model/selection event in the log.
-  for (const e of [...(transcript?.events ?? [])].reverse()) if (e.kind === 'model' && e.provider) return { provider: e.provider, model: e.model ?? '', effort: e.effort };
   const n = nextSelection.value;
   if (n) return n;
   const d = catalog.value?.defaultSelection;

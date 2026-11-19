@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { siblingsFor, versionsVersion, type Siblings } from '../state/versions';
-import { describeApproval, type ApprovalRequest, type QuestionRequest } from '../engine/events';
+import { describeApproval, type ApprovalRequest, type Part, type QuestionRequest } from '../engine/events';
 import type { ChatItem } from '../engine/transcript';
 import { pluginMessageActions } from '../plugins/dshgo';
 import {
@@ -34,6 +34,7 @@ import { renderMarkdown } from './md';
 import { SOURCE_NAME } from '../history/imported';
 import { Protected } from './Protected';
 import { openFeature } from './pages/registry';
+import { SessionImage } from './SessionImage';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 type Asst = Extract<ChatItem, { kind: 'assistant' }>;
@@ -475,6 +476,8 @@ function VersionNav({ sib }: { sib: Siblings }) {
 }
 
 function UserMsg({ user, text, sib }: { user: User; text: string; sib?: Siblings }) {
+  const images = user.parts.filter((p): p is Extract<Part, { type: 'image' }> => p.type === 'image');
+  const files = user.parts.filter((p): p is Extract<Part, { type: 'file' }> => p.type === 'file');
   const [selecting, setSelecting] = useState(false);
   const bubble = useRef<HTMLDivElement>(null);
   const press = useLongPress(() =>
@@ -505,16 +508,23 @@ function UserMsg({ user, text, sib }: { user: User; text: string; sib?: Siblings
   }, [selecting]);
   return (
     <div class="msg user">
-      <div class={`bubble ${selecting ? 'selecting' : ''}`} ref={bubble} {...(isMobile.value ? press : {})}>
-        {text}
-        {user.parts
-          .filter((p) => p.type === 'image' || p.type === 'file')
-          .map((p, i) => (
+      {images.length > 0 && currentId.value && (
+        <div class="u-imgs">
+          {images.map((p, i) => (
+            <SessionImage key={i} sessionId={currentId.value!} part={p} />
+          ))}
+        </div>
+      )}
+      {(text || files.length > 0) && (
+        <div class={`bubble ${selecting ? 'selecting' : ''}`} ref={bubble} {...(isMobile.value ? press : {})}>
+          {text}
+          {files.map((p, i) => (
             <span class="att" key={i}>
-              {p.type === 'image' ? '图片' : (p as any).name ?? '文件'}
+              {p.name ?? '文件'}
             </span>
           ))}
-      </div>
+        </div>
+      )}
       {user.sourceKind !== 'user' && <div class="steer">{user.sourceKind === 'schedule' ? '自动化任务' : '系统'}</div>}
       {sib && isMobile.value && (
         <div class="u-ver">

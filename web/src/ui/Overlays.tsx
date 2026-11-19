@@ -112,6 +112,12 @@ function OverlayBody({ o }: { o: Overlay }) {
       return <Search />;
     case 'input':
       return <InputDialog o={o} />;
+    case 'image':
+      return (
+        <button class="img-view" type="button" aria-label="关闭图片" onClick={closeOverlay}>
+          <img src={o.src} alt={o.alt} />
+        </button>
+      );
     case 'confirm':
       if (isMobile.value)
         return (
