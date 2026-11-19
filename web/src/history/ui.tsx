@@ -6,39 +6,76 @@
 // into the conversation list (native.ts); otherwise they stay on this device.
 
 import { useEffect, useState } from 'preact/hooks';
-import { native } from '../bridge/native';
-import { backPage, confirm, draft, drawerOpen, errText, newChat, openPage, pages, screens, showToast } from '../state/store';
+import { native, type PickedDocument } from '../bridge/native';
+import { backPage, confirm, draft, drawerOpen, errText, newChat, openPage, pages, screens, showToast, toast } from '../state/store';
 import { fmtTime } from '../ui/common';
 import { renderMarkdown } from '../ui/md';
 import { MIc } from '../ui/mobile/MIc';
-import { SOURCE_NAME, clearImported, deleteImported, getImported, imported, parseFiles, saveImported, toMarkdown, type ImportedChat } from './imported';
-import { importRun, nativeImportSupported, previewImport, runImport, stopImport } from './native';
+import { SOURCE_NAME, clearImported, deleteImported, getImported, imported, saveImported, toMarkdown, type ImportedChat } from './imported';
+import { importRun, nativeImportSupported, previewImport, runImport, stopImport, type ChatFeed, type ImportPreview } from './native';
+import { readAllChats } from './stream';
 
 export async function importHistory() {
-  let files: File[];
+  let files: PickedDocument[];
   try {
     files = await native.pickDocuments(['.json', '.zip', 'application/json', 'application/zip']);
   } catch (e) {
     return showToast(errText(e));
   }
   if (!files.length) return;
+  const release = () => files.forEach((f) => f.release?.());
+  // Read twice: once to count (nothing kept), once to import. Either way only
+  // the conversation being read is in memory, so the export's size doesn't matter.
+  const total = files.reduce((n, f) => n + f.size, 0);
+  let shown = -1;
+  let unreadable = 0;
+  /** The conversations, read afresh; with `progress`, a toast follows a big read. */
+  const each = (progress = false) =>
+    readAllChats(files, (p) => {
+      unreadable = p.unreadable;
+      const pct = Math.floor((p.read / total) * 100);
+      if (progress && total > 2 * 1024 * 1024 && pct !== shown && pct < 100) showToast(`正在读取文件… ${(shown = pct)}%`);
+    });
   try {
-    const { chats, skipped } = await parseFiles(files);
-    if (!chats.length) return showToast('没有在文件里找到对话');
-    const sources = [...new Set(chats.map((c) => SOURCE_NAME[c.source]))].join('、');
-    const unread = skipped ? `另有 ${skipped} 个文件读不出来。` : '';
-    if (await nativeImportSupported()) return confirmNative(chats, sources, unread);
+    const canNative = await nativeImportSupported();
+    const p = await previewImport(each(true));
+    if (shown >= 0) toast.value = null;
+    if (!p.count) {
+      release();
+      return showToast('没有在文件里找到对话');
+    }
+    const sources = p.sources.map((s) => SOURCE_NAME[s]).join('、');
+    const unread = unreadable ? `另有 ${unreadable} 项读不出来。` : '';
+    if (canNative) return confirmNative(() => each(), p, sources, unread, { onDone: release });
     confirm(
-      `导入 ${chats.length} 个对话？`,
+      `导入 ${p.count} 个对话？`,
       `来自 ${sources}。${unread}这个引擎还不能直接收进对话列表，导入的对话先保存在这台设备上，可以查看和接着聊。`,
       '导入',
       async () => {
-        const r = await saveImported(chats);
-        showToast(r.updated ? `已导入 ${r.added} 个，更新 ${r.updated} 个` : `已导入 ${r.added} 个对话`);
+        try {
+          const r = { added: 0, updated: 0 };
+          let chunk: ImportedChat[] = [];
+          const save = async () => {
+            const got = await saveImported(chunk);
+            r.added += got.added;
+            r.updated += got.updated;
+            chunk = [];
+          };
+          shown = -1;
+          for await (const c of each(true)) if (chunk.push(c) >= 100) await save();
+          if (chunk.length) await save();
+          showToast(r.updated ? `已导入 ${r.added} 个，更新 ${r.updated} 个` : `已导入 ${r.added} 个对话`);
+        } catch (e) {
+          showToast(`读取失败：${errText(e)}`);
+        } finally {
+          release();
+        }
       },
       false,
+      release,
     );
   } catch (e) {
+    release();
     showToast(`读取失败：${errText(e)}`);
   }
 }
@@ -50,8 +87,7 @@ const day = (t: number) =>
     day: 'numeric',
   });
 
-async function confirmNative(chats: ImportedChat[], sources: string, unread: string, removeLocal = false) {
-  const p = await previewImport(chats);
+async function confirmNative(each: () => ChatFeed, p: ImportPreview, sources: string, unread: string, { removeLocal = false, onDone }: { removeLocal?: boolean; onDone?: () => void } = {}) {
   const span = day(p.from) === day(p.to) ? day(p.from) : `${day(p.from)} – ${day(p.to)}`;
   const again = p.already ? `其中 ${p.already} 个之前导入过，会跳过。` : '';
   confirm(
@@ -60,9 +96,10 @@ async function confirmNative(chats: ImportedChat[], sources: string, unread: str
     '导入',
     () => {
       openImportedPage('import-run');
-      void runImport(chats, { removeLocal });
+      void runImport(each(), { removeLocal, total: p.count }).finally(() => onDone?.());
     },
     false,
+    onDone,
   );
 }
 
@@ -71,7 +108,7 @@ export function ImportRunPage() {
   const r = importRun.value;
   if (!r) return <div class="plg-empty-line">没有正在进行的导入。</div>;
   const pct = r.total ? Math.round((r.done / r.total) * 100) : 100;
-  const title = r.running ? '正在导入…' : r.error ? '导入中断了' : r.stopped ? '已停止' : '导入完成';
+  const title = r.running ? '正在导入…' : r.error || r.readError ? '导入中断了' : r.stopped ? '已停止' : '导入完成';
   return (
     <div class="plg">
       <div class="plg-group">
@@ -89,6 +126,12 @@ export function ImportRunPage() {
             <div class="plg-row-s danger">
               引擎没有回应：{r.error}
               。已经导入的对话会保留，再导入一次会接着导剩下的。
+            </div>
+          )}
+          {r.readError && (
+            <div class="plg-row-s danger">
+              文件没能读完：{r.readError}
+              。已经导入的对话会保留，重新选择文件再导入一次会接着导剩下的。
             </div>
           )}
         </div>
@@ -143,7 +186,9 @@ export function ImportedListPage() {
   useEffect(() => void nativeImportSupported().then(setCanMove), []);
   const moveAll = async () => {
     const chats = (await Promise.all(list.map((c) => getImported(c.id)))).filter((c): c is ImportedChat => !!c);
-    if (chats.length) void confirmNative(chats, [...new Set(chats.map((c) => SOURCE_NAME[c.source]))].join('、'), '转进去以后，这台设备上的副本会删掉。', true);
+    if (!chats.length) return;
+    const p = await previewImport(chats);
+    void confirmNative(() => chats, p, p.sources.map((s) => SOURCE_NAME[s]).join('、'), '转进去以后，这台设备上的副本会删掉。', { removeLocal: true });
   };
   const shown = q.trim() ? list.filter((c) => c.title.includes(q.trim()) || c.preview.includes(q.trim())) : list;
   return (

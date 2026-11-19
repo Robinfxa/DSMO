@@ -31,6 +31,7 @@ import '../ui/features/feature_catalog.dart' show featureSections;
 import 'bridge_local.dart';
 import 'bridge_phone.dart';
 import 'dictation.dart';
+import 'picks.dart';
 import 'web_update.dart' show apiDemoBridgeVersion;
 
 /// Session pages the bridge may open natively (Q6: chat-bound pages are web,
@@ -132,16 +133,12 @@ class ApiDemoBridge {
         await _removeSkills(p['names']);
         return null;
       case 'pickDocuments':
-        // Files read on the device and handed to the page; nothing is uploaded (导入历史对话).
-        final out = <Map<String, Object?>>[];
-        var total = 0;
-        for (final f in await FilePicker.pickFiles()) {
-          final bytes = await f.readAsBytes();
-          total += bytes.length;
-          if (total > 64 * 1024 * 1024) throw ArgumentError('files too large');
-          out.add({'name': f.name, 'data': base64Encode(bytes)});
-        }
-        return out;
+        // Picked files stay on the phone: copied into the app cache and read by the
+        // page as a stream from the proxy (picks.dart), whatever their size.
+        return ApiDemoPicks.instance.take(await FilePicker.pickFiles());
+      case 'releaseDocuments':
+        await ApiDemoPicks.instance.release([for (final u in (p['urls'] as List? ?? const [])) '$u']);
+        return null;
       case 'saveFile':
         return _saveFile(p['name'] as String? ?? 'file', p['mimeType'] as String? ?? 'application/octet-stream', p['data'] as String? ?? '');
       case 'storage.get':

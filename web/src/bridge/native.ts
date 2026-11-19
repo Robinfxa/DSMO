@@ -125,6 +125,57 @@ export const BROWSER_HOSTS: HostEntry[] = [
   { id: 'ssh-pc', label: '电脑', sub: 'SSH · me@192.168.1.20', status: '已连接', current: false },
 ];
 
+/** A picked file: a browser File, or a copy the app keeps until [release]. */
+export interface PickedDocument {
+  readonly name: string;
+  readonly size: number;
+  stream(): ReadableStream<Uint8Array>;
+  text(): Promise<string>;
+  release?(): void;
+}
+
+/** A file an older bridge handed over whole. */
+function pickedFromBytes(name: string, bytes: Uint8Array): PickedDocument {
+  return {
+    name,
+    size: bytes.length,
+    stream: () =>
+      new ReadableStream<Uint8Array>({
+        start(ctrl) {
+          ctrl.enqueue(bytes);
+          ctrl.close();
+        },
+      }),
+    text: async () => new TextDecoder().decode(bytes),
+  };
+}
+
+function pickedFromProxy(f: { name: string; size: number; url: string }): PickedDocument {
+  const stream = () => {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    return new ReadableStream<Uint8Array>({
+      async pull(ctrl) {
+        if (!reader) {
+          const r = await fetch(f.url, { cache: 'no-store' });
+          if (!r.ok || !r.body) throw new Error(r.status === 404 ? '文件已经不在了，请重新选择' : `读取失败（${r.status}）`);
+          reader = r.body.getReader();
+        }
+        const { done, value } = await reader.read();
+        if (done) ctrl.close();
+        else ctrl.enqueue(value);
+      },
+      cancel: (why) => reader?.cancel(why),
+    });
+  };
+  return {
+    name: f.name,
+    size: f.size,
+    stream,
+    text: () => new Response(stream()).text(),
+    release: () => void call('releaseDocuments', { urls: [f.url] }).catch(() => {}),
+  };
+}
+
 export const native = {
   async info(): Promise<NativeInfo> {
     if (inApp()) return { inApp: true, ...(await call<Omit<NativeInfo, 'inApp'>>('info')) };
@@ -192,11 +243,23 @@ export const native = {
     browserSkillSink?.('remove', names);
   },
 
-  /** Reads files the user picks, without uploading them anywhere (导入历史对话). */
-  async pickDocuments(accept: string[]): Promise<File[]> {
+  /**
+   * Files the user picks (导入历史对话), never uploaded anywhere, read as streams (any size). In the app they stay on the
+   * phone: the bridge copies them into the app cache and the proxy serves them
+   * (native/overlay/…/picks.dart); [PickedDocument.release] lets go of the copy.
+   */
+  async pickDocuments(accept: string[]): Promise<PickedDocument[]> {
     if (inApp()) {
-      const got = await call<{ name: string; data: string }[]>('pickDocuments', { accept }, PICK_TIMEOUT_MS);
-      return got.map((f) => new File([Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0))], f.name));
+      // Bridge 1 APKs from before picks.dart hand the files over whole, as base64 (≤ 64 MiB in all):
+      // hot-updated pages still run on them, so both shapes are read.
+      let got: ({ name: string; size: number; url: string } | { name: string; data: string })[];
+      try {
+        got = await call('pickDocuments', { accept }, PICK_TIMEOUT_MS);
+      } catch (e) {
+        if (/files too large/i.test(e instanceof Error ? e.message : String(e))) throw new Error('文件超过 64 MB，这个版本的 App 读不了，更新 App 后就能导入');
+        throw e;
+      }
+      return got.map((f) => ('url' in f ? pickedFromProxy(f) : pickedFromBytes(f.name, base64ToBytes(f.data))));
     }
     return new Promise((resolve) => {
       const input = Object.assign(document.createElement('input'), { type: 'file', multiple: true, accept: accept.join(',') });
@@ -310,6 +373,13 @@ function browserPick(accept: 'any' | 'image' | 'camera'): Promise<PickedFile[]> 
     };
     input.click();
   });
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 function blobToBase64(b: Blob): Promise<string> {

@@ -16,7 +16,8 @@ App → 页面   window.__apiDemo.reply(id, ok, value)
 |---|---|---|---|---|
 | `info` | — | `{appVersion, hosts:[{id,label,sub,status,current}], nativePages:[…], voice, notifications}` | 本机 + 已保存的 SSH 主机 | 两个演示主机 |
 | `pickFiles` | `{sessionId, accept:'any'|'image'|'camera'}` | `[{kind:'image', name, mimeType, data(base64), size} | {kind:'file', name, receiptId, size}]` | dsh-Go 的选择器（camera 走拍照）；文件由 App 上传到引擎（`/api/session/uploadFileBinary`），只回收据 | `<input type=file>` |
-| `pickDocuments` | `{accept: string[]}` | `[{name, data(base64)}]` | 读用户选的文件交给页面，不上传（导入历史对话）；合计 ≤ 64 MiB | `<input type=file>` |
+| `pickDocuments` | `{accept: string[]}` | `[{name, size, url}]` | 用户选的文件流式拷进 App 缓存，页面从代理的 `url`（`/__picks/<token>`）按流读取，可以读多遍；不上传，不限大小（导入历史对话、分享码文件）。BRIDGE 1 里更早的 APK 回的是 `[{name, data(base64)}]`、合计 ≤ 64 MiB，页面两种都认（热更新的页面也会跑在旧 APK 上） | `<input type=file>` |
+| `releaseDocuments` | `{urls: string[]}` | – | 删掉缓存里的副本（没调用的话，下次启动时清掉） | – |
 | `skills.install` | `{skills:[{name, files}]}` | 名字列表 | 写进本机引擎的 `~/.dsh/skills/<name>/`（和 dsh-Go 分享码导入同一个目录，同名的先移到 `~/.dsh/backups/`）；只在当前主机是本机时可用 | 原型里由模拟引擎接住 |
 | `skills.remove` | `{names}` | — | 删掉这些技能文件夹 | 同上 |
 | `switchHost` | `{id}` | — | 切换主机；首页为新主机重建代理并重新加载页面 | 只换显示 |

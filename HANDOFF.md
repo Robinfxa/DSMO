@@ -101,13 +101,15 @@ bash native/build-apk.sh          # 工作目录默认 ./build-apk
 | `proxy.dart` | 本地代理：127.0.0.1 随机端口，每次启动换一个密钥 cookie，只认自己的 Host / Origin，没有引擎时也给出页面（`/api/*` 回 503），`retarget` 换引擎不重载页面；转发 `/api/*`（含 DS Bot 的 `/api/bot` 和实时推送 `/api/bot/feed`，事件流不缓冲）、`/api/remote.mux`、`/dsh-go/*` | `dart:io` 的 `HttpServer` / `WebSocket`，`rootBundle` |
 | `bridge.dart` | 原生桥（选文件、拍照、存文件、分享、本地存储、语音、写技能文件、读导入文件），协议见 `docs/bridge.md` | `attachmentPickerProvider`（`takePhoto` / `pickImages` / `pickFiles`）、`client.uploadFile`、`FilePicker.pickFiles`、`GuestFs`、`SharedSkill`、`pageForId`、`featureSections` |
 | `bridge_local.dart` | 设置里「这台手机」那几页的原生方法（远程主机、本机引擎、通知、识别方式、更新、系统权限、手机操控）和分享码要读写的本机文件（技能、AGENTS.md、还原点），协议见 `docs/bridge.md` | `hostsProvider`、`SshHostLink`（`promptHostKey`）、`localRuntimeProvider`、`localRuntimeLogsProvider`、`settingsProvider.setAutoStartLocal`、`notifyPrefsProvider`、`voiceSettingsProvider`、`appUpdateProvider`、`accessReadingsProvider`、`accessDriverProvider`、`phoneProvider`、`GuestFs`（`readUserSkills` / `readUserAgentsMd` / `readSkillForImport` / `readImportedAgentsMd` / `writeImportedAgentsMd`）、`RestorePoint`（`pinCurrentProfile` / `backupDir` / `replaceSkill` / `backupAgentsMd`）；第 4 轮：首次启动 `setup.*` 和引擎故障 / 安全模式：`apiDemoSetup`、`onboardingPrefsProvider`、`runtimeInstallProvider`、`setupRuntimeProvider`、`installEtaProvider`、`localFootprintProvider`、`performanceDefaultsProvider`、`usageStatsProvider`、`EngineControl`（`restart` / `enterSafeMode` / `leaveSafeMode` / `restoreLastKnownGood` / `ensureStarted`）、`FailureCardModel`、`EngineFailureCard.visibleFor`、`SafeModeActions.describeRestore`、`safeModeReasonText`、`repairPrompt`、`appUpdateProvider.autoCheckIfDue` |
+| `picks.dart` | 选的文件流式拷进缓存，代理的 `/__picks/<token>` 给页面按流读（导入历史对话不限大小） | `FilePicker.pickFiles` 返回的 `PlatformFile.readAsByteStream()`、`path_provider` 的 `getTemporaryDirectory` |
+| `web_update.dart` | 前端热更新：从本仓库 `web-latest` 下载 `web.zip`，校验后切换（见 `.github/workflows/web.yml`） | `package:http`、`package:archive`、`package:crypto`、`path_provider` |
 | `api_demo_setup.dart` | 首次启动：RootGate 发布当前步骤和回调（补丁 0006 用它） | `OnboardingStep` |
 | `bridge_phone.dart` | 第 6 轮：不打扰模式、自动恢复无障碍、Android Shell、操作记录、本机语音模型 | `phoneProvider`（`PhoneController` 的 `setPrivilegedMode`、`adbPair` 等）、`AndroidShellChannel`、`voiceModelProvider`、`PhoneBackgroundPreviewDialog`、`phoneDecisionLabel`、`RomFamily` |
 | `dictation.dart` | 复用 dsh-Go 的听写 | `voice*Provider`、`streamingAsrProvider`、`streamingPcmCaptureProvider` |
 
 修的原则：
 
-- **只改这 7 个 overlay 文件，不动补丁。** `bridge_local.dart` 最可能报错（用到的 provider 最多）；实在修不动，可以先把 `bridge.dart` 里 `ApiDemoLocal.handles` 那一行注释掉，App 照样能编译，只是「这台手机」那几页会显示失败。 修好后把改动拷回 DSMO 仓库的 `native/overlay/app/lib/api_demo/`，下次就不用再修。
+- **只改这 9 个 overlay 文件，不动补丁。** `bridge_local.dart` 最可能报错（用到的 provider 最多）；实在修不动，可以先把 `bridge.dart` 里 `ApiDemoLocal.handles` 那一行注释掉，App 照样能编译，只是「这台手机」那几页会显示失败。 修好后把改动拷回 DSMO 仓库的 `native/overlay/app/lib/api_demo/`，下次就不用再修。
 - 报「找不到某个 provider / 方法」时，到 dsh-Go 里搜同名或相近的定义（`grep -rn "名字" app/lib`），按实际签名改调用。
 - 如果是 `git am` 打补丁失败（只会在你换了 dsh-Go 版本时发生），见 `docs/native.md` › 跟进上游。
 

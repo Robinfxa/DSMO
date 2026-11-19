@@ -53,51 +53,90 @@ export function toWire(c: ImportedChat) {
   };
 }
 
+/** An array, or a stream of conversations read from the picked files (stream.ts). */
+export type ChatFeed = Iterable<ImportedChat> | AsyncIterable<ImportedChat>;
+
 export interface ImportPreview {
   count: number;
   messages: number;
   from: number;
   to: number;
+  sources: ImportedChat['source'][];
   /** Already in the conversation list from an earlier import. */
   already: number;
 }
 
-export async function previewImport(chats: ImportedChat[]): Promise<ImportPreview> {
+/** One pass over the conversations, holding none of them. */
+export async function previewImport(chats: ChatFeed): Promise<ImportPreview> {
   const have = new Set(sessions.value.map((s) => s.sessionId));
-  let already = 0;
-  for (const c of chats) if (have.has(await importedSessionId(c.source, sourceIdOf(c)))) already++;
-  return {
-    count: chats.length,
-    messages: chats.reduce((n, c) => n + c.messages.length, 0),
-    from: Math.min(...chats.map((c) => c.createdAt)),
-    to: Math.max(...chats.map((c) => c.updatedAt)),
-    already,
-  };
+  const p: ImportPreview = { count: 0, messages: 0, from: Infinity, to: -Infinity, sources: [], already: 0 };
+  for await (const c of chats) {
+    p.count++;
+    p.messages += c.messages.length;
+    p.from = Math.min(p.from, c.createdAt);
+    p.to = Math.max(p.to, c.updatedAt);
+    if (!p.sources.includes(c.source)) p.sources.push(c.source);
+    if (have.has(await importedSessionId(c.source, sourceIdOf(c)))) p.already++;
+  }
+  return p;
+}
+
+type Batch = { source: ImportedChat['source']; items: { chat: ImportedChat; wire: ReturnType<typeof toWire> }[] };
+
+/** Fills same-source runs of at most BATCH conversations and BATCH_BYTES of JSON, one conversation at a time. */
+class Batcher {
+  private open: Batch | null = null;
+  private bytes = 0;
+  private readonly enc = new TextEncoder();
+
+  /** The conversation goes into the open batch; a batch that is full comes back. 'too-large' when the bridge can't take it at all. */
+  add(chat: ImportedChat): Batch | 'too-large' | null {
+    const wire = toWire(chat);
+    const size = this.enc.encode(JSON.stringify(wire)).length;
+    if (size > MAX_ONE) return 'too-large';
+    const last = this.open;
+    if (last && last.source === chat.source && last.items.length < BATCH && this.bytes + size <= BATCH_BYTES) {
+      last.items.push({ chat, wire });
+      this.bytes += size;
+      return null;
+    }
+    this.open = { source: chat.source, items: [{ chat, wire }] };
+    this.bytes = size;
+    return last;
+  }
+
+  flush(): Batch | null {
+    const last = this.open;
+    this.open = null;
+    return last;
+  }
 }
 
 /** Same-source runs of at most BATCH conversations and BATCH_BYTES of JSON. */
 export function batches(chats: ImportedChat[]) {
-  const out: { source: ImportedChat['source']; items: { chat: ImportedChat; wire: ReturnType<typeof toWire> }[] }[] = [];
+  const out: Batch[] = [];
   const tooLarge: ImportedChat[] = [];
-  const enc = new TextEncoder();
-  let bytes = 0;
+  const b = new Batcher();
   for (const chat of chats) {
-    const wire = toWire(chat);
-    const size = enc.encode(JSON.stringify(wire)).length;
-    if (size > MAX_ONE) {
-      tooLarge.push(chat);
-      continue;
-    }
-    const last = out[out.length - 1];
-    if (last && last.source === chat.source && last.items.length < BATCH && bytes + size <= BATCH_BYTES) {
-      last.items.push({ chat, wire });
-      bytes += size;
-    } else {
-      out.push({ source: chat.source, items: [{ chat, wire }] });
-      bytes = size;
-    }
+    const r = b.add(chat);
+    if (r === 'too-large') tooLarge.push(chat);
+    else if (r) out.push(r);
   }
+  const last = b.flush();
+  if (last) out.push(last);
   return { batches: out, tooLarge };
+}
+
+/** The batches as the conversations stream in; only the batch being filled is held. */
+async function* batchStream(chats: ChatFeed, tooLarge: (c: ImportedChat) => void): AsyncGenerator<Batch> {
+  const b = new Batcher();
+  for await (const chat of chats) {
+    const r = b.add(chat);
+    if (r === 'too-large') tooLarge(chat);
+    else if (r) yield r;
+  }
+  const last = b.flush();
+  if (last) yield last;
 }
 
 export interface ImportFailure {
@@ -114,6 +153,8 @@ export interface ImportRun {
   stopped: boolean;
   /** Set when the host stopped answering; the rest was not sent. */
   error?: string;
+  /** Set when the file stopped reading part-way. */
+  readError?: string;
 }
 export const importRun = signal<ImportRun | null>(null);
 let stopRequested = false;
@@ -126,45 +167,65 @@ const REASON: Record<string, string> = {
   'too-many-deletions': '删除过太多次',
   'too-large': '对话太长',
 };
+/** The bridge's reasons for `invalid` (normalizeConversation in patch 0007) that the person can act on. */
+const INVALID: Record<string, string> = {
+  messages: '消息超过 4000 条',
+  'message text': '有一条消息超过 50 万字',
+};
 
 /**
- * Sends the chats batch by batch; `importRun` follows along. With removeLocal,
+ * Sends the chats batch by batch as they are read; `importRun` follows along
+ * (pass `total` from the preview when [chats] is a stream). With removeLocal,
  * on-device copies (imported.ts) that reached the list are deleted afterwards.
  */
-export async function runImport(chats: ImportedChat[], { removeLocal = false } = {}): Promise<ImportRun> {
+export async function runImport(chats: ChatFeed, { removeLocal = false, total }: { removeLocal?: boolean; total?: number } = {}): Promise<ImportRun> {
   stopRequested = false;
-  const { batches: queue, tooLarge } = batches(chats);
-  const run: ImportRun = { total: chats.length, done: tooLarge.length, imported: 0, skipped: 0, failed: tooLarge.map((c) => ({ title: c.title, reason: REASON['too-large'] })), running: true, stopped: false };
-  const publish = () => (importRun.value = { ...run, failed: [...run.failed] });
-  const landed: ImportedChat[] = [];
+  const run: ImportRun = { total: total ?? (Array.isArray(chats) ? chats.length : 0), done: 0, imported: 0, skipped: 0, failed: [], running: true, stopped: false };
+  const publish = () => (importRun.value = { ...run, total: Math.max(run.total, run.done), failed: [...run.failed] });
+  const landed: string[] = [];
   publish();
-  for (const batch of queue) {
-    if (stopRequested) {
-      run.stopped = true;
-      break;
+  const queue = batchStream(chats, (c) => {
+    run.failed.push({ title: c.title, reason: REASON['too-large'] });
+    run.done++;
+  });
+  try {
+    for await (const batch of queue) {
+      if (stopRequested) {
+        run.stopped = true;
+        break;
+      }
+      let results: Record<string, unknown>[];
+      try {
+        const r = await dshGoTransport().post(IMPORT_PATH, { source: batch.source, conversations: batch.items.map((i) => i.wire) });
+        if (r.status !== 200) throw new Error(str(obj(obj(r.json).error).message) ?? `HTTP ${r.status}`);
+        results = list(obj(r.json).results).map(obj);
+      } catch (e) {
+        run.error = e instanceof Error ? e.message : String(e);
+        break;
+      }
+      batch.items.forEach(({ chat }, i) => {
+        const status = str(results[i]?.status);
+        if (status === 'imported') run.imported++;
+        else if (status === 'skipped') run.skipped++;
+        else {
+          const code = str(results[i]?.code) ?? '';
+          run.failed.push({ title: chat.title, reason: (code === 'invalid' && INVALID[str(results[i]?.reason) ?? '']) || REASON[code] || '没有导入' });
+        }
+        if (status === 'imported' || status === 'skipped') landed.push(chat.id);
+      });
+      run.done += batch.items.length;
+      publish();
     }
-    let results: Record<string, unknown>[];
-    try {
-      const r = await dshGoTransport().post(IMPORT_PATH, { source: batch.source, conversations: batch.items.map((i) => i.wire) });
-      if (r.status !== 200) throw new Error(str(obj(obj(r.json).error).message) ?? `HTTP ${r.status}`);
-      results = list(obj(r.json).results).map(obj);
-    } catch (e) {
-      run.error = e instanceof Error ? e.message : String(e);
-      break;
-    }
-    batch.items.forEach(({ chat }, i) => {
-      const status = str(results[i]?.status);
-      if (status === 'imported') run.imported++;
-      else if (status === 'skipped') run.skipped++;
-      else run.failed.push({ title: chat.title, reason: REASON[str(results[i]?.code) ?? ''] ?? '没有导入' });
-      if (status === 'imported' || status === 'skipped') landed.push(chat);
-    });
-    run.done += batch.items.length;
-    publish();
+  } catch (e) {
+    // the file stopped reading part-way (it went away, or the zip is damaged)
+    run.readError = e instanceof Error ? e.message : String(e);
+  } finally {
+    // stops the reader if the loop left early
+    await queue.return(undefined);
   }
   run.running = false;
   publish();
   if (run.imported) void refreshSessions();
-  if (removeLocal) for (const c of landed) await deleteImported(c.id);
+  if (removeLocal) for (const id of landed) await deleteImported(id);
   return run;
 }

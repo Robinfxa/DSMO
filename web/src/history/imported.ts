@@ -8,7 +8,6 @@
 // (a DSH session log), and a plain [{ title, messages: [{ role, content }] }].
 
 import { signal } from '@preact/signals';
-import { unzipSync, strFromU8 } from 'fflate';
 import { list, obj, str } from '../engine/json';
 import { parseLogEvent } from '../engine/events';
 import { Transcript } from '../engine/transcript';
@@ -169,39 +168,6 @@ export function parseJson(v: unknown): ImportedChat[] {
   return out;
 }
 const isConversationList = (v: unknown) => Array.isArray(obj(v).conversations) || Array.isArray(obj(v).items);
-
-function readBytes(f: Blob): Promise<Uint8Array> {
-  if (typeof f.arrayBuffer === 'function') return f.arrayBuffer().then((b) => new Uint8Array(b));
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(new Uint8Array(r.result as ArrayBuffer));
-    r.onerror = () => reject(r.error);
-    r.readAsArrayBuffer(f);
-  });
-}
-
-/** Files picked by the user → conversations (zip archives are opened in place). */
-export async function parseFiles(files: File[]): Promise<{ chats: ImportedChat[]; skipped: number }> {
-  const chats: ImportedChat[] = [];
-  let skipped = 0;
-  const take = (name: string, text: string) => {
-    try {
-      const found = parseJson(JSON.parse(text));
-      found.length ? chats.push(...found) : skipped++;
-    } catch {
-      if (/\.json$/i.test(name)) skipped++;
-    }
-  };
-  for (const f of files) {
-    const buf = await readBytes(f);
-    if (/\.zip$/i.test(f.name) || (buf[0] === 0x50 && buf[1] === 0x4b)) {
-      const entries = unzipSync(buf, { filter: (e) => /\.json$/i.test(e.name) && !e.name.startsWith('__MACOSX') });
-      for (const [name, data] of Object.entries(entries)) take(name, strFromU8(data));
-    } else take(f.name, strFromU8(buf));
-  }
-  const byId = new Map(chats.map((c) => [c.id, c]));
-  return { chats: [...byId.values()], skipped };
-}
 
 // ---------------------------------------------------------------- storage (IndexedDB on this device)
 

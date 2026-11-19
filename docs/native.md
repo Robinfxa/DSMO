@@ -29,7 +29,8 @@ Kotlin 包名（`namespace`）故意不改，否则要搬一堆文件。
 | 文件 | 作用 |
 |---|---|
 | `app/lib/api_demo/api_demo_home.dart` | 首页：为当前主机起代理、加载页面、接通知 / 链接 / 分享 / 返回键 |
-| `app/lib/api_demo/proxy.dart` | 本地代理：127.0.0.1 随机端口；每次启动的密钥（HttpOnly、SameSite=Strict cookie）；只认自己的 Host 和 Origin；转发 `/api/*`、`/api/remote.mux`、`/dsh-go/*` |
+| `app/lib/api_demo/proxy.dart` | 本地代理：127.0.0.1 随机端口；每次启动的密钥（HttpOnly、SameSite=Strict cookie）；只认自己的 Host 和 Origin；转发 `/api/*`、`/api/remote.mux`、`/dsh-go/*`；`/__picks/<token>` 按流给出用户选的文件（`picks.dart`） |
+| `app/lib/api_demo/picks.dart` | 用户选的文件：流式拷进缓存，由代理按流给页面（导入大文件不再整个读进内存、不再 base64） |
 | `app/lib/api_demo/bridge.dart` | 原生桥，见 [bridge.md](bridge.md) |
 | `app/lib/api_demo/bridge_local.dart` · `bridge_phone.dart` | 桥里管手机本地状态的部分（主机、引擎、通知、更新、权限、手机操控、分享、首次启动；第 6 轮的不打扰模式、Android Shell、语音模型） |
 | `app/lib/api_demo/api_demo_setup.dart` | 首次启动：RootGate 把当前步骤交给网页（补丁 0006） |

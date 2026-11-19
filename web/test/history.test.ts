@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
-import { parseFiles, parseJson, saveImported, imported, getImported, clearImported, toMarkdown } from '../src/history/imported';
+import { parseJson, saveImported, imported, getImported, clearImported, toMarkdown } from '../src/history/imported';
+import { parseFiles } from '../src/history/stream';
+import { source } from './stream-source';
 
 const fx = (n: string) => readFileSync(`test/fixtures/${n}`, 'utf8');
 
@@ -47,8 +49,8 @@ describe('导入历史对话', () => {
 
   it('opens zip archives and de-duplicates by id', async () => {
     const zip = zipSync({ 'conversations.json': strToU8(fx('deepseek-conversations.json')), 'user.json': strToU8('{"name":"x"}') });
-    const f1 = new File([zip], 'deepseek_data.zip');
-    const f2 = new File([fx('deepseek-conversations.json')], 'conversations.json');
+    const f1 = source('deepseek_data.zip', zip);
+    const f2 = source('conversations.json', strToU8(fx('deepseek-conversations.json')));
     const { chats, skipped } = await parseFiles([f1, f2]);
     expect(chats).toHaveLength(2);
     expect(skipped).toBe(1);

@@ -8,6 +8,7 @@
 //   /__enter?k=<secret>  sets an HttpOnly cookie holding a per-launch secret and
 //                        redirects to /. Every other request must carry it, so
 //                        other apps on the phone can't use the proxy's engine login.
+//   /__picks/<token>     a file the person picked, streamed from the app cache (picks.dart)
 //   /api/*, /dsh-go/*    forwarded to the engine (HTTP and the mux WebSocket) with
 //                        the engine's own auth cookie, Host rewritten, Origin and
 //                        Referer dropped — to the engine it is a same-origin client.
@@ -29,6 +30,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show AssetBundle, rootBundle;
+
+import 'picks.dart';
 
 /// Where the page's assets live in the Flutter bundle.
 const apiDemoAssetRoot = 'assets/api_demo';
@@ -150,6 +153,7 @@ class ApiDemoProxy {
     final origin = r.headers.value('origin');
     if (origin != null && origin != this.origin && origin != 'null') return _fail(r, 403, 'cross-origin');
 
+    if (path.startsWith(ApiDemoPicks.route)) return _servePick(r);
     if (path.startsWith('/api/') || path.startsWith('/dsh-go/')) {
       if (_engine == null) return _fail(r, 503, 'no-engine');
       if (WebSocketTransformer.isUpgradeRequest(r)) return _proxySocket(r);
@@ -247,6 +251,20 @@ class ApiDemoProxy {
     'woff2': 'font/woff2',
     'ico': 'image/x-icon',
   };
+
+  /// A file the person picked (picks.dart), streamed; it never goes to the engine.
+  Future<void> _servePick(HttpRequest r) async {
+    if (r.method != 'GET') return _fail(r, 405, 'method');
+    final file = ApiDemoPicks.instance.lookup(r.uri.path);
+    if (file == null || !await file.exists()) return _fail(r, 404, 'gone');
+    r.response
+      ..statusCode = HttpStatus.ok
+      ..headers.contentType = ContentType.binary
+      ..headers.contentLength = await file.length()
+      ..headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+    await r.response.addStream(file.openRead());
+    await r.response.close();
+  }
 
   Future<void> _serveAsset(HttpRequest r) async {
     if (r.method != 'GET' && r.method != 'HEAD') return _fail(r, 405, 'method');

@@ -4,7 +4,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -85,6 +85,35 @@ await tap('.plg-link:has-text("全部转入对话列表")', 500);
 await tap('.m-alert-btns button >> nth=-1', 150);
 await page.waitForSelector('.imp-run-t:has-text("导入完成")', { timeout: 8000 });
 await shot('09-moved');
+await tap('.hist-bar .plg-btn.pri', 500);
+
+// an export over the old 64 MB limit (“file too large”): read as a stream, imported in batches
+const big = join(shots, '..', 'big-deepseek-export.zip');
+if (!existsSync(big)) {
+  const { zipSync, strToU8 } = await import(join(here, '..', 'node_modules', 'fflate', 'esm', 'index.mjs'));
+  const filler = ' 很长的回答'.repeat(4000);
+  const convs = Array.from({ length: 1200 }, (_, i) => ({
+    id: `big${i}`,
+    title: `大文件对话 ${i}`,
+    inserted_at: '2025-06-01T09:00:00+08:00',
+    updated_at: '2025-06-01T09:10:00+08:00',
+    mapping: {
+      root: { id: 'root', parent: null, children: ['1'], message: null },
+      1: { id: '1', parent: 'root', children: ['2'], message: { fragments: [{ type: 'REQUEST', content: `问题 ${i}` }] } },
+      2: { id: '2', parent: '1', children: [], message: { fragments: [{ type: 'RESPONSE', content: `回答 ${i}${filler}` }] } },
+    },
+  }));
+  writeFileSync(big, zipSync({ 'deepseek_data/conversations.json': strToU8(JSON.stringify(convs)) }, { level: 6 }));
+}
+await toData();
+await pick([big]);
+await page.waitForSelector('.m-alert', { timeout: 60000 });
+check((await page.textContent('.m-alert')).includes('导入 1200 个对话'), 'large export: preview counts every conversation');
+await shot('10-big-confirm');
+await tap('.m-alert-btns button >> nth=-1', 150);
+await page.waitForSelector('.imp-run-t:has-text("导入完成")', { timeout: 120000 });
+check((await page.textContent('.imp-run')).includes('已导入 1200'), 'large export: all imported');
+await shot('11-big-done');
 
 await browser.close();
 if (errors.length) {
