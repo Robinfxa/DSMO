@@ -47,14 +47,19 @@ jobs:
             build-apk/dsh-go/runtime/.cache
           key: dshgo-${{ hashFiles('native/BASE') }}
 
-      # One debug signing key for every build: without it each runner makes its own, and a new
-      # APK can't install over the last one (the phone has to uninstall it first). It is the
-      # standard Android debug key (password "android"), not a release key.
-      - name: Keep the debug signing key between builds
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: dsmo-debug-keystore-v1
+      # DSMO's one signing key (repository secrets). Android only installs an update signed with
+      # the same key; without it every runner would sign with its own random debug key and each
+      # APK would need an uninstall (which wipes the app's data).
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DSMO_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::secret DSMO_KEYSTORE_BASE64 is missing: the APK could not update the installed one"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/dsmo-release.p12"
+          echo "DSMO_KEYSTORE=$RUNNER_TEMP/dsmo-release.p12" >> "$GITHUB_ENV"
 
       # Gradle's downloads (plugins, Maven dependencies) between builds: Maven Central answers
       # GitHub's shared runners with 429 Too Many Requests now and then.
@@ -78,6 +83,8 @@ jobs:
         env:
           ABI: ${{ inputs.abi }}
           API_DEMO_UPDATE_REPO: ${{ inputs.update_repo }}
+          DSMO_KEYSTORE_PASSWORD: ${{ secrets.DSMO_KEYSTORE_PASSWORD }}
+          DSMO_KEY_ALIAS: ${{ secrets.DSMO_KEY_ALIAS }}
           # GitHub's runners reach Google's and Maven Central's repositories directly;
           # dsh-Go's Gradle files skip their China mirrors when this is 0.
           DSH_MAVEN_MIRRORS: '0'

@@ -75,6 +75,18 @@ echo "→ runtime ($rt)"
 bash runtime/build-runtime.sh "$rt"
 
 echo "→ APK"
+# DSMO's signing key: every APK signed with it installs over the last one, data kept. Without it
+# the build falls back to a debug key made on this machine, which other machines' builds don't share.
+if [ -n "${DSMO_KEYSTORE:-}" ]; then
+  [ -f "$DSMO_KEYSTORE" ] || { echo "✗ DSMO_KEYSTORE: no file at $DSMO_KEYSTORE" >&2; exit 1; }
+  [ -n "${DSMO_KEYSTORE_PASSWORD:-}" ] || { echo "✗ DSMO_KEYSTORE_PASSWORD is not set" >&2; exit 1; }
+  (umask 077 && printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+    "$DSMO_KEYSTORE" "$DSMO_KEYSTORE_PASSWORD" "${DSMO_KEY_ALIAS:-dsmo}" "$DSMO_KEYSTORE_PASSWORD" > app/android/key.properties)
+  echo "  signing with DSMO's key"
+else
+  rm -f app/android/key.properties
+  echo "  ! no DSMO_KEYSTORE: signed with this machine's debug key; it will not install over APKs built elsewhere"
+fi
 # The native bridge this APK provides: a hot-updated page that needs a newer one is not taken
 # (web_update.dart, native/BRIDGE).
 defines=("--dart-define=API_DEMO_BRIDGE=$(tr -dc 0-9 < "$here/BRIDGE")")
@@ -84,4 +96,6 @@ DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh -f "$abi" -- "${defines[@]}"
 apk="$dsh/app/build/app/outputs/flutter-apk/app-$abi-release.apk"
 mkdir -p "$repo/dist-apk"
 cp "$apk" "$repo/dist-apk/dsmo-$abi.apk"
+# The certificate the phone checks on every update (public; DSMO's key: FE:33:5D:B8:…:47:F3).
+keytool -printcert -jarfile "$apk" 2>/dev/null | grep -m1 -E 'SHA256:' | sed 's/^[[:space:]]*/  certificate /' || true
 echo "✓ $repo/dist-apk/dsmo-$abi.apk"
