@@ -56,6 +56,16 @@ jobs:
           path: ~/.android/debug.keystore
           key: dsmo-debug-keystore-v1
 
+      # Gradle's downloads (plugins, Maven dependencies) between builds: Maven Central answers
+      # GitHub's shared runners with 429 Too Many Requests now and then.
+      - name: Cache Gradle downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper
+          key: dsmo-gradle-${{ hashFiles('native/BASE') }}
+
       - name: Pre-download Flutter from official CDN
         run: |
           mkdir -p ~/dev/.downloads
