@@ -24,7 +24,8 @@ import { TerminalPage } from './host/terminal';
 import { AccessPage, EnginePage, HostEditPage, HostsPage, NotifySettingsPage, PhonePage, UpdatePage, VoiceSettingsPage } from './host/local';
 import { A11yRestorePage, AndroidShellPage, PhoneDndPage, PhoneLogPage } from './host/phone';
 import { PresetsPage, TeamPage } from './agents';
-import { PersonaPage } from './persona';
+import { LongMemoryEditPage, LongMemoryPage } from './memory';
+import { PersonaDetailPage, PersonaEditPage, PersonaPage } from './persona';
 import { SkillEditPage, SkillInfoPage, SkillsPage } from './skills';
 import { imported } from '../../history/imported';
 import { exportConversations, exportFileName } from '../../history/export';
@@ -92,6 +93,7 @@ export const PAGES: Record<string, PageDef> = {
   'agent-team': { title: '智能体团队', body: TeamPage },
   presets: { title: 'Agent 预设', body: PresetsPage },
   persona: { title: '人设', body: PersonaPage },
+  memory: { title: '长期记忆', body: LongMemoryPage },
   'phone-a11y-restore': { title: '自动恢复无障碍', body: A11yRestorePage },
   'phone-shell': { title: 'Android Shell', body: AndroidShellPage },
   'phone-log': { title: '操作记录', body: PhoneLogPage },
@@ -108,6 +110,18 @@ export const PAGES: Record<string, PageDef> = {
 /** Pages with a parameter: `plugin:<id>` (detail) and `plugin-manage:<id>` (its 管理 page). */
 function pageDef(id: string | undefined): PageDef | undefined {
   if (!id) return undefined;
+  if (id.startsWith('memory:')) {
+    const mid = id.slice('memory:'.length);
+    return { title: '记忆', body: () => <LongMemoryEditPage id={mid} /> };
+  }
+  if (id.startsWith('persona-edit:')) {
+    const t = id.slice('persona-edit:'.length);
+    return { title: t === 'new' ? '新建人设' : t.startsWith('copy:') ? '复制人设' : '编辑人设', body: () => <PersonaEditPage target={t} /> };
+  }
+  if (id.startsWith('persona:')) {
+    const pid = id.slice('persona:'.length);
+    return { title: '人设详情', body: () => <PersonaDetailPage id={pid} /> };
+  }
   if (id.startsWith('skill-info:')) {
     const name = id.slice('skill-info:'.length);
     return { title: name, body: () => <SkillInfoPage name={name} /> };

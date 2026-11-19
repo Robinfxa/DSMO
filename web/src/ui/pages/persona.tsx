@@ -1,21 +1,29 @@
 // 人设 (plugin 「人设库」): the community persona library dsh-persona-dafeiyu runs on the host and
 // adds the chosen persona to every turn's system prompt. Its own settings and chips are DSH Web
-// UI, which DSMO doesn't render, so this page drives its loopback API through the local proxy:
+// UI, which DSMO doesn't render, so these pages drive its loopback API through the local proxy:
 //
 //   GET  /api/dsh-persona-dafeiyu/status          current persona, the list (metadata only)
 //   GET  /api/dsh-persona-dafeiyu/persona?id=…    one persona's text
 //   POST /api/dsh-persona-dafeiyu/mutate          {action: set-current | import | rename | remove, …}
 //
 // `set-current` with `id: null` switches personas off. The package writes only on JSON same-origin
-// requests (its CSRF guard); the proxy's requests are both.
+// requests (its CSRF guard); the proxy's requests are both. It has no "edit text" action: an edit
+// imports the new text under a temporary name, moves the choice to it, removes the old one and
+// renames the new one back.
+//
+// Pages: 人设 (choose; › for details), persona:<id> (the text; use / edit / copy / delete),
+// persona-edit:new | persona-edit:<id> | persona-edit:copy:<id> (name and text).
 
+import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
-import { confirm, errText, openPage, showToast } from '../../state/store';
+import { backPage, confirm, errText, openPage, showToast } from '../../state/store';
 import { MIc } from '../mobile/MIc';
 
 const BASE = '/api/dsh-persona-dafeiyu';
-/** The persona text the package accepts at most (its MAX_PERSONA_CHARS is larger; keep prompts short). */
-const MAX_CHARS = 8000;
+/** What these pages let a persona be (the package takes up to 64 000; every character goes into every turn). */
+export const MAX_CHARS = 20_000;
+/** The package's MAX_PERSONA_NAME. */
+const MAX_NAME = 60;
 
 interface Persona {
   id: string;
@@ -64,15 +72,17 @@ async function getJson(path: string): Promise<unknown> {
   return j.value ?? j;
 }
 
-async function mutate(body: Record<string, unknown>) {
+/** One change; the package answers with the new status. */
+async function mutate(body: Record<string, unknown>): Promise<Status> {
   const res = await fetch(`${BASE}/mutate`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; value?: unknown };
   if (!res.ok || j.ok === false) throw new Error(j.error || `HTTP ${res.status}`);
+  return (status.value = j.value ? readStatus(j.value) : await refresh());
 }
 
 function readStatus(v: unknown): Status {
@@ -98,216 +108,317 @@ function readStatus(v: unknown): Status {
   };
 }
 
+/** Shared by the three pages; the list reloads it when it opens. */
+const status = signal<Status | null>(null);
+const failure = signal<string | null>(null);
+
+async function refresh(): Promise<Status> {
+  try {
+    const s = readStatus(await getJson(`${BASE}/status`));
+    failure.value = null;
+    return (status.value = s);
+  } catch (e) {
+    failure.value = (e as Error).message === 'missing' ? 'missing' : errText(e);
+    throw e;
+  }
+}
+
+async function readText(id: string): Promise<string> {
+  const one = (await getJson(`${BASE}/persona?id=${encodeURIComponent(id)}`)) as Record<string, unknown>;
+  return typeof one.text === 'string' ? one.text : '';
+}
+
+const inUse = (s: Status, p: Persona) => !s.globalOff && p.current;
+/** Only personas the person added can be edited, renamed or deleted (the package's rules). */
+const own = (p: Persona) => !p.builtin && p.source !== 'config';
+const sourceLabel = (p: Persona) => (p.builtin ? '示例' : p.source === 'config' ? '配置文件' : null);
+
 /** The first `# 人设：名字` line (the package's file format), for a name when none is typed. */
 function nameFromText(text: string): string {
   const m = text.match(/^#\s*人设[:：]\s*(.+)$/m);
-  return (m?.[1] ?? '').trim().slice(0, 24);
+  return (m?.[1] ?? '').trim().slice(0, MAX_NAME);
 }
 
-export function PersonaPage() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [failed, setFailed] = useState<'missing' | string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-  const [view, setView] = useState<{ name: string; text: string } | null>(null);
-  const [draft, setDraft] = useState<{ name: string; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const load = async () => {
-    try {
-      setStatus(readStatus(await getJson(`${BASE}/status`)));
-      setFailed(null);
-    } catch (e) {
-      setFailed((e as Error).message === 'missing' ? 'missing' : errText(e));
-    }
-  };
-  useEffect(() => void load(), []);
-
-  const act = async (body: Record<string, unknown>, done: string) => {
-    setBusy(true);
-    try {
-      await mutate(body);
-      showToast(done);
-    } catch (e) {
-      showToast(errText(e));
-    } finally {
-      setBusy(false);
-      void load();
-    }
-  };
-  const show = async (p: Persona) => {
-    try {
-      const one = (await getJson(`${BASE}/persona?id=${encodeURIComponent(p.id)}`)) as Record<string, unknown>;
-      setView({ name: p.name, text: typeof one.text === 'string' ? one.text : '（读不到正文）' });
-    } catch (e) {
-      showToast(errText(e));
-    }
-  };
-  const save = async () => {
-    if (!draft) return;
-    const text = draft.text.trim();
-    const name = (draft.name.trim() || nameFromText(text)).slice(0, 24);
-    if (!name) return showToast('给人设起个名字');
-    if (!text || text === PERSONA_TEMPLATE.trim()) return showToast('先写一下人设内容');
-    if (text.length > MAX_CHARS) return showToast(`人设太长了（${text.length} 字），请控制在 ${MAX_CHARS} 字以内`);
-    setBusy(true);
-    try {
-      await mutate({ action: 'import', name, text });
-      // Use it right away: the new one is the imported persona with that name.
-      const next = readStatus(await getJson(`${BASE}/status`));
-      const made = [...next.personas].reverse().find((p) => p.name === name && !p.builtin);
-      if (made) await mutate({ action: 'set-current', id: made.id });
-      setDraft(null);
-      showToast(`已启用「${name}」`);
-    } catch (e) {
-      showToast(errText(e));
-    } finally {
-      setBusy(false);
-      void load();
-    }
-  };
-
-  if (failed === 'missing')
-    return (
-      <div class="plg">
-        <p class="plg-note">还没装「人设库」插件，或者装好后引擎还没重启。</p>
-        <div class="plg-actions">
-          <button class="plg-btn pri" type="button" onClick={() => openPage('plugins')}>
-            去插件市场
-          </button>
-          <button class="plg-btn" type="button" onClick={() => void load()}>
-            重试
-          </button>
-        </div>
+function Missing() {
+  return (
+    <div class="plg">
+      <p class="plg-note">还没装「人设库」插件，或者装好后引擎还没重启。</p>
+      <div class="plg-actions">
+        <button class="plg-btn pri" type="button" onClick={() => openPage('plugins')}>
+          去插件市场
+        </button>
+        <button class="plg-btn" type="button" onClick={() => void refresh().catch(() => {})}>
+          重试
+        </button>
       </div>
-    );
-  if (failed && !status)
+    </div>
+  );
+}
+
+/** While the status loads, or when it can't. */
+function Waiting() {
+  if (failure.value === 'missing') return <Missing />;
+  if (failure.value)
     return (
       <div class="plg-empty-line">
-        没能读取人设：{failed}
-        <button class="plg-text-btn" type="button" onClick={() => void load()}>
+        没能读取人设：{failure.value}
+        <button class="plg-text-btn" type="button" onClick={() => void refresh().catch(() => {})}>
           重试
         </button>
       </div>
     );
-  if (!status) return <div class="plg-empty-line">正在读取…</div>;
+  return <div class="plg-empty-line">正在读取…</div>;
+}
 
-  if (view)
-    return (
-      <div class="plg">
-        <div class="plg-group">
-          <pre class="dnd-cmd">{view.text}</pre>
-        </div>
-        <div class="plg-actions">
-          <button class="plg-btn" type="button" onClick={() => setView(null)}>
-            返回
-          </button>
-        </div>
-      </div>
-    );
+// ---------------------------------------------------------------- 人设: choose
 
-  if (draft)
-    return (
-      <div class="plg">
-        <p class="plg-note">照下面的格式写，每一节都可以删改。写好后会立刻用在之后的每一句话里。</p>
-        <div class="plg-group">
-          <input
-            class="sf-input"
-            type="text"
-            maxLength={24}
-            placeholder="名字（不填就用「# 人设：」后面那个）"
-            value={draft.name}
-            onInput={(e) => setDraft({ ...draft, name: (e.target as HTMLInputElement).value })}
-          />
-          <textarea
-            class="sf-input area"
-            rows={16}
-            value={draft.text}
-            onInput={(e) => setDraft({ ...draft, text: (e.target as HTMLTextAreaElement).value })}
-          />
-          <p class="dnd-fine">{draft.text.length} / {MAX_CHARS} 字</p>
-        </div>
-        <div class="plg-actions">
-          <button class="plg-btn pri" type="button" disabled={busy} onClick={() => void save()}>
-            {busy ? '保存中' : '保存并启用'}
-          </button>
-          <button class="plg-btn" type="button" disabled={busy} onClick={() => setDraft(null)}>
-            取消
-          </button>
-        </div>
-      </div>
-    );
+export function PersonaPage() {
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => void refresh().catch(() => {}), []);
+  const s = status.value;
+  if (!s) return <Waiting />;
+
+  const choose = async (id: string | null, name: string) => {
+    if (busy) return;
+    setBusy(id ?? 'off');
+    try {
+      await mutate({ action: 'set-current', id });
+      showToast(id ? `已启用「${name}」` : '已关闭人设');
+    } catch (e) {
+      showToast(errText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div class="plg">
-      <p class="plg-note">
-        {status.globalOff ? '现在没有启用人设。' : `现在的人设：${status.currentName ?? status.current}。`}
-        选好的人设会带进之后的每一句话里。
-      </p>
-      <div class="plg-group">
-        <div class="plg-row" role="button" tabIndex={0} onClick={() => !status.globalOff && void act({ action: 'set-current', id: null }, '已关闭人设')}>
+      <p class="plg-note">选好的人设会带进之后的每一句话里：AI 会用 TA 的身份、性格和说话方式来回答。</p>
+      <div class="plg-group" role="radiogroup" aria-label="人设">
+        <div class="plg-row" role="radio" tabIndex={0} aria-checked={s.globalOff} onClick={() => !s.globalOff && void choose(null, '')}>
           <div class="plg-row-m">
-            <div class="plg-row-t">
-              不启用人设
-              {status.globalOff && <em class="tm-badge">使用中</em>}
-            </div>
+            <div class="plg-row-t">不启用人设</div>
             <div class="plg-row-s">按 AI 原本的样子回答</div>
           </div>
+          <span class="ps-check">{busy === 'off' ? <span class="spin" /> : s.globalOff && <MIc n="check" />}</span>
         </div>
-        {status.personas.map((p) => {
-          const isOpen = open === p.id;
-          const using = !status.globalOff && p.current;
+        {s.personas.map((p) => {
+          const on = inUse(s, p);
+          const tag = sourceLabel(p);
           return (
-            <div key={p.id}>
-              <div class="plg-row" role="button" tabIndex={0} aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : p.id)}>
-                <div class="plg-row-m">
-                  <div class="plg-row-t">
-                    {p.name}
-                    {using && <em class="tm-badge">使用中</em>}
-                    {p.builtin && <em class="tm-badge">示例</em>}
-                  </div>
-                  <div class="plg-row-s wrap">{p.description || `${p.chars} 字`}</div>
+            <div class="plg-row ps-row" role="radio" tabIndex={0} aria-checked={on} key={p.id} onClick={() => !on && void choose(p.id, p.name)}>
+              <div class="plg-row-m">
+                <div class="plg-row-t">
+                  {p.name}
+                  {tag && <em class="tm-badge quiet">{tag}</em>}
                 </div>
-                <span class={`dnd-arrow ${isOpen ? 'open' : ''}`}>
-                  <MIc n="chevron" />
-                </span>
+                <div class="plg-row-s">{p.description || `${p.chars} 字`}</div>
               </div>
-              {isOpen && (
-                <div class="dnd-panel">
-                  <div class="dnd-next-a">
-                    <button class="plg-btn pri" type="button" disabled={busy || using} onClick={() => void act({ action: 'set-current', id: p.id }, `已启用「${p.name}」`)}>
-                      {using ? '使用中' : '使用这个人设'}
-                    </button>
-                    <button class="plg-btn" type="button" onClick={() => void show(p)}>
-                      查看内容
-                    </button>
-                    {!p.builtin && p.source !== 'config' && (
-                      <button
-                        class="plg-btn danger"
-                        type="button"
-                        disabled={busy}
-                        onClick={() => confirm(`删除「${p.name}」？`, '删除后不能恢复。', '删除', () => void act({ action: 'remove', id: p.id }, '已删除'))}
-                      >
-                        删除
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
+              <span class="ps-check">{busy === p.id ? <span class="spin" /> : on && <MIc n="check" />}</span>
+              <button
+                class="ps-more"
+                type="button"
+                aria-label={`${p.name}的详情`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openPage(`persona:${p.id}`);
+                }}
+              >
+                <MIc n="chevron" />
+              </button>
             </div>
           );
         })}
       </div>
-      <section class="plg-sec">
-        <div class="plg-group">
-          <button class="plg-link" type="button" onClick={() => setDraft({ name: '', text: PERSONA_TEMPLATE })}>
-            <span>
-              新建人设
-              <small>写下 TA 是谁、性格和说话方式，也可以把别处的人设粘贴进来</small>
-            </span>
-            <MIc n="chevron" />
-          </button>
+      <div class="plg-actions">
+        <button class="plg-btn pri wide" type="button" onClick={() => openPage('persona-edit:new')}>
+          <MIc n="plus" />
+          新建人设
+        </button>
+      </div>
+      <p class="plg-note foot">可以照模板写，也可以把别处写好的人设整段粘贴进来，最多 {MAX_CHARS.toLocaleString()} 字。</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- persona:<id>: details
+
+export function PersonaDetailPage({ id }: { id: string }) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!status.value) void refresh().catch(() => {});
+    readText(id).then(setText, (e) => setError(errText(e)));
+  }, [id]);
+  const s = status.value;
+  const p = s?.personas.find((x) => x.id === id);
+  if (!s) return <Waiting />;
+  if (!p) return <div class="plg-empty-line">这个人设已经不在了</div>;
+  const on = inUse(s, p);
+
+  const use = async () => {
+    setBusy(true);
+    try {
+      await mutate({ action: 'set-current', id: p.id });
+      showToast(`已启用「${p.name}」`);
+    } catch (e) {
+      showToast(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = () =>
+    confirm(`删除「${p.name}」？`, on ? '它正在使用，删掉后会换回默认的人设。删除后不能恢复。' : '删除后不能恢复。', '删除', async () => {
+      try {
+        await mutate({ action: 'remove', id: p.id });
+        showToast('已删除');
+        backPage();
+      } catch (e) {
+        showToast(errText(e));
+      }
+    });
+
+  return (
+    <div class="plg">
+      <div class="ps-head">
+        <div class="ps-name">
+          {p.name}
+          {on && <em class="tm-badge">使用中</em>}
+          {sourceLabel(p) && <em class="tm-badge quiet">{sourceLabel(p)}</em>}
         </div>
-      </section>
+        <div class="ps-meta">{p.chars.toLocaleString()} 字</div>
+      </div>
+      <div class="plg-group">{error ? <div class="plg-empty-line">读不到正文：{error}</div> : <pre class="ps-text">{text ?? '正在读取…'}</pre>}</div>
+      <div class="plg-actions">
+        <button class={`plg-btn ${on ? '' : 'pri'}`} type="button" disabled={busy || on} onClick={() => void use()}>
+          {on ? '使用中' : '使用这个人设'}
+        </button>
+        {own(p) ? (
+          <button class="plg-btn" type="button" disabled={text === null} onClick={() => openPage(`persona-edit:${p.id}`)}>
+            编辑
+          </button>
+        ) : (
+          <button class="plg-btn" type="button" disabled={text === null} onClick={() => openPage(`persona-edit:copy:${p.id}`)}>
+            复制一份来改
+          </button>
+        )}
+        {own(p) && (
+          <button class="plg-btn danger" type="button" onClick={remove}>
+            删除
+          </button>
+        )}
+      </div>
+      {!own(p) && <p class="plg-note foot">{p.builtin ? '示例人设不能直接改，可以复制一份改成自己的。' : '这个人设来自插件的配置文件，在主机上改那份文件。'}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- persona-edit:…: name and text
+
+export function PersonaEditPage({ target }: { target: string }) {
+  const isNew = target === 'new';
+  const copyOf = target.startsWith('copy:') ? target.slice('copy:'.length) : null;
+  const editId = isNew || copyOf ? null : target;
+  const [name, setName] = useState('');
+  const [text, setText] = useState<string | null>(isNew ? PERSONA_TEMPLATE : null);
+  const [orig, setOrig] = useState<{ name: string; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isNew) return;
+    const id = copyOf ?? editId!;
+    (async () => {
+      const s = status.value ?? (await refresh());
+      const p = s.personas.find((x) => x.id === id);
+      if (!p) throw new Error('这个人设已经不在了');
+      const t = await readText(id);
+      setName(copyOf ? `${p.name}（我的）`.slice(0, MAX_NAME) : p.name);
+      setText(t);
+      if (editId) setOrig({ name: p.name, text: t });
+    })().catch((e) => setError(errText(e)));
+  }, [target]);
+
+  if (error) return <div class="plg-empty-line">{error}</div>;
+  if (text === null) return <div class="plg-empty-line">正在读取…</div>;
+  const over = text.length > MAX_CHARS;
+
+  const save = async () => {
+    const body = text.trim();
+    const n = (name.trim() || nameFromText(body)).slice(0, MAX_NAME);
+    if (!n) return showToast('给人设起个名字');
+    if (!body || body === PERSONA_TEMPLATE.trim()) return showToast('先写一下人设内容');
+    if (body.length > MAX_CHARS) return showToast(`人设太长了（${body.length.toLocaleString()} 字），请控制在 ${MAX_CHARS.toLocaleString()} 字以内`);
+    setBusy(true);
+    try {
+      if (!editId) {
+        // New (or a copy): add it and use it right away.
+        const after = await mutate({ action: 'import', name: n, text: body });
+        const made = [...after.personas].reverse().find((p) => p.name === n && own(p));
+        if (made) await mutate({ action: 'set-current', id: made.id });
+        showToast(`已启用「${n}」`);
+        backPage();
+        if (copyOf) backPage();
+        return;
+      }
+      const textChanged = body !== orig!.text.trim();
+      if (!textChanged) {
+        if (n !== orig!.name) await mutate({ action: 'rename', id: editId, name: n });
+        showToast('已保存');
+        backPage();
+        return;
+      }
+      // The text changed: add the new version beside the old (names are unique), move the
+      // choice over if the old one was in use, remove the old one, then take the name.
+      const wasOn = (() => {
+        const s = status.value!;
+        const p = s.personas.find((x) => x.id === editId);
+        return !!p && inUse(s, p);
+      })();
+      const temp = `${n.slice(0, MAX_NAME - 6)} ·${Date.now().toString(36).slice(-4)}`;
+      const after = await mutate({ action: 'import', name: temp, text: body });
+      const made = [...after.personas].reverse().find((p) => p.name === temp);
+      if (!made) throw new Error('新版本没有存进去');
+      if (wasOn) await mutate({ action: 'set-current', id: made.id });
+      await mutate({ action: 'remove', id: editId });
+      await mutate({ action: 'rename', id: made.id, name: n });
+      showToast('已保存');
+      // the details page was for the old id
+      backPage();
+      backPage();
+      openPage(`persona:${made.id}`);
+    } catch (e) {
+      showToast(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div class="plg">
+      {isNew && <p class="plg-note">照下面的格式写，每一节都可以删改；也可以把别处写好的人设整段粘贴进来。</p>}
+      <div class="plg-group sk-form">
+        <label class="sk-field">
+          <span>名字</span>
+          <input class="sf-input" type="text" maxLength={MAX_NAME} placeholder="不填就用「# 人设：」后面那个" value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+        </label>
+        <label class="sk-field">
+          <span>人设内容</span>
+          <textarea class="sf-input area ps-edit" rows={18} value={text} onInput={(e) => setText((e.target as HTMLTextAreaElement).value)} />
+          <small class={over ? 'ps-over' : ''}>
+            {text.length.toLocaleString()} / {MAX_CHARS.toLocaleString()} 字{over ? '，超出了' : ''}
+          </small>
+        </label>
+      </div>
+      <div class="plg-actions">
+        <button class="plg-btn pri" type="button" disabled={busy || over} onClick={() => void save()}>
+          {busy ? '保存中' : editId ? '保存' : '保存并启用'}
+        </button>
+        <button class="plg-btn" type="button" disabled={busy} onClick={backPage}>
+          取消
+        </button>
+      </div>
     </div>
   );
 }

@@ -110,6 +110,13 @@ export class MockHost {
     ['shell', { value: { timeoutSeconds: 120, allowNetwork: true, blockedCommands: ['rm -rf /'], env: {} }, revision: 1 }],
     ['pi-ai', { value: { providers: {} }, revision: 1 }],
   ]);
+  /** dsh-plugin-memory-share's memories.json, as the prototype pretends it. */
+  private memories = [
+    { id: 'mxiukgc20ed', text: '用户叫小林，喜欢别人叫他林子。', scope: 'user', key: '', tier: 'hot', tags: ['称呼'], createdAt: Date.now() - 864e5 * 20, updatedAt: Date.now() - 864e5 * 20 },
+    { id: 'mxiukg60478', text: '回答用中文，代码和注释用英文。', scope: 'user', key: '', tier: 'hot', tags: ['偏好'], createdAt: Date.now() - 864e5 * 9, updatedAt: Date.now() - 864e5 * 9 },
+    { id: 'mxiukgk9a11', text: '不吃香菜，喜欢辣。', scope: 'user', key: '', tier: 'cold', tags: ['饮食'], createdAt: Date.now() - 864e5 * 4, updatedAt: Date.now() - 864e5 * 4 },
+    { id: 'mxiukgj6176', text: '这个仓库用 pnpm + Node 22，测试命令是 pnpm test。', scope: 'workspace', key: '/root/work/app', tier: 'cold', tags: ['项目'], createdAt: Date.now() - 864e5 * 2, updatedAt: Date.now() - 864e5 * 2 },
+  ];
   private bundles = [
     { name: '@deepseek-ai/dsh-subagent', version: '0.2.2', official: true, installed: true, enabled: true, removable: false, description: '子代理：把任务分给另一个对话去做' },
     { name: '@deepseek-ai/dsh-schedule', version: '0.2.2', official: true, installed: true, enabled: true, removable: false, description: '自动化任务' },
@@ -297,6 +304,26 @@ export class MockHost {
         const url = str(req.baseURL) ?? '';
         if (!/^https?:\/\//.test(url) && !req.provider) throw new DshRemoteError('llm/discover-failed', `${url || '（没填地址）'}/models：地址无效`);
         return [{ id: 'model-large' }, { id: 'model-small' }, { id: 'model-coder' }];
+      }
+
+      // dsh-plugin-memory-share's Remote namespace (长期记忆), once the package is installed
+      case 'memoryShare/list':
+      case 'memoryShare/update':
+      case 'memoryShare/forget': {
+        if (!this.bundles.some((b) => b.name === 'dsh-plugin-memory-share' && b.installed)) throw new DshRemoteError('gateway/unknown-endpoint', `No endpoint ${endpoint}`);
+        if (endpoint === 'memoryShare/update') {
+          const m = this.memories.find((x) => x.id === args.id);
+          if (m) Object.assign(m, { text: String(args.text ?? ''), updatedAt: Date.now() });
+          return { ok: !!m };
+        }
+        if (endpoint === 'memoryShare/forget') {
+          const before = this.memories.length;
+          this.memories = this.memories.filter((x) => x.id !== args.id);
+          return { removed: before - this.memories.length };
+        }
+        const counts = { user: 0, workspace: 0, session: 0 } as Record<string, number>;
+        for (const m of this.memories) counts[m.scope]++;
+        return { entries: this.memories.map((m) => ({ ...m })), total: this.memories.length, counts, dataDir: '/root/.dsh/memory-share' };
       }
 
       // the engine's plugin manager

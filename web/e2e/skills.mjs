@@ -23,6 +23,8 @@ page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
 const shot = (n) => page.screenshot({ path: join(shots, `${scheme}-${n}.png`) });
 const toast = async () => (await page.waitForSelector('.toast', { timeout: 3000 }).catch(() => null)) && page.textContent('.toast');
+/** The toast that says exactly this (an earlier one may still be showing). */
+const toastIs = (text) => page.waitForSelector(`.toast:text-is(${JSON.stringify(text)})`, { timeout: 3000 }).then(() => true, () => false);
 const names = (sec) => page.$$eval(`.plg-sec:has(.plg-sec-t:text-is("${sec}")) .plg-row-t`, (e) => e.map((x) => x.childNodes[0].textContent.trim()));
 const back = async () => (await page.click('[aria-label="返回"] >> nth=-1'), await page.waitForTimeout(450));
 
@@ -69,7 +71,7 @@ check(await page.isDisabled('.plg-actions .plg-btn >> nth=0'), 'nothing to save 
 await page.fill('.sk-desc', '把这周的提交、笔记和会议整理成周报: 三段式');
 await page.fill('.ske-body', '# 周报\n\n1. 读 git log、notes/ 和会议纪要\n2. 按「完成 / 进行中 / 下周」三段写\n');
 await page.click('.plg-btn.pri');
-check((await toast()) === '已保存', 'saved');
+check(await toastIs('已保存'), 'saved');
 await page.waitForTimeout(300);
 check((await page.textContent('.plg-actions .plg-btn >> nth=0')) === '已保存', 'button says it is saved');
 await shot('02-edit');
@@ -87,7 +89,7 @@ check((await toast())?.includes('名字只能用英文'), 'rejects a name DSH ca
 await page.waitForTimeout(2000);
 await page.fill('.sk-field input', 'daily-notes');
 await page.click('.plg-btn.pri');
-check((await toast()) === '已新建「daily-notes」', 'created');
+check(await toastIs('已新建「daily-notes」'), 'created');
 await page.waitForTimeout(500);
 check((await page.textContent('.sk-name')) === '/daily-notes', 'opens the new skill');
 await shot('03-new');
@@ -115,7 +117,7 @@ await page.waitForTimeout(450);
 await page.click('.plg-btn.danger');
 await page.waitForTimeout(300);
 await page.click('.m-alert-btns button >> nth=-1');
-check((await toast()) === '已删除', 'deleted');
+check(await toastIs('已删除'), 'deleted');
 await page.waitForTimeout(500);
 check(JSON.stringify(await names('我的技能')) === '["weekly-report"]', 'gone from the list');
 await shot('04-after-delete');

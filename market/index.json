@@ -83,27 +83,44 @@
     },
     {
       "tier": 3,
-      "integrity": "sha256-C9Ks3nK9Txdagk2TACNOD1VCm19M4jNHjiek9cA49vI=",
+      "integrity": "sha256-OYUu41n8G4fZEUadT4UI7gDmMCauSXI1/xkWNnujNDs=",
       "manifest": {
         "v": 1,
         "title": "长期记忆",
         "summary": "跨对话记住你说过的事：你的喜好、经历、你们之间的约定，新开对话也记得。",
         "kinds": [
-          "engine"
+          "engine",
+          "slot"
         ],
         "permissions": [],
         "engine": {
           "package": "dsh-plugin-memory-share",
-          "version": "0.6.0"
+          "version": "0.6.0",
+          "shows": {
+            "sider": [
+              "长期记忆"
+            ]
+          }
         },
-        "description": "AI 会把值得记住的事存下来：你的名字和称呼、喜好和忌口、发生过的事、你们约好的事。之后每次对话一开始就带着这些记忆，不用它自己想起来去查，换一个新对话也记得。\n\n想让它记住什么，直接说「记住……」；想让它忘掉，说「忘掉……」。常用的记忆每次都带上，其他的聊到相关话题时才带，避免越记越长。\n\n引擎部分是社区插件 dsh-plugin-memory-share 0.6.0（MIT 许可），装在当前主机上；记忆存在主机的 ~/.dsh/memory-share/memories.json 里，可以直接打开查看和修改。",
+        "description": "AI 会把值得记住的事存下来：你的名字和称呼、喜好和忌口、发生过的事、你们约好的事。之后每次对话一开始就带着这些记忆，不用它自己想起来去查，换一个新对话也记得。\n\n想让它记住什么，直接说「记住……」；想让它忘掉，说「忘掉……」。记住了什么，在「设置 › 陪伴 › 长期记忆」里能看到，可以改、可以删。常用的记忆每次都带上，其他的聊到相关话题时才带，避免越记越长。\n\n引擎部分是社区插件 dsh-plugin-memory-share 0.6.0（MIT 许可），装在当前主机上；记忆存在主机的 ~/.dsh/memory-share/memories.json 里，可以直接打开查看和修改。",
         "highlights": [
           "新开对话也记得你",
           "说「记住」「忘掉」就行",
-          "记忆存在你自己的设备上"
+          "记住了什么看得见、改得了"
+        ],
+        "slots": [
+          {
+            "slot": "sider.features",
+            "id": "open",
+            "title": "长期记忆",
+            "icon": "FxSkill",
+            "action": {
+              "open": "memory"
+            }
+          }
         ],
         "id": "@api-demo/memory-share",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "license": "MIT",
         "official": true
       }

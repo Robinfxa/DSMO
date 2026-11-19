@@ -281,9 +281,10 @@ function SettingsHome() {
         <Row icon="bell" label="通知" onClick={() => toPage('notify-settings')} />
         <Row icon="shield" label="系统权限" onClick={() => toPage('access')} />
       </Group>
-      {installed.value.some((x) => x.id === '@api-demo/persona-library' && x.enabled) && (
+      {installed.value.some((x) => (x.id === '@api-demo/persona-library' || x.id === '@api-demo/memory-share') && x.enabled) && (
         <Group title="陪伴">
-          <Row icon="person" label="人设" onClick={() => toPage('persona')} />
+          {installed.value.some((x) => x.id === '@api-demo/persona-library' && x.enabled) && <Row icon="person" label="人设" onClick={() => toPage('persona')} />}
+          {installed.value.some((x) => x.id === '@api-demo/memory-share' && x.enabled) && <Row icon="sparkle" label="长期记忆" onClick={() => toPage('memory')} />}
         </Group>
       )}
       <Group title="语音">
