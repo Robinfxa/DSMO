@@ -112,6 +112,8 @@ export interface Optimistic {
 export const conn = signal<ConnState>('idle');
 export const connError = signal<string | null>(null);
 export const sessions = signal<SessionSummary[]>([]);
+/** The engine has answered `session/list` since the page started; until then the list is the saved copy. */
+export const sessionsLive = signal(false);
 export const currentId = signal<string | null>(null);
 export const txVersion = signal(0);
 export const followState = signal<'opening' | 'live' | 'retrying'>('opening');
@@ -176,6 +178,37 @@ export const running = computed(() => {
 /** Re-reads the app's host list and capabilities (after hosts change). */
 export async function refreshNativeInfo() {
   nativeInfo.value = await native.info();
+  restoreSessionCache();
+}
+
+// ------------------------------------------------------------------ saved conversation list
+// The phone's engine starts cold whenever Android has stopped the app (Samsung's power
+// management does that minutes after it leaves the screen): about 15 s with an empty list.
+// The last list this host gave is kept on the device and shown meanwhile.
+
+const CACHE_MAX = 200;
+const cacheKey = () => `api-demo:sessions:${nativeInfo.value?.hosts.find((h) => h.current)?.id ?? 'local'}`;
+
+function restoreSessionCache() {
+  if (sessionsLive.value || sessions.value.length) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(cacheKey()) || 'null') as { list?: SessionSummary[] } | null;
+    if (Array.isArray(saved?.list)) sessions.value = saved.list.map((s) => ({ ...s, running: false, projections: s.projections ?? {} }));
+  } catch {
+    /* no storage, or an old shape: start empty */
+  }
+}
+
+function saveSessionCache(list: SessionSummary[]) {
+  try {
+    const slim = list.slice(0, CACHE_MAX).map((s) => {
+      const projections = JSON.stringify(s.projections ?? {}).length <= 2048 ? s.projections : {};
+      return { sessionId: s.sessionId, updatedAt: s.updatedAt, running: false, blank: s.blank, agentAvailable: s.agentAvailable, cwd: s.cwd, parentSessionId: s.parentSessionId, origin: s.origin, title: s.title, projections };
+    });
+    localStorage.setItem(cacheKey(), JSON.stringify({ at: Date.now(), list: slim }));
+  } catch {
+    /* private mode / full: the list just isn't kept */
+  }
 }
 
 export async function boot() {
@@ -290,6 +323,8 @@ export async function refreshSessions() {
   try {
     const list = await client.listSessions();
     sessions.value = list.sort((a, b) => b.updatedAt - a.updatedAt);
+    sessionsLive.value = true;
+    saveSessionCache(sessions.value);
   } catch (e) {
     connError.value = (e as Error).message;
   }

@@ -6,7 +6,7 @@ import { canSpeak } from '../../bridge/native';
 import { anyWorking, dsBot, totalUnread } from '../../bots/store';
 import { EngineGate } from '../../setup/gate';
 import { SafeBanner } from '../../setup/recovery';
-import { forkConversation } from '../../state/store';
+import { forkConversation, sessionsLive } from '../../state/store';
 import { openImportedPage } from '../../history/ui';
 import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
@@ -305,7 +305,10 @@ function Drawer({ onTouchStart, onTouchMove }: { onTouchStart: (e: TouchEvent) =
             {items.map(row)}
           </section>
         ))}
-        {!list.length && <div class="m-empty">还没有对话</div>}
+        {!sessionsLive.value && conn.value !== 'connected' && (
+          <div class={list.length ? 'm-starting' : 'm-empty'}>{list.length ? '正在连接引擎，显示的是上次的列表…' : '引擎正在启动，对话马上就来…'}</div>
+        )}
+        {!list.length && (sessionsLive.value || conn.value === 'connected') && <div class="m-empty">还没有对话</div>}
         {!picking && imported.value.length > 0 && (
           <button class="m-imported" type="button" onClick={() => openImportedPage()}>
             <span>这台设备上的对话</span>

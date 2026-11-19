@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { forkConversation } from '../state/store';
+import { conn, forkConversation, sessionsLive } from '../state/store';
 import { M } from './mobile/icons';
 import { openImportedPage } from '../history/ui';
 import { imported } from '../history/imported';
@@ -136,7 +136,8 @@ export function Sider() {
             )}
           </div>
         ))}
-        {!list.length && <div class="empty">还没有对话</div>}
+        {!sessionsLive.value && conn.value !== 'connected' && <div class="empty">{list.length ? '正在连接引擎，显示的是上次的列表…' : '引擎正在启动，对话马上就来…'}</div>}
+        {!list.length && (sessionsLive.value || conn.value === 'connected') && <div class="empty">还没有对话</div>}
         {imported.value.length > 0 && (
           <div class="section">
             <button class="row" type="button" onClick={() => ((drawerOpen.value = false), openImportedPage())}>
