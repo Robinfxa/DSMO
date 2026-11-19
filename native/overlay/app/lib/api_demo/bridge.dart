@@ -31,13 +31,31 @@ import '../ui/features/feature_catalog.dart' show featureSections;
 import 'bridge_local.dart';
 import 'bridge_phone.dart';
 import 'dictation.dart';
+import 'web_update.dart' show apiDemoBridgeVersion;
 
 /// Session pages the bridge may open natively (Q6: chat-bound pages are web,
 /// these stay native for now and need the conversation).
 const apiDemoSessionPages = {'terminal', 'session-detail', 'files', 'artifacts', 'jobs', 'plan-goal', 'skills', 'subagents'};
 
 class ApiDemoBridge {
-  ApiDemoBridge({required this.ref, required this.controller, required this.context, required this.onBackResult});
+  ApiDemoBridge({
+    required this.ref,
+    required this.controller,
+    required this.context,
+    required this.onBackResult,
+    this.onAlive,
+    this.onWebUpdate,
+    this.webVersion,
+  });
+
+  /// The page talked to the app: its script runs (a downloaded page that never does is rolled back).
+  final VoidCallback? onAlive;
+
+  /// `webUpdate.check` / `webUpdate.apply` (web_update.dart, done by the home page).
+  final Future<Object?> Function(String method)? onWebUpdate;
+
+  /// The page's version: a downloaded one's, or `apk`.
+  final String Function()? webVersion;
 
   final WidgetRef ref;
   final WebViewController controller;
@@ -59,6 +77,7 @@ class ApiDemoBridge {
     } on Object {
       return;
     }
+    onAlive?.call();
     final id = m['id'] as String? ?? '';
     final method = m['method'] as String? ?? '';
     final params = (m['params'] as Map?)?.cast<String, Object?>() ?? const {};
@@ -80,6 +99,10 @@ class ApiDemoBridge {
     switch (method) {
       case 'info':
         return _info();
+      case 'webUpdate.check' || 'webUpdate.apply':
+        final handle = onWebUpdate;
+        if (handle == null) throw StateError('web updates are off');
+        return handle(method);
       case 'pickFiles':
         return _pickFiles(p['sessionId'] as String? ?? '', p['accept'] as String? ?? 'any');
       case 'switchHost':
@@ -182,6 +205,8 @@ class ApiDemoBridge {
       'nativePages': [...pageLinkIds, ...apiDemoSessionPages],
       'voice': true,
       'notifications': true,
+      'webVersion': webVersion?.call() ?? 'apk',
+      'bridge': apiDemoBridgeVersion,
     };
   }
 

@@ -75,9 +75,11 @@ echo "→ runtime ($rt)"
 bash runtime/build-runtime.sh "$rt"
 
 echo "→ APK"
-extra=()
-[ -n "${API_DEMO_UPDATE_REPO:-}" ] && extra=(-- "--dart-define=API_DEMO_UPDATE_REPO=$API_DEMO_UPDATE_REPO")
-DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh -f "$abi" "${extra[@]}"
+# The native bridge this APK provides: a hot-updated page that needs a newer one is not taken
+# (web_update.dart, native/BRIDGE).
+defines=("--dart-define=API_DEMO_BRIDGE=$(tr -dc 0-9 < "$here/BRIDGE")")
+[ -n "${API_DEMO_UPDATE_REPO:-}" ] && defines+=("--dart-define=API_DEMO_UPDATE_REPO=$API_DEMO_UPDATE_REPO")
+DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh -f "$abi" -- "${defines[@]}"
 
 apk="$dsh/app/build/app/outputs/flutter-apk/app-$abi-release.apk"
 mkdir -p "$repo/dist-apk"

@@ -1,0 +1,63 @@
+# Hot update of the frontend (native/overlay/app/lib/api_demo/web_update.dart): every push to
+# main that changes web/ builds and tests it and publishes web.zip + web.json on the `web-latest`
+# pre-release. Installed apps pick it up on their next check (page load, or back in the
+# foreground, at most every 5 minutes) without a new APK.
+#
+# Changes to the native side (native/) still need a new APK (apk.yml). When the page starts
+# calling bridge methods older APKs don't have, raise native/BRIDGE: those APKs then keep the
+# page they have until they are updated.
+name: Publish web bundle
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', 'native/BRIDGE', '.github/workflows/web.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-bundle
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Test and build
+        working-directory: web
+        run: npm ci && npm test && npm run build
+
+      - name: Pack
+        run: |
+          version="${GITHUB_SHA::7}"
+          (cd web/dist && zip -qr -X ../../web.zip .)
+          sha=$(sha256sum web.zip | cut -d' ' -f1)
+          size=$(stat -c%s web.zip)
+          bridge=$(tr -dc 0-9 < native/BRIDGE)
+          printf '{"version":"%s","sha256":"%s","size":%s,"bridge":%s,"commit":"%s","builtAt":"%s"}\n' \
+            "$version" "$sha" "$size" "${bridge:-1}" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > web.json
+          cat web.json
+
+      - name: Publish on web-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view web-latest >/dev/null 2>&1; then
+            gh release create web-latest --prerelease --target "$GITHUB_SHA" \
+              --title "Web bundle (hot update)" \
+              --notes "The frontend the app downloads (web_update.dart). Replaced on every change to web/; not an APK release."
+          fi
+          # The zip first: an app that reads the new web.json always finds its zip.
+          gh release upload web-latest web.zip --clobber
+          gh release upload web-latest web.json --clobber

@@ -29,6 +29,8 @@ App → 页面   window.__apiDemo.reply(id, ok, value)
 | `storage.get` / `storage.set` | `{key, value?}` | 字符串 / — | SharedPreferences（`api_demo.` 前缀，单项 ≤ 1 MiB） | localStorage |
 | `voice.start` / `stop` / `cancel` | — | — | dsh-Go 自己的听写（系统 / 本机模型 / 云端，同「设置 › 语音」） | Web Speech API |
 | `backResult` | `{handled}` | — | 回答 `back` 事件 | — |
+| `webUpdate.check` | — | `{updated, latest, serving}` | 马上去仓库查前端热更新（`web_update.dart`），`latest` 是下次加载用的版本，`serving` 是当前页面的版本（`apk` = 安装包自带） | 不可用 |
+| `webUpdate.apply` | — | 是否切换了 | 用已下载的新前端重新加载页面 | 不可用 |
 
 ### App 本地页面用的方法（第 2 轮，`bridge_local.dart`）
 
@@ -91,6 +93,7 @@ App → 页面   window.__apiDemo.reply(id, ok, value)
 |---|---|---|
 | `back` | — | 关最上层（浮层 → 抽屉 → 功能页），然后 `backResult`；没东西可关就让 App 退到后台 |
 | `resumed` | `{awayMs}` | 重新打开当前对话的 follow |
+| `webUpdate.ready` | `{version}` | 下载好了新前端：提示「界面有更新 · 刷新」（不点也会在下次打开时用新的） |
 | `openSession` | `{sessionId}` | 打开那个对话（通知点进来、最近对话） |
 | `compose` | `{newSession, sessionId?, text}` | 分享进来的文字放进（新）对话的输入框，不发送 |
 | `voice.partial` / `voice.final` / `voice.error` | `{text}` / `{text}` / `{message}` | 听写结果 |

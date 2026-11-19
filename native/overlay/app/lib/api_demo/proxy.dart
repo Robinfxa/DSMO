@@ -34,10 +34,14 @@ import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 const apiDemoAssetRoot = 'assets/api_demo';
 
 class ApiDemoProxy {
-  ApiDemoProxy({Uri? engine, String? token, AssetBundle? assets}) : _assets = assets ?? rootBundle {
+  ApiDemoProxy({Uri? engine, String? token, AssetBundle? assets, this.webRoot}) : _assets = assets ?? rootBundle {
     _engine = engine;
     _token = token;
   }
+
+  /// A downloaded page (web_update.dart) to serve instead of the APK's; null for the APK's.
+  /// Changing it takes effect on the page's next load.
+  Directory? webRoot;
 
   /// The engine's origin, e.g. http://127.0.0.1:3080 (local) or the SSH forward; null when none runs.
   Uri? _engine;
@@ -248,14 +252,27 @@ class ApiDemoProxy {
     if (r.method != 'GET' && r.method != 'HEAD') return _fail(r, 405, 'method');
     var path = Uri.decodeComponent(r.uri.path);
     if (path == '/' || path.isEmpty) path = '/index.html';
-    if (path.contains('..')) return _fail(r, 400, 'bad path');
-    ByteData data;
-    try {
-      data = await _assets.load('$apiDemoAssetRoot$path');
-    } on Object {
-      // Client-side routes fall back to the page.
-      data = await _assets.load('$apiDemoAssetRoot/index.html');
-      path = '/index.html';
+    if (path.contains('..') || path.contains('\\')) return _fail(r, 400, 'bad path');
+    final ByteData data;
+    final root = webRoot;
+    if (root != null) {
+      // The downloaded page: only its own files (a mix of two versions would not work).
+      var file = File('${root.path}$path');
+      if (!file.existsSync()) {
+        file = File('${root.path}/index.html');
+        path = '/index.html';
+      }
+      data = ByteData.sublistView(await file.readAsBytes());
+    } else {
+      ByteData loaded;
+      try {
+        loaded = await _assets.load('$apiDemoAssetRoot$path');
+      } on Object {
+        // Client-side routes fall back to the page.
+        loaded = await _assets.load('$apiDemoAssetRoot/index.html');
+        path = '/index.html';
+      }
+      data = loaded;
     }
     final ext = path.split('.').last.toLowerCase();
     r.response

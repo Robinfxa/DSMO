@@ -87,3 +87,14 @@ native/apply.sh <dsh-Go>      # git am --3way：小冲突会自动合并
 ```
 
 停在冲突时：解决后 `git am --continue`，然后在这个仓库里用 `git format-patch` 重新导出补丁、更新 `native/BASE`。overlay 文件如果因为上游改了接口编译不过，就改 overlay——补丁保持不动。
+
+## 前端热更新（早期快速迭代用）
+
+改了 `web/` 不用重新装 APK：
+
+1. 推到 main 后，`.github/workflows/web.yml` 测试并构建 `web/`，把 `web.zip` 和 `web.json`（版本 = 提交号前 7 位、SHA-256、大小、需要的桥版本）发到仓库的 `web-latest` 预发布版。dsh-Go 的应用内更新只看正式版，不受影响。
+2. App（`app/lib/api_demo/web_update.dart`）在页面加载完和回到前台时查 `web.json`（最多每 5 分钟一次），有新版本就下载、校验、解压到应用私有目录，页面弹出「界面有更新 · 刷新」；不点的话下次打开时用新的。设置 › 关于 › 界面版本 可以手动查。
+3. 下载的页面 20 秒内没和 App 说话（没调用桥），就视为坏了：这个版本以后不再用，退回安装包自带的页面。
+4. **改了原生部分**（`native/` 里的补丁或 Dart 文件）仍然要重新打 APK。如果页面开始用老 APK 没有的桥方法，把 `native/BRIDGE` 加 1：老 APK 会停在它现有的页面，直到装上新 APK。
+
+关掉：打包时加 `--dart-define=API_DEMO_WEB_UPDATE=false`。安全上，下载的页面和自带页面一样能用整个原生桥，能往这个仓库发 Release 的人就能改所有装了它的手机上的界面；这是早期方案，正式发布前应该加签名校验或关掉。

@@ -24,6 +24,17 @@ export interface NativeInfo {
   nativePages: string[];
   voice: boolean;
   notifications: boolean;
+  /** The page's own version: a hot-updated bundle's commit, `apk` for the APK's page (web_update.dart). */
+  webVersion?: string;
+  /** The native bridge the APK provides (native/BRIDGE). */
+  bridge?: number;
+}
+export interface WebUpdateCheck {
+  updated: boolean;
+  /** The downloaded version the next load uses, or `apk`. */
+  latest: string;
+  /** What this page is. */
+  serving: string;
 }
 export type PickedFile =
   | { kind: 'image'; name: string; mimeType: string; data: string; size: number }
@@ -212,6 +223,17 @@ export const native = {
       return null;
     }
   },
+  /** Hot update (web_update.dart): ask the repository now. App only. */
+  async checkWebUpdate(): Promise<WebUpdateCheck | null> {
+    if (!inApp()) return null;
+    return call<WebUpdateCheck>('webUpdate.check', {}, 5 * 60_000);
+  },
+  /** Reloads the page from the downloaded version. */
+  async applyWebUpdate(): Promise<boolean> {
+    if (!inApp()) return false;
+    return call<boolean>('webUpdate.apply');
+  },
+
   async storageSet(key: string, value: string | null) {
     if (inApp()) return call('storage.set', { key, value });
     try {

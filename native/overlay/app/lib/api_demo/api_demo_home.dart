@@ -34,6 +34,7 @@ import '../ui/web/web_home.dart' show WebEntryHost;
 import '../ui/web/web_target.dart';
 import 'bridge.dart';
 import 'proxy.dart';
+import 'web_update.dart';
 
 class ApiDemoHome extends ConsumerStatefulWidget {
   const ApiDemoHome({super.key, this.initial});
@@ -54,6 +55,13 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
   String? _pageSession;
   Completer<bool>? _back;
   DateTime? _pausedAt;
+
+  /// The downloaded page being served (web_update.dart); null: the APK's own.
+  ApiDemoWebBundle? _web;
+
+  /// The page has talked to the bridge since its last load.
+  bool _alive = false;
+  Timer? _aliveTimer;
 
   /// Events for a page that is still loading (a host switch reloads it).
   final _later = <(String, Object?)>[];
@@ -128,6 +136,7 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
     for (final off in _off) {
       off();
     }
+    _aliveTimer?.cancel();
     _bridge?.dispose();
     unawaited(_proxy?.close());
     super.dispose();
@@ -142,6 +151,7 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
       unawaited(_bridge?.event('resumed', {'awayMs': away.inMilliseconds}));
       // An update install waiting on 「安装未知应用」 carries on (dsh-Go's UpdateLaunchCheck does this).
       unawaited(ref.read(appUpdateProvider.notifier).onAppResumed());
+      unawaited(_checkWeb());
     }
   }
 
@@ -170,7 +180,11 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
     await old?.close();
     if (!mounted || _key != key) return;
     try {
-      final proxy = ApiDemoProxy(engine: engine, token: token);
+      // A page downloaded from the repository (web_update.dart) goes first; the APK's is the fallback.
+      final web = await ApiDemoWebUpdate.instance.active();
+      if (!mounted || _key != key) return;
+      _web = web;
+      final proxy = ApiDemoProxy(engine: engine, token: token, webRoot: web?.dir);
       await proxy.start();
       if (!mounted || _key != key) return unawaited(proxy.close());
       _proxy = proxy;
@@ -180,6 +194,9 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
         controller: controller,
         context: () => context,
         onBackResult: (handled) => _back?.complete(handled),
+        onAlive: () => _alive = true,
+        onWebUpdate: _webUpdate,
+        webVersion: () => _web?.version ?? 'apk',
       );
       _bridge = bridge;
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
@@ -216,6 +233,7 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
           },
           onPageFinished: (_) {
             if (_pageSession case final id?) unawaited(bridge.event('openSession', {'sessionId': id}));
+            unawaited(_checkWeb());
             // The page installs its listeners as it starts; give it a moment.
             Timer(const Duration(milliseconds: 900), () {
               if (!identical(_bridge, bridge)) return;
@@ -227,11 +245,60 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
           },
         ),
       );
+      _watchStart(bridge);
       await controller.loadRequest(proxy.entry);
       if (mounted && _key == key) setState(() => _controller = controller);
     } on Object catch (e) {
       if (mounted && _key == key) setState(() => _error = '$e');
     }
+  }
+
+  /// A downloaded page has to talk to the bridge soon after it loads (the page asks
+  /// `info` as it starts); one that doesn't is rejected and the APK's page comes back.
+  void _watchStart(ApiDemoBridge bridge) {
+    _alive = false;
+    _aliveTimer?.cancel();
+    final web = _web;
+    if (web == null) return;
+    _aliveTimer = Timer(const Duration(seconds: 20), () async {
+      if (_alive || !identical(_bridge, bridge) || !identical(_web, web)) return;
+      await ApiDemoWebUpdate.instance.reject(web.version);
+      if (!mounted || !identical(_bridge, bridge)) return;
+      _web = null;
+      _proxy?.webRoot = null;
+      _watchStart(bridge);
+      await bridge.controller.reload();
+    });
+  }
+
+  /// Asks the repository for a newer page; the page offers to switch to it (it is used
+  /// from the next launch either way).
+  Future<void> _checkWeb() async {
+    if (!await ApiDemoWebUpdate.instance.check()) return;
+    final next = await ApiDemoWebUpdate.instance.active();
+    if (next == null || !mounted) return;
+    _emit('webUpdate.ready', {'version': next.version});
+  }
+
+  Future<Object?> _webUpdate(String method) async {
+    final update = ApiDemoWebUpdate.instance;
+    switch (method) {
+      case 'webUpdate.check':
+        final updated = await update.check(force: true);
+        return {'updated': updated, 'latest': (await update.active())?.version ?? 'apk', 'serving': _web?.version ?? 'apk'};
+      case 'webUpdate.apply':
+        final next = await update.active();
+        final bridge = _bridge;
+        final proxy = _proxy;
+        if (next == null || bridge == null || proxy == null) return false;
+        _web = next;
+        proxy.webRoot = next.dir;
+        _watchStart(bridge);
+        // After this answer has gone back to the page.
+        Timer(const Duration(milliseconds: 150), () => unawaited(bridge.controller.reload()));
+        return true;
+    }
+    return null;
   }
 
   Future<bool> _onBack() async {

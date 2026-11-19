@@ -244,6 +244,23 @@ function SettingsHome() {
       </Group>
       <Group title="关于">
         <Row icon="info" label="版本" value={`${nativeInfo.value?.appVersion && nativeInfo.value.appVersion !== 'web' ? nativeInfo.value.appVersion : '0.1.0'} · ${__BUILD__}`} />
+        {nativeInfo.value?.inApp && (
+          <Row
+            icon="download"
+            label="界面版本"
+            value={nativeInfo.value.webVersion === 'apk' || !nativeInfo.value.webVersion ? '安装包自带' : nativeInfo.value.webVersion}
+            onClick={() =>
+              void native
+                .checkWebUpdate()
+                .then((r) => {
+                  if (!r) return;
+                  if (r.latest !== r.serving) showToast('界面有更新', '刷新', () => void native.applyWebUpdate());
+                  else showToast('界面已是最新');
+                })
+                .catch(() => showToast('检查失败，稍后再试'))
+            }
+          />
+        )}
         <Row icon="download" label="检查更新" onClick={() => toPage('update')} />
         <Row icon="doc" label="开源许可" onClick={() => pushScreen('licenses')} />
       </Group>

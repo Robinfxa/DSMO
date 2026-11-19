@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
-import { onNative } from '../bridge/native';
+import { native, onNative } from '../bridge/native';
 import { layoutHidden } from '../plugins/frontend';
-import { conn, current, currentId, draft, drawerOpen, handleBack, isMobile, newChat, openSession, pages, prefs, protoEngine, refreshFollow, setPref, toast } from '../state/store';
+import { conn, current, currentId, draft, drawerOpen, handleBack, isMobile, newChat, openSession, pages, prefs, protoEngine, refreshFollow, setPref, showToast, toast } from '../state/store';
 import { MobileApp } from './mobile/MobileApp';
 import { Chat } from './Chat';
 import { Composer } from './Composer';
@@ -59,6 +59,10 @@ export function App() {
       refreshFollow();
       void import('../bots/store').then((m) => m.kickDsBot());
     });
+    // Hot update: a newer page was downloaded (it is used from the next launch either way).
+    const offWeb = onNative('webUpdate.ready', () => {
+      showToast('界面有更新', '刷新', () => void native.applyWebUpdate().catch(() => showToast('没能刷新，下次打开时会用新的')));
+    });
     // A tapped DS Bot notification (dsh-Go's BotAlertsHost, forwarded by api_demo_home.dart).
     const offBot = onNative('bots.open', (p) => {
       const d = (p ?? {}) as { kind?: string; id?: string };
@@ -86,6 +90,7 @@ export function App() {
       offBack();
       offResume();
       offBot();
+      offWeb();
       offOpen();
       offCompose();
       removeEventListener('keydown', onKey);
