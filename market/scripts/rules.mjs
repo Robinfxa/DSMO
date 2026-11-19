@@ -120,6 +120,14 @@ export function checkManifest(m, { panelHtml = {} } = {}) {
     const shows = m.engine.shows || {};
     for (const k of Object.keys(shows)) if (!['pills', 'sider'].includes(k)) e(`engine.shows 不认识 ${k}`);
     for (const t of [...(shows.pills || []), ...(shows.sider || [])]) if (typeof t !== 'string' || t.length > 16) e('engine.shows 每项 16 字以内');
+    // One JSON POST the app sends once the package runs: only to the package's own routes.
+    if (m.engine.setup !== undefined) {
+      const st = m.engine.setup || {};
+      const own = `/api/${m.engine.package}/`;
+      if (typeof st.path !== 'string' || !st.path.startsWith(own) || /\.\.|[?#\\]/.test(st.path)) e(`engine.setup.path 只能是 ${own} 下的接口`);
+      if (!st.body || typeof st.body !== 'object' || Array.isArray(st.body) || JSON.stringify(st.body).length > 2048) e('engine.setup.body 要是 2 KB 以内的 JSON 对象');
+      for (const k of Object.keys(st)) if (!['path', 'body'].includes(k)) e(`engine.setup 不认识 ${k}`);
+    }
   }
   return { errors, warn };
 }

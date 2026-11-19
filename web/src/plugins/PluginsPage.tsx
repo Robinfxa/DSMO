@@ -34,6 +34,20 @@ import { CATEGORIES, PERM_INFO, TIER_INFO, catInfo, categoryOf, hasToggle, optio
 import { MARKET_TIER } from './official';
 import { AutomationPreview, EnginePreview, LayoutPreview, SkillPreview, SkinPreview, SkinSwatch, ToolsPreview, themeNow } from './preview';
 import { describeTiming, runSchedule, scheduleState, setScheduleTime, skillsInstallable } from './automation';
+import { local } from '../bridge/native';
+import { onLocalHost } from '../setup/state';
+import type { InstallOutcome } from './frontend';
+
+/** After an install: an engine plugin that loads only once the engine restarts says so (and offers it on this phone). */
+function afterInstall(title: string, outcome: InstallOutcome) {
+  if (!outcome.restart) return showToast(`已安装「${title}」`);
+  if (!onLocalHost.value) return showToast(`已安装「${title}」，在主机上重启 DSH 后生效`);
+  confirm(`「${title}」装好了`, '重启本机引擎后生效。正在生成的回复会中断。', '重启引擎', () => {
+    void local('engine.restart')
+      .then(() => showToast('引擎正在重启'))
+      .catch((e) => showToast(errText(e)));
+  }, false);
+}
 
 const tab = signal<'discover' | 'installed'>('discover');
 
@@ -75,8 +89,7 @@ function GetButton({ p }: { p: ApiDemoManifest }) {
         e.stopPropagation();
         setBusy(true);
         try {
-          await installPlugin(p.id);
-          showToast(`已安装「${p.title}」`);
+          afterInstall(p.title, await installPlugin(p.id));
         } catch (err) {
           showToast(errText(err));
         } finally {
@@ -241,9 +254,9 @@ export function PluginDetailPage({ id }: { id: string }) {
   const install = async () => {
     setBusy(true);
     try {
-      await installPlugin(id);
+      const outcome = await installPlugin(id);
       if (trying) setTrialSkin(null);
-      showToast(`已安装「${p.title}」`);
+      afterInstall(p.title, outcome);
     } catch (e) {
       showToast(errText(e));
     } finally {

@@ -1,0 +1,52 @@
+{
+  "name": "@api-demo/persona-library",
+  "version": "1.0.0",
+  "description": "人设库：给 AI 一个固定的身份、性格和说话方式",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "人设库",
+    "summary": "给 AI 一个固定的身份、性格和说话方式，之后的每一句话都按这个人设来。",
+    "kinds": [
+      "engine",
+      "slot"
+    ],
+    "permissions": [],
+    "slots": [
+      {
+        "slot": "sider.features",
+        "id": "open",
+        "title": "人设",
+        "icon": "FxSkill",
+        "action": {
+          "open": "persona"
+        }
+      }
+    ],
+    "engine": {
+      "package": "dsh-persona-dafeiyu",
+      "version": "0.8.0",
+      "setup": {
+        "path": "/api/dsh-persona-dafeiyu/mutate",
+        "body": {
+          "action": "set-current",
+          "id": null
+        }
+      },
+      "shows": {
+        "sider": [
+          "人设"
+        ]
+      }
+    },
+    "description": "写下 TA 是谁、什么性格、怎么说话、和你是什么关系，选好之后，AI 之后的每一句话都会按这个人设来，不用每次开头再交代一遍。\n\n在「设置 › 陪伴 › 人设」里新建、切换或关闭人设；新建时有现成的格式（你是谁 / 性格 / 说话风格 / 对话示例 / 边界），也可以把别处写好的人设直接粘贴进来。插件自带三个示例人设（大肥鱼、阿茶、听澜），装好后默认不启用任何人设。\n\n引擎部分是社区插件 dsh-persona-dafeiyu 0.8.0（作者 huaizhuanghub，MIT 许可），装在当前主机上；人设存在主机的 ~/.dsh/storages/dsh-persona-dafeiyu/ 里。",
+    "highlights": [
+      "每一句话都按人设来",
+      "现成的人设格式，也能直接粘贴",
+      "随时切换或关闭"
+    ]
+  }
+}

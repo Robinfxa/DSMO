@@ -158,3 +158,22 @@ describe('plugin store pages', async () => {
     expect(checkManifest({ ...base, highlights: ['1', '2', '3', '4', '5', '6'] }).errors.length).toBe(1);
   });
 });
+
+describe('engine plugins: setup call', () => {
+  const engine = (setup: unknown) =>
+    ({ ...base, kinds: ['engine'], engine: { package: 'dsh-persona-dafeiyu', version: '0.8.0', setup } }) as unknown as ApiDemoManifest;
+  it('may only reach the package’s own routes with a small JSON object', () => {
+    expect(() => validateManifest(engine({ path: '/api/dsh-persona-dafeiyu/mutate', body: { action: 'set-current', id: null } }))).not.toThrow();
+    for (const path of ['/api/credentials/set', '/api/dsh-persona-dafeiyu/../credentials/set', '/api/dsh-persona-dafeiyu/mutate?x=1', '/dsh-go/v1/invoke', 'https://evil.example/api/dsh-persona-dafeiyu/']) {
+      expect(() => validateManifest(engine({ path, body: {} }))).toThrow();
+    }
+    expect(() => validateManifest(engine({ path: '/api/dsh-persona-dafeiyu/mutate', body: ['x'] }))).toThrow();
+    expect(() => validateManifest(engine({ path: '/api/dsh-persona-dafeiyu/mutate', body: { t: 'x'.repeat(3000) } }))).toThrow();
+  });
+  it('the market rules say the same', () => {
+    const m = (setup: unknown) => ({ ...base, kinds: ['engine'], engine: { package: 'dsh-persona-dafeiyu', version: '0.8.0', setup } });
+    expect(checkManifest(m({ path: '/api/dsh-persona-dafeiyu/mutate', body: { action: 'set-current', id: null } })).errors).toEqual([]);
+    expect(checkManifest(m({ path: '/api/credentials/set', body: {} })).errors.join()).toContain('engine.setup.path');
+    expect(checkManifest(m({ path: '/api/dsh-persona-dafeiyu/mutate', body: {}, method: 'DELETE' })).errors.join()).toContain('engine.setup 不认识');
+  });
+});

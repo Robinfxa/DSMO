@@ -24,6 +24,7 @@ import { TerminalPage } from './host/terminal';
 import { AccessPage, EnginePage, HostEditPage, HostsPage, NotifySettingsPage, PhonePage, UpdatePage, VoiceSettingsPage } from './host/local';
 import { A11yRestorePage, AndroidShellPage, PhoneDndPage, PhoneLogPage } from './host/phone';
 import { PresetsPage, TeamPage } from './agents';
+import { PersonaPage } from './persona';
 import { imported } from '../../history/imported';
 import { ShareImportPage, ShareOpenPage, ShareOutPage, ShareProfilePage } from '../../share/pages';
 import { BotChatPage, BotDetailsPage, BotModelPage, BotsHomePage, FolderPage, MemoryPage, NewBotPage, NewRoomPage, RoomChatPage, RoomDetailsPage, botStatusLine, homeSub, roomStatusLine } from '../../bots/pages';
@@ -89,6 +90,7 @@ export const PAGES: Record<string, PageDef> = {
   'phone-dnd': { title: '不打扰模式', body: PhoneDndPage },
   'agent-team': { title: '智能体团队', body: TeamPage },
   presets: { title: 'Agent 预设', body: PresetsPage },
+  persona: { title: '人设', body: PersonaPage },
   'phone-a11y-restore': { title: '自动恢复无障碍', body: A11yRestorePage },
   'phone-shell': { title: 'Android Shell', body: AndroidShellPage },
   'phone-log': { title: '操作记录', body: PhoneLogPage },

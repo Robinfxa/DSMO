@@ -12,6 +12,8 @@
     "@api-demo/skill-meeting-notes",
     "@api-demo/skill-code-review",
     "@api-demo/auto-daily-plan",
-    "@api-demo/auto-weekly-review"
+    "@api-demo/auto-weekly-review",
+    "@api-demo/persona-library",
+    "@api-demo/memory-share"
   ]
 }

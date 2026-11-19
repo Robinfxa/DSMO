@@ -8,6 +8,7 @@ import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { canSpeak, native } from '../../bridge/native';
+import { installed } from '../../plugins/frontend';
 import {
   clearApiKey,
   confirm,
@@ -280,6 +281,11 @@ function SettingsHome() {
         <Row icon="bell" label="通知" onClick={() => toPage('notify-settings')} />
         <Row icon="shield" label="系统权限" onClick={() => toPage('access')} />
       </Group>
+      {installed.value.some((x) => x.id === '@api-demo/persona-library' && x.enabled) && (
+        <Group title="陪伴">
+          <Row icon="person" label="人设" onClick={() => toPage('persona')} />
+        </Group>
+      )}
       <Group title="语音">
         <Row icon="mic" label="语音输入" right={<Toggle on={p.voiceInput} label="语音输入" onChange={(v) => setPref('voiceInput', v)} />} />
         <Row icon="waves" label="识别方式" onClick={() => toPage('voice-settings')} />

@@ -45,7 +45,10 @@
 
   "engine": {                            // 可选：引擎那半，固定版本
     "package": "dsh-plugin-foo", "version": "1.2.3",
-    "shows": { "pills": ["今日用量"] }      // 可选：只给详情页的效果预览用（引擎插件的界面要装好才知道）
+    "shows": { "pills": ["今日用量"] },     // 可选：只给详情页的效果预览用（引擎插件的界面要装好才知道）
+    "setup": {                           // 可选：包跑起来后 App 发一次的 JSON POST，只能发到包自己的 /api/<包名>/ 下
+      "path": "/api/dsh-plugin-foo/mutate", "body": { "action": "…" }   // body ≤ 2 KB；引擎要重启才生效时，等引擎起来再发
+    }
   }
 }
 ```
@@ -112,6 +115,10 @@
 
 面板总是开在 App 的浮层里。当前对话来了授权请求时，插件面板会被自动关掉并提示，授权卡上面不会有任何插件的东西。
 
+### 引擎插件装好以后
+
+`pluginManager/installBundle` 的结果里 `application` 说明是否已生效：`applied` 直接可用；`restart-required` 要重启引擎才加载（本机主机时插件页提示「重启引擎」）；`failed` / `cancelled` 按失败处理，不会记成已安装。DSH 自己的社区插件常把设置界面做在 DSH Web 里，那部分在 DSMO 里看不到，上架前要确认装好后的默认行为对 DSMO 用户合适。
+
 ## 和 dsh-Go 插件的兼容
 
 前端说 dsh-Go 原生插件协议 v1（`web/src/plugins/dshgo.ts`）：
@@ -146,3 +153,5 @@
 | 每日计划 | 自动化 | 每天 8:30 新开对话排今天的计划 |
 | 每周回顾 | 自动化 | 每周五 17:30 新开对话做周回顾 |
 | 今日用量 | 引擎 | 装到主机上的 dsh-Go 插件（`dsh-go-example-usage`）：输入框上方的用量状态条和用量面板；卸载即消失 |
+| 人设库 | 引擎 + 入口 | 社区插件 `dsh-persona-dafeiyu`：选中的人设每轮注入系统提示。它的设置界面是 DSH Web 的，DSMO 用自己的「设置 › 陪伴 › 人设」页调它的 `/api/dsh-persona-dafeiyu/*`；`engine.setup` 装好后先关掉它默认开着的示例人设 |
+| 长期记忆 | 引擎 | 社区插件 `dsh-plugin-memory-share`：记忆渲染进系统提示（常驻 / 按话题两档），模型用 `memory_save` 等工具写；无界面 |

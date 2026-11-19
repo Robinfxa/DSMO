@@ -8,7 +8,8 @@ import './styles/mobile.css';
 import './styles/plugins.css';
 import { App } from './ui/App';
 import { boot } from './state/store';
-import { loadInstalled } from './plugins/frontend';
+import { loadInstalled, settleEngineSetups } from './plugins/frontend';
+import { onNative } from './bridge/native';
 import { startGuard } from './plugins/guard';
 import { loadContributions, setDshGoTransport } from './plugins/dshgo';
 
@@ -24,5 +25,10 @@ async function main() {
   startGuard();
   await boot();
   void loadContributions();
+  // An engine plugin's one-time setup that is still owed (engine was off, or needed a restart).
+  void settleEngineSetups();
+  onNative('engine.changed', (p) => {
+    if ((p as { running?: boolean } | null)?.running) setTimeout(() => void settleEngineSetups(), 3000);
+  });
 }
 void main();

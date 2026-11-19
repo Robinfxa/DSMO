@@ -44,7 +44,17 @@ export interface ApiDemoManifest {
   panels?: Record<string, { title: string; html: string }>;
   permissions: string[];
   /** The engine half: a DSH plugin package installed on the current host. `shows` is for the store page only. */
-  engine?: { package: string; version: string; shows?: { pills?: string[]; sider?: string[] } };
+  engine?: {
+    package: string;
+    version: string;
+    shows?: { pills?: string[]; sider?: string[] };
+    /**
+     * One request the app sends once the package runs (after install, or after the engine restart it
+     * needed): a JSON POST to the package's own routes, `/api/<package>/…`. For defaults DSMO wants
+     * different from the package's (the persona library starts with its sample persona on).
+     */
+    setup?: { path: string; body: Record<string, unknown> };
+  };
 }
 export interface ManifestSchedule {
   id: string;
@@ -77,6 +87,8 @@ interface Installed {
   off?: string[];
   /** What installing made outside the device: schedule ids by manifest id, skill names. */
   made?: { schedules?: Record<string, string>; skills?: string[] };
+  /** `engine.setup` has been answered (true), or is still owed (false). */
+  setupDone?: boolean;
 }
 
 export const installed = signal<Installed[]>([]);
@@ -147,14 +159,76 @@ async function save() {
   applySkin();
 }
 
-export async function installPlugin(id: string) {
+/** What an install left to do: an engine plugin that loads only after the engine restarts. */
+export interface InstallOutcome {
+  restart: boolean;
+}
+
+/** DSH's answer to `pluginManager/installBundle` (ChangeResult): failures arrive as an ok RPC. */
+function bundleOutcome(r: Record<string, unknown>): { restart: boolean } {
+  const application = typeof r.application === 'string' ? r.application : 'applied';
+  if (application === 'failed' || application === 'cancelled') {
+    const err = (r.error && typeof r.error === 'object' ? (r.error as Record<string, unknown>) : {}) as Record<string, unknown>;
+    const kind = (r.packageResult as Record<string, unknown> | undefined)?.kind;
+    const why: Record<string, string> = {
+      network: '网络不通，下载不了插件',
+      'not-found': '找不到这个插件包',
+      'no-matching-version': '找不到这个版本',
+      'disk-full': '手机空间不够',
+      timeout: '下载超时',
+      'build-blocked': '插件需要运行安装脚本，已拦下',
+    };
+    throw new Error(application === 'cancelled' ? '安装已取消' : why[String(kind)] ?? (typeof err.message === 'string' ? err.message : '引擎没能装上这个插件'));
+  }
+  return { restart: application === 'restart-required' };
+}
+
+/** Sends a plugin's `engine.setup` once; true when the package answered it. */
+async function runEngineSetup(p: ApiDemoManifest): Promise<boolean> {
+  const setup = p.engine?.setup;
+  if (!setup) return true;
+  try {
+    const res = await fetch(setup.path, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(setup.body),
+    });
+    if (!res.ok) return false;
+    const j = (await res.json().catch(() => ({}))) as { ok?: boolean };
+    return j.ok !== false;
+  } catch {
+    return false;
+  }
+}
+
+/** Owed `engine.setup` calls (the engine was off, or needed a restart first): tried at start and when it comes back. */
+export async function settleEngineSetups() {
+  let changed = false;
+  for (const x of installed.value) {
+    if (x.setupDone !== false) continue;
+    const p = findPlugin(x.id);
+    if (!p || !(await runEngineSetup(p))) continue;
+    x.setupDone = true;
+    changed = true;
+  }
+  if (changed) {
+    installed.value = [...installed.value];
+    await save();
+  }
+}
+
+export async function installPlugin(id: string): Promise<InstallOutcome> {
   const p = findPlugin(id);
   if (!p) throw new Error('找不到这个插件');
   validateManifest(p);
+  let restart = false;
+  let setupDone: boolean | undefined;
   if (p.engine) {
     // Engine half → the current host. Official-only market (Q8): the bundle comes from the pinned version.
-    await getClient().installBundle(`${p.engine.package}@${p.engine.version}`);
+    restart = bundleOutcome(await getClient().installBundle(`${p.engine.package}@${p.engine.version}`)).restart;
     void loadContributions();
+    if (p.engine.setup) setupDone = !restart && (await runEngineSetup(p));
   }
   const made: NonNullable<Installed['made']> = {};
   if (p.skills?.length) {
@@ -170,11 +244,12 @@ export async function installPlugin(id: string) {
       throw e;
     }
   }
-  installed.value = [...installed.value.filter((x) => x.id !== id), { id, enabled: true, version: p.version, made }];
+  installed.value = [...installed.value.filter((x) => x.id !== id), { id, enabled: true, version: p.version, made, ...(setupDone === undefined ? {} : { setupDone }) }];
   // A skin replaces any other active skin.
   if (p.kinds.includes('skin'))
     installed.value = installed.value.map((x) => (x.id !== id && findPlugin(x.id)?.kinds.includes('skin') ? { ...x, enabled: false } : x));
   await save();
+  return { restart };
 }
 
 export async function removePlugin(id: string) {
@@ -258,6 +333,16 @@ export function validateManifest(p: ApiDemoManifest) {
   for (const k of p.layout?.hide ?? []) if (!HIDEABLE.has(k)) throw new Error(`插件想隐藏「${k}」，这是不允许的`);
   for (const mode of ['light', 'dark'] as const) for (const [k, v] of Object.entries(p.skin?.[mode] ?? {})) checkToken(k, v);
   for (const s of p.slots ?? []) if ('open' in s.action && PROTECTED_WORDS.test(s.action.open)) throw new Error('插件入口不能指向受保护的页面');
+  checkEngineSetup(p);
+}
+
+/** `engine.setup` may only reach the package's own routes, with a small JSON body. */
+export function checkEngineSetup(p: Pick<ApiDemoManifest, 'engine'>) {
+  const setup = p.engine?.setup;
+  if (!setup) return;
+  const own = `/api/${p.engine!.package}/`;
+  if (typeof setup.path !== 'string' || !setup.path.startsWith(own) || /\.\.|[?#\\]/.test(setup.path)) throw new Error(`engine.setup 只能调用 ${own} 下的接口`);
+  if (!setup.body || typeof setup.body !== 'object' || Array.isArray(setup.body) || JSON.stringify(setup.body).length > 2048) throw new Error('engine.setup 的 body 要是 2 KB 以内的 JSON 对象');
 }
 
 export function checkToken(name: string, value: string) {
