@@ -11,7 +11,8 @@ name: Publish web bundle
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'native/BRIDGE', '.github/workflows/web.yml']
+    # market/ is compiled into the page (web/src/plugins/official.ts), plugins/ feeds it.
+    paths: ['web/**', 'market/**', 'plugins/**', 'native/BRIDGE', '.github/workflows/web.yml']
   workflow_dispatch:
 
 permissions:
