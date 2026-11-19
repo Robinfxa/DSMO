@@ -83,9 +83,11 @@ class ApiDemoBridge {
       case 'pickFiles':
         return _pickFiles(p['sessionId'] as String? ?? '', p['accept'] as String? ?? 'any');
       case 'switchHost':
-        return _switchHost(p['id'] as String? ?? 'local');
+        await _switchHost(p['id'] as String? ?? 'local');
+        return null;
       case 'openNativePage':
-        return _openNativePage(p['page'] as String? ?? '', p['sessionId'] as String?);
+        await _openNativePage(p['page'] as String? ?? '', p['sessionId'] as String?);
+        return null;
       case 'session':
         // The page reports the conversation on screen (notifications, launcher recents, native mode).
         ref.read(currentSessionProvider.notifier).select(p['sessionId'] as String?);
@@ -104,7 +106,8 @@ class ApiDemoBridge {
       case 'skills.install':
         return _installSkills(p['skills']);
       case 'skills.remove':
-        return _removeSkills(p['names']);
+        await _removeSkills(p['names']);
+        return null;
       case 'pickDocuments':
         // Files read on the device and handed to the page; nothing is uploaded (导入历史对话).
         final out = <Map<String, Object?>>[];

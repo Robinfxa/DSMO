@@ -18,7 +18,6 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
-import '../notify/notify_channel.dart';
 import '../performance/performance_state.dart';
 import '../runtime/local_footprint.dart';
 import '../state/engine_control.dart';
