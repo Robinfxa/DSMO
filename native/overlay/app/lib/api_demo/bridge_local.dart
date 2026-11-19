@@ -31,8 +31,6 @@ import '../ui/safe_mode/safe_mode_card.dart' show safeModeReasonText;
 import '../usage/usage_net.dart' show UsageBuild;
 import '../usage/usage_stats.dart';
 import 'api_demo_setup.dart';
-import '../remote/link_status.dart';
-import '../remote/ssh/ssh_host_config.dart';
 import '../remote/ssh/ssh_link.dart';
 import '../runtime/runtime_bridge.dart';
 import '../share_code/guest_fs.dart';

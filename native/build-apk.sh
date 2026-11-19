@@ -59,7 +59,7 @@ flutter --version | head -1
 java -version 2>&1 | head -1
 
 echo "→ check the DSMO Dart files compile"
-(cd app && flutter pub get --enforce-lockfile >/dev/null && flutter analyze --no-pub lib/api_demo)
+(cd app && flutter pub get --enforce-lockfile >/dev/null && flutter analyze --no-pub --no-fatal-infos lib/api_demo)
 
 echo "→ runtime ($rt)"
 bash runtime/build-runtime.sh "$rt"

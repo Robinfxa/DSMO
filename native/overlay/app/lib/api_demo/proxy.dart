@@ -33,7 +33,10 @@ import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 const apiDemoAssetRoot = 'assets/api_demo';
 
 class ApiDemoProxy {
-  ApiDemoProxy({Uri? engine, String? token, AssetBundle? assets}) : _engine = engine, _token = token, _assets = assets ?? rootBundle;
+  ApiDemoProxy({Uri? engine, String? token, AssetBundle? assets}) : _assets = assets ?? rootBundle {
+    _engine = engine;
+    _token = token;
+  }
 
   /// The engine's origin, e.g. http://127.0.0.1:3080 (local) or the SSH forward; null when none runs.
   Uri? _engine;

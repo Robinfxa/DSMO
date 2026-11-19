@@ -18,7 +18,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../phone/android_shell_channel.dart';
-import '../phone/phone_channel.dart';
 import '../state/phone_state.dart';
 import '../state/voice_model_state.dart';
 import '../ui/common/app_dialog.dart';
