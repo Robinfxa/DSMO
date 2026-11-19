@@ -25,6 +25,7 @@ import { AccessPage, EnginePage, HostEditPage, HostsPage, NotifySettingsPage, Ph
 import { A11yRestorePage, AndroidShellPage, PhoneDndPage, PhoneLogPage } from './host/phone';
 import { PresetsPage, TeamPage } from './agents';
 import { PersonaPage } from './persona';
+import { SkillEditPage, SkillsPage } from './skills';
 import { imported } from '../../history/imported';
 import { exportConversations, exportFileName } from '../../history/export';
 import { ShareImportPage, ShareOpenPage, ShareOutPage, ShareProfilePage } from '../../share/pages';
@@ -36,7 +37,6 @@ import {
   LOCATION_TAG,
   backPage,
   currentId,
-  draft,
   errText,
   getClient,
   getTranscript,
@@ -66,7 +66,7 @@ export const PAGES: Record<string, PageDef> = {
   export: { title: '导出对话日志', session: true, body: ExportPage },
   jobs: { title: '后台任务', session: true, body: JobsPage },
   'plan-goal': { title: '计划与目标', session: true, body: PlanGoalPage },
-  skills: { title: '技能', session: true, body: SkillsPage },
+  skills: { title: '技能', body: SkillsPage },
   subagents: { title: '子代理', session: true, body: SubagentsPage },
   reference: { title: '引用文件和对话', body: ReferencePage },
   permission: { title: '权限', sub: () => '执行前是否确认', session: true, body: PermissionPage },
@@ -108,6 +108,10 @@ export const PAGES: Record<string, PageDef> = {
 /** Pages with a parameter: `plugin:<id>` (detail) and `plugin-manage:<id>` (its 管理 page). */
 function pageDef(id: string | undefined): PageDef | undefined {
   if (!id) return undefined;
+  if (id.startsWith('skill:')) {
+    const name = id.slice('skill:'.length);
+    return { title: name === 'new' ? '新建技能' : name, body: () => <SkillEditPage name={name} /> };
+  }
   if (id === 'imported') return { title: '保存在这台设备上的对话', body: ImportedListPage };
   if (id === 'import-run') return { title: '导入历史对话', body: ImportRunPage };
   if (id.startsWith('imported:')) {
@@ -537,34 +541,6 @@ function PlanGoalPage() {
   );
 }
 const GOAL_PHASE: Record<string, string> = { active: '进行中', paused: '已暂停', complete: '已完成', blocked: '受阻' };
-
-// ------------------------------------------------------------------ 技能
-
-function SkillsPage() {
-  const s = sid()!;
-  const { data, error, loading } = useAsync(() => getClient().listSkills(s), [s]);
-  if (loading) return <div class="note">正在读取…</div>;
-  if (error) return <div class="note">{errText(error)}</div>;
-  if (!data?.length) return <Empty title="没有可用的技能" />;
-  return (
-    <>
-      <div class="note">点一个技能，会把 <code>/名字</code> 放进输入框。</div>
-      {data.map((k) => (
-        <Lrow
-          key={k.name}
-          title={<code>/{k.name}</code>}
-          sub={k.description}
-          end={k.source === 'project' ? '项目' : k.source === 'bundled' ? '内置' : k.source ?? ''}
-          onClick={() => {
-            draft.value = `/${k.name} `;
-            pages.value = [];
-            setTimeout(() => document.getElementById('input')?.focus(), 50);
-          }}
-        />
-      ))}
-    </>
-  );
-}
 
 // ------------------------------------------------------------------ 子代理
 

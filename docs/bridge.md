@@ -66,7 +66,7 @@ App → 页面   window.__apiDemo.reply(id, ok, value)
 | `share.localFiles` | — | `{skills:[{name, description, files}], agentsMd}`：本机引擎里用户自己的技能和全局 AGENTS.md（分享配置用）；只在当前主机是本机时可用 |
 | `share.readSkill` / `share.readAgentsMd` | `{name}` / — | 导入前对比：同名技能的文件 / 之前导入的 AGENTS.md |
 | `share.pinRestorePoint` | — | 导入配置前留还原点（安全模式里的「恢复上次正常的配置」） |
-| `share.writeSkill` / `share.writeAgentsMd` | `{skill}` / `{text}` | 写入，旧的先备份到 `~/.dsh/backups/`（和 dsh-Go 的分享码导入同一套） |
+| `share.writeSkill` / `share.writeAgentsMd` | `{skill}` / `{text}` | 写入，旧的先备份到 `~/.dsh/backups/`（和 dsh-Go 的分享码导入同一套）；「技能」页新建和编辑也用它 |
 
 ### 第 6 轮（`bridge_phone.dart`）
 
