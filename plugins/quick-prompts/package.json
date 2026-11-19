@@ -1,0 +1,44 @@
+{
+  "name": "@api-demo/quick-prompts",
+  "version": "1.1.0",
+  "description": "常用提示词：自定义 5 条，点一下放进输入框",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "常用提示词",
+    "summary": "边栏多一个「常用提示词」，存 5 条自己的提示词，点一下放进输入框。",
+    "kinds": [
+      "slot",
+      "panel"
+    ],
+    "permissions": [
+      "storage"
+    ],
+    "slots": [
+      {
+        "slot": "sider.features",
+        "id": "open",
+        "title": "常用提示词",
+        "icon": "FxSkill",
+        "action": {
+          "panel": "list"
+        }
+      }
+    ],
+    "panels": {
+      "list": {
+        "title": "常用提示词",
+        "entry": "panel.html"
+      }
+    },
+    "description": "在边栏打开「常用提示词」，点一条就放进输入框，不会替你发送。\n\n最多存 5 条。点「编辑」可以改名、改内容、上移下移和删除；内容只保存在这台设备上。",
+    "highlights": [
+      "最多 5 条，自己写",
+      "改名、改内容、调整顺序",
+      "只填进输入框，不自动发送"
+    ]
+  }
+}

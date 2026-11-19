@@ -1,0 +1,7 @@
+node_modules/
+web/dist/
+web/dist-proto/
+web/e2e/shots/
+*.log
+build-apk/
+dist-apk/

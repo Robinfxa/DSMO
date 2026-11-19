@@ -1,0 +1,5 @@
+{
+  "package": "@api-demo/notes-panel",
+  "version": "1.0.0",
+  "source": "plugins/notes-panel"
+}

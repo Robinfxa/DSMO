@@ -1,0 +1,43 @@
+{
+  "name": "@api-demo/skin-paper",
+  "version": "1.0.0",
+  "description": "暖白纸张皮肤，带一段自定义样式",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "纸张",
+    "summary": "米白底色、衬线正文。演示皮肤里的自定义 CSS：遮住授权卡或登录框会被自动停用。",
+    "kinds": [
+      "skin"
+    ],
+    "permissions": [],
+    "skin": {
+      "light": {
+        "--dsw-alias-bg-base": "#fbf8f1",
+        "--dsw-specific-sidebar-fill": "#f3eee2",
+        "--dsw-specific-bubble": "#efe6d2",
+        "--dsw-alias-brand-primary": "#9a5b13",
+        "--dsw-alias-brand-text": "#9a5b13",
+        "--dsw-alias-button-primary-fill": "#9a5b13",
+        "--dsw-specific-input-major": "#fffdf8"
+      },
+      "dark": {
+        "--dsw-alias-bg-base": "#1c1a16",
+        "--dsw-specific-sidebar-fill": "#221f1a",
+        "--dsw-specific-bubble": "#2d2921",
+        "--dsw-alias-brand-primary": "#e0a35a",
+        "--dsw-alias-brand-text": "#e7b779"
+      },
+      "css": ".md p, .md li { font-family: \"Songti SC\", \"Noto Serif SC\", Georgia, serif; font-size: 16px; line-height: 28px; }\n.bubble { border-radius: 14px; }\n.greeting { font-family: \"Songti SC\", \"Noto Serif SC\", Georgia, serif; }"
+    },
+    "description": "像在纸上读字：米白的底、暖棕色的强调，回答正文换成衬线字体，行距更松。\n\n这款皮肤带一小段自定义样式（改正文字体和气泡圆角）。如果样式遮住了授权卡或登录框，应用会自动暂停它。",
+    "highlights": [
+      "回答正文用衬线字体，长文更好读",
+      "浅色、深色各一套",
+      "自定义样式受保护规则约束"
+    ]
+  }
+}

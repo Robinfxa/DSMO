@@ -1,0 +1,69 @@
+From 710e4a9313e66c4c73f6a1b2a82fdd8ab2648408 Mon Sep 17 00:00:00 2001
+From: API Demo <api-demo@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 04:36:12 -0500
+Subject: [PATCH 2/3] API Demo: own application id, name and update channel
+
+Installs beside DSH Go (applicationId, overridable with
+-PapiDemoApplicationId), shows as API Demo, and checks our own releases
+instead of DSH Go's. The Kotlin namespace is unchanged on purpose: the
+patch stays small.
+---
+ app/android/app/build.gradle.kts             | 2 +-
+ app/android/app/src/main/AndroidManifest.xml | 2 +-
+ app/lib/update/update_config.dart            | 7 +++++--
+ 3 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/app/android/app/build.gradle.kts b/app/android/app/build.gradle.kts
+index f2d6b7e..e93fa07 100644
+--- a/app/android/app/build.gradle.kts
++++ b/app/android/app/build.gradle.kts
+@@ -49,7 +49,7 @@ android {
+     }
+ 
+     defaultConfig {
+-        applicationId = "io.github.ccch1mneyyy.dsh_app"
++        applicationId = (project.findProperty("apiDemoApplicationId") as String?) ?: "io.github.apidemo.app"
+         // java.nio.file (symlinks while unpacking the rootfs) needs API 26.
+         minSdk = 26
+         // Target 28 like Termux, so the API 29+ exec restriction on app-private
+diff --git a/app/android/app/src/main/AndroidManifest.xml b/app/android/app/src/main/AndroidManifest.xml
+index 1473ba2..b48a1cb 100644
+--- a/app/android/app/src/main/AndroidManifest.xml
++++ b/app/android/app/src/main/AndroidManifest.xml
+@@ -52,7 +52,7 @@
+          TODO(targetSdk >= 31): also configure dataExtractionRules. -->
+     <application
+         android:allowBackup="false"
+-        android:label="DSH Go"
++        android:label="API Demo"
+         android:name="${applicationName}"
+         android:icon="@mipmap/ic_launcher"
+         android:roundIcon="@mipmap/ic_launcher_round"
+diff --git a/app/lib/update/update_config.dart b/app/lib/update/update_config.dart
+index 896d761..2a8ef89 100644
+--- a/app/lib/update/update_config.dart
++++ b/app/lib/update/update_config.dart
+@@ -21,7 +21,8 @@
+ library;
+ 
+ /// GitHub repository the releases live in.
+-const updateRepo = 'ccch1mneyyy/dsh-go';
++// API Demo: releases come from our own repository (override with --dart-define).
++const updateRepo = String.fromEnvironment('API_DEMO_UPDATE_REPO', defaultValue: 'api-demo/api-demo');
+ 
+ /// `releases/latest` of the REST API: tag, notes, assets with sizes and
+ /// SHA-256 digests. Unauthenticated: 60 requests per hour per IP.
+@@ -45,7 +46,9 @@ const updateMirrorOrigin = 'https://go.dshtui.com';
+ /// Our public copy of the release files (an R2 bucket): `/update.json`, the
+ /// latest public manifest with absolute asset URLs, and
+ /// `/download/<version>/<file>` for every file of every release.
+-const updateDownloadOrigin = 'https://dl.dshtui.com';
++// API Demo: no download mirror of our own; an empty origin means GitHub releases
++// of [updateRepo] only (buildUpdateSources drops the self-hosted feed).
++const updateDownloadOrigin = '';
+ 
+ /// The beta channel: `<origin>/beta/update.json` and `<origin>/beta/<version>/<file>`,
+ /// both behind `Authorization: Bearer <token>`. The token is compiled into beta
+-- 
+2.43.0
+

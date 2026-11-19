@@ -1,0 +1,29 @@
+{
+  "name": "@api-demo/skill-meeting-notes",
+  "version": "1.0.0",
+  "description": "把会议记录、转写或群聊整理成纪要：结论、待办、待定问题。",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "会议纪要",
+    "summary": "把会议记录、转写或群聊整理成纪要：结论、待办、待定问题。",
+    "permissions": [],
+    "description": "装好后在输入框里输入 /meeting-notes，再贴上会议记录、录音转写或群聊内容，AI 会整理成一份能直接发出去的纪要。\n\n只写材料里有的内容；没提到负责人或时间的待办会标「待定」，不会替人认领。",
+    "highlights": [
+      "结论、待办、待定问题三段",
+      "待办写清谁、做什么、什么时候",
+      "不编造材料里没有的内容"
+    ],
+    "kinds": [
+      "skill"
+    ],
+    "skills": [
+      {
+        "name": "meeting-notes"
+      }
+    ]
+  }
+}

@@ -1,0 +1,107 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 4px 4px 8px; font: 15px/22px system-ui, -apple-system, "PingFang SC", sans-serif; color: var(--fg); background: transparent; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  .head { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px 8px; color: var(--muted); font-size: 13px; }
+  .link { color: var(--brand); font-size: 15px; padding: 4px 0; }
+  .item { display: flex; align-items: center; gap: 4px; border-radius: 14px; }
+  .item .main { flex: 1; min-width: 0; text-align: left; padding: 10px 12px; border-radius: 14px; }
+  .item .main:active, .item .main:hover { background: var(--hover); }
+  .t { display: block; }
+  .p { display: block; color: var(--muted); font-size: 13px; line-height: 19px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .tool { width: 34px; height: 34px; border-radius: 17px; color: var(--muted); font-size: 16px; }
+  .tool:hover { background: var(--hover); }
+  .tool:disabled { opacity: .3; cursor: default; }
+  .tool.del { color: #e5484d; font-size: 14px; width: auto; padding: 0 10px; }
+  .editor { padding: 8px 12px 12px; }
+  input, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--input); color: inherit; font: inherit; outline: none; }
+  textarea { height: 96px; margin-top: 8px; resize: vertical; }
+  .row { display: flex; justify-content: flex-end; gap: 16px; margin-top: 10px; }
+  .empty { padding: 18px 12px; color: var(--muted); }
+  .add { display: block; width: 100%; padding: 12px; text-align: left; color: var(--brand); }
+</style>
+<div class="head"><span id="count"></span><button class="link" id="mode">编辑</button></div>
+<div id="list"></div>
+<script>
+  const MAX = 5;
+  const DEFAULTS = [
+    { t: '总结要点', p: '总结上面的对话，列三条要点。' },
+    { t: '改得更简洁', p: '把你上一条回答改写得更简洁，保留关键信息。' },
+    { t: '写成周报', p: '把我们这次做的事整理成一段周报，分「完成」「问题」「下周」三部分。' },
+    { t: '解释给新人', p: '用新人能听懂的话解释一遍，避免术语。' },
+    { t: '找出风险', p: '列出这个方案可能出问题的地方，以及怎么提前发现。' },
+  ];
+  let items = [];
+  let editing = false;
+  let open = -1; // index being edited; items.length = a new one
+
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const save = () => apiDemo.storage.set('prompts', JSON.stringify(items));
+  const fit = () => requestAnimationFrame(() => apiDemo.resize(document.body.scrollHeight + 8));
+
+  function editor(i) {
+    const cur = items[i] || { t: '', p: '' };
+    const box = el('div', 'editor');
+    const t = el('input'); t.placeholder = '名称，例如「写成周报」'; t.maxLength = 20; t.value = cur.t;
+    const p = el('textarea'); p.placeholder = '提示词内容'; p.maxLength = 1000; p.value = cur.p;
+    const row = el('div', 'row');
+    const cancel = el('button', 'link', '取消');
+    const ok = el('button', 'link', '保存');
+    cancel.onclick = () => { open = -1; render(); };
+    ok.onclick = () => {
+      const v = { t: t.value.trim() || p.value.trim().slice(0, 10), p: p.value.trim() };
+      if (!v.p) return apiDemo.toast('提示词不能为空');
+      if (i < items.length) items[i] = v; else items.push(v);
+      open = -1; save(); render();
+    };
+    row.append(cancel, ok);
+    box.append(t, p, row);
+    setTimeout(() => (cur.t ? p : t).focus(), 0);
+    return box;
+  }
+
+  function render() {
+    const list = document.getElementById('list');
+    list.textContent = '';
+    document.getElementById('count').textContent = editing ? `最多 ${MAX} 条，可以改名、改内容、调整顺序` : '点一下放进输入框，不会自动发送';
+    document.getElementById('mode').textContent = editing ? '完成' : '编辑';
+    if (!items.length && open < 0) list.append(el('div', 'empty', '还没有提示词。'));
+    items.forEach((it, i) => {
+      if (open === i) return list.append(editor(i));
+      const row = el('div', 'item');
+      const main = el('button', 'main');
+      main.append(el('span', 't', it.t), el('span', 'p', it.p));
+      main.onclick = () => (editing ? ((open = i), render()) : apiDemo.insert(it.p).then(() => apiDemo.close()));
+      row.append(main);
+      if (editing) {
+        const up = el('button', 'tool', '↑'); up.setAttribute('aria-label', '上移'); up.disabled = i === 0;
+        const down = el('button', 'tool', '↓'); down.setAttribute('aria-label', '下移'); down.disabled = i === items.length - 1;
+        const del = el('button', 'tool del', '删除');
+        up.onclick = () => { [items[i - 1], items[i]] = [items[i], items[i - 1]]; save(); render(); };
+        down.onclick = () => { [items[i + 1], items[i]] = [items[i], items[i + 1]]; save(); render(); };
+        del.onclick = () => { items.splice(i, 1); save(); render(); };
+        row.append(up, down, del);
+      }
+      list.append(row);
+    });
+    if (open === items.length) list.append(editor(items.length));
+    else if (editing && items.length < MAX) {
+      const add = el('button', 'add', '＋ 添加提示词');
+      add.onclick = () => { open = items.length; render(); };
+      list.append(add);
+    }
+    fit();
+  }
+
+  document.getElementById('mode').onclick = () => { editing = !editing; open = -1; render(); };
+  apiDemo.ready().then(async () => {
+    try {
+      const raw = await apiDemo.storage.get('prompts');
+      const saved = raw ? JSON.parse(raw) : null;
+      items = Array.isArray(saved) ? saved.filter((x) => x && typeof x.p === 'string').slice(0, MAX) : DEFAULTS.slice();
+    } catch { items = DEFAULTS.slice(); }
+    render();
+  });
+</script>

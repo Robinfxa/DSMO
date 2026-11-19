@@ -1,0 +1,44 @@
+{
+  "name": "@api-demo/notes-panel",
+  "version": "1.0.0",
+  "description": "随手记：保存在本机的便签面板",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "随手记",
+    "summary": "一个保存在这台设备上的便签面板，可以把便签放进输入框。演示沙箱面板的存储能力。",
+    "kinds": [
+      "slot",
+      "panel"
+    ],
+    "permissions": [
+      "storage"
+    ],
+    "slots": [
+      {
+        "slot": "sider.features",
+        "id": "open",
+        "title": "随手记",
+        "icon": "IconEditOutline16",
+        "action": {
+          "panel": "main"
+        }
+      }
+    ],
+    "panels": {
+      "main": {
+        "title": "随手记",
+        "entry": "panel.html"
+      }
+    },
+    "description": "一个随手记的便签面板。想到什么先记下来，需要时一键放进输入框。\n\n便签只存在这台设备上，在「管理」里能看到占了多少空间，也能一键清除。",
+    "highlights": [
+      "便签保存在本机",
+      "一键把便签放进输入框",
+      "可在管理页清除数据"
+    ]
+  }
+}

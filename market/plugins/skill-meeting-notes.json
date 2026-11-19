@@ -1,0 +1,5 @@
+{
+  "package": "@api-demo/skill-meeting-notes",
+  "version": "1.0.0",
+  "source": "plugins/skill-meeting-notes"
+}

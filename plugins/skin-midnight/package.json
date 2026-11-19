@@ -1,0 +1,44 @@
+{
+  "name": "@api-demo/skin-midnight",
+  "version": "1.0.0",
+  "description": "深蓝夜色皮肤",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "夜航",
+    "summary": "深蓝底色、青色强调的夜间皮肤。只改设计变量，浅色和深色各一套。",
+    "kinds": [
+      "skin"
+    ],
+    "permissions": [],
+    "skin": {
+      "light": {
+        "--dsw-alias-bg-base": "#f3f6fb",
+        "--dsw-specific-sidebar-fill": "#e8eef8",
+        "--dsw-alias-brand-primary": "#0e7490",
+        "--dsw-alias-brand-text": "#0e7490",
+        "--dsw-alias-button-primary-fill": "#0e7490",
+        "--dsw-specific-bubble": "#dceefa"
+      },
+      "dark": {
+        "--dsw-alias-bg-base": "#0b1220",
+        "--dsw-alias-bg-layer-2": "#111a2e",
+        "--dsw-specific-sidebar-fill": "#0e1729",
+        "--dsw-alias-brand-primary": "#22d3ee",
+        "--dsw-alias-brand-text": "#67e8f9",
+        "--dsw-alias-button-primary-fill": "#0891b2",
+        "--dsw-specific-bubble": "#16233d",
+        "--dsw-specific-input-major": "#111a2e"
+      }
+    },
+    "description": "深夜里看屏幕不刺眼的一套配色：深色是接近墨蓝的底，配青色的按钮和强调；浅色是带一点蓝的灰白。\n\n只改设计变量，不加任何自定义样式，所以手机和电脑上都一样稳妥，也不可能挡住授权卡或登录框。",
+    "highlights": [
+      "浅色、深色各一套，跟着系统切换",
+      "手机端和网页端都生效",
+      "只改配色，不动布局"
+    ]
+  }
+}

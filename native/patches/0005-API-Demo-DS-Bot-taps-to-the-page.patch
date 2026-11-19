@@ -1,0 +1,35 @@
+From 3fa9829c12bc56f48df7072dfd5485766af1722a Mon Sep 17 00:00:00 2001
+From: API Demo <api-demo@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 14:46:12 -0500
+Subject: [PATCH] API Demo: DS Bot notification taps can be taken by the app's
+ home
+
+A hook before openDsBotTap pushes dsh-Go's own Bot pages, so the bundled
+page can open the Bot or group itself.
+---
+ app/lib/ui/bots/bot_alerts.dart | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/app/lib/ui/bots/bot_alerts.dart b/app/lib/ui/bots/bot_alerts.dart
+index 51c1f06..fc0bbdc 100644
+--- a/app/lib/ui/bots/bot_alerts.dart
++++ b/app/lib/ui/bots/bot_alerts.dart
+@@ -46,11 +46,15 @@ class _BotAlertsHostState extends ConsumerState<BotAlertsHost> with WidgetsBindi
+   }
+ }
+ 
++/// Takes DS Bot taps before the pages below would (API Demo opens its own); true when taken.
++bool Function(NotifyTap tap)? dsBotTapHandler;
++
+ /// Opens the Bot or group a tapped notification names; false for any other
+ /// notification, which the chat handles.
+ bool openDsBotTap(BuildContext context, NotifyTap tap) {
+   final kind = tap.kind;
+   if (kind != dsBotTapBot && kind != dsBotTapRoom) return false;
++  if (dsBotTapHandler?.call(tap) ?? false) return true;
+   final container = ProviderScope.containerOf(context, listen: false);
+   container.read(activeHostProvider.notifier).select(tap.host);
+   final navigator = Navigator.of(context, rootNavigator: true);
+-- 
+2.43.0
+

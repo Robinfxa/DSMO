@@ -1,0 +1,5 @@
+{
+  "package": "@api-demo/session-stats",
+  "version": "1.0.0",
+  "source": "plugins/session-stats"
+}

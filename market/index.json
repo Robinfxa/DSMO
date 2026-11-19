@@ -1,0 +1,414 @@
+{
+  "v": 1,
+  "plugins": [
+    {
+      "tier": 2,
+      "integrity": "sha256-ZwWvBgNcUCOaDREtQRZIZKqilURseXN3YiJla1X+naI=",
+      "manifest": {
+        "v": 1,
+        "title": "每日计划",
+        "summary": "每天早上 8:30 新开一个对话，帮你把今天要做的事排成计划。",
+        "permissions": [],
+        "description": "每天 8:30 自动开一个新对话，请 AI 列出今天的计划框架：最重要的三件事、时间块、可以推迟的事。你在对话里补上具体安排就行。\n\n时间可以在「管理」里改；暂停或查看运行记录在「自动化任务」里。",
+        "highlights": [
+          "每天 8:30，时间可改",
+          "每次一个新对话，不打扰旧对话",
+          "卸载即删除任务"
+        ],
+        "kinds": [
+          "schedule"
+        ],
+        "schedules": [
+          {
+            "id": "daily-plan",
+            "title": "每日计划",
+            "prompt": "早上好。帮我规划今天：先问我今天最重要的三件事（如果我还没说），然后给出一个按时间块排的计划，留出休息和缓冲时间，最后列出可以推迟的事。回答简短。",
+            "timing": {
+              "kind": "daily",
+              "time": "08:30"
+            }
+          }
+        ],
+        "id": "@api-demo/auto-daily-plan",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-rr9tXE4Y8GE7uUU/PwXMZBfgevB3KqnU9vJ6xIgvmHU=",
+      "manifest": {
+        "v": 1,
+        "title": "每周回顾",
+        "summary": "每周五 17:30 新开一个对话，回顾这一周：完成了什么、卡在哪、下周先做什么。",
+        "permissions": [],
+        "description": "每周五 17:30 自动开一个新对话，带你做一次周回顾：这周完成了什么、哪里卡住了、学到什么、下周最先做的三件事。\n\n适合配合「会议纪要」或工作区里的记录一起用。时间可以在「管理」里改。",
+        "highlights": [
+          "每周五 17:30，时间可改",
+          "固定四个问题，十分钟做完",
+          "卸载即删除任务"
+        ],
+        "kinds": [
+          "schedule"
+        ],
+        "schedules": [
+          {
+            "id": "weekly-review",
+            "title": "每周回顾",
+            "prompt": "到周末了，带我做一次十分钟的周回顾。依次问我：1. 这周完成了什么；2. 哪里卡住了、为什么；3. 学到了什么；4. 下周最先做的三件事。等我回答完一项再问下一项，最后整理成一段可以存档的周回顾。",
+            "timing": {
+              "kind": "weekly",
+              "time": "17:30",
+              "weekdays": [
+                5
+              ]
+            }
+          }
+        ],
+        "id": "@api-demo/auto-weekly-review",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 1,
+      "integrity": "sha256-pRRPr/39bvHgOGFuWo+5gLmoTScFdN5SAsnTC760CAs=",
+      "manifest": {
+        "v": 1,
+        "title": "专注布局",
+        "summary": "高级模式下隐藏手机操控、自动化任务入口和语音按钮，界面更清爽。授权卡、权限和登录不受影响。",
+        "kinds": [
+          "layout"
+        ],
+        "permissions": [],
+        "layout": {
+          "hide": [
+            "sider.features.phone",
+            "sider.features.schedules",
+            "composer.voice"
+          ]
+        },
+        "description": "高级模式的功能很多，不常用的入口会挤占边栏。专注布局把手机操控、自动化任务两个入口和输入框的语音按钮藏起来。\n\n装好后可以在「管理」里逐项决定藏哪些。授权卡、权限页和登录框不在可隐藏的范围内。",
+        "highlights": [
+          "隐藏不常用的边栏入口",
+          "可以逐项开关",
+          "随时停用，界面马上恢复"
+        ],
+        "id": "@api-demo/layout-focus",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-V2LGifTRe8jG1LNXEZv9vYEhqxs9aggbq09giGzBhus=",
+      "manifest": {
+        "v": 1,
+        "title": "随手记",
+        "summary": "一个保存在这台设备上的便签面板，可以把便签放进输入框。演示沙箱面板的存储能力。",
+        "kinds": [
+          "slot",
+          "panel"
+        ],
+        "permissions": [
+          "storage"
+        ],
+        "slots": [
+          {
+            "slot": "sider.features",
+            "id": "open",
+            "title": "随手记",
+            "icon": "IconEditOutline16",
+            "action": {
+              "panel": "main"
+            }
+          }
+        ],
+        "panels": {
+          "main": {
+            "title": "随手记",
+            "html": "<!doctype html>\n<meta charset=\"utf-8\">\n<style>\n  body { margin: 0; font: 14px/22px system-ui, -apple-system, \"PingFang SC\", sans-serif; color: var(--fg); }\n  textarea { box-sizing: border-box; width: 100%; height: 180px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--input); color: inherit; font: inherit; resize: vertical; outline: none; }\n  .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }\n  button { font: inherit; border: 0; border-radius: 16px; padding: 6px 14px; cursor: pointer; background: var(--hover); color: inherit; }\n  button.primary { background: var(--brand); color: #fff; }\n  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }\n</style>\n<textarea id=\"t\" placeholder=\"随手记点什么…\"></textarea>\n<div class=\"hint\" id=\"h\">自动保存在这台设备上</div>\n<div class=\"row\"><button id=\"clear\">清空</button><button class=\"primary\" id=\"ins\">放进输入框</button></div>\n<script>\n  const t = document.getElementById('t');\n  let timer = 0;\n  apiDemo.ready().then(async () => {\n    t.value = (await apiDemo.storage.get('note')) || '';\n    t.oninput = () => { clearTimeout(timer); timer = setTimeout(() => apiDemo.storage.set('note', t.value), 300); };\n    document.getElementById('clear').onclick = () => { t.value = ''; apiDemo.storage.set('note', ''); };\n    document.getElementById('ins').onclick = () => t.value.trim() && apiDemo.insert(t.value).then(() => apiDemo.toast('已放进输入框'));\n  });\n</script>\n"
+          }
+        },
+        "description": "一个随手记的便签面板。想到什么先记下来，需要时一键放进输入框。\n\n便签只存在这台设备上，在「管理」里能看到占了多少空间，也能一键清除。",
+        "highlights": [
+          "便签保存在本机",
+          "一键把便签放进输入框",
+          "可在管理页清除数据"
+        ],
+        "id": "@api-demo/notes-panel",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-TLaiR9WxVlH9X/myGqkHx1UiJDjvVqS/cRdwvT8AjMk=",
+      "manifest": {
+        "v": 1,
+        "title": "常用提示词",
+        "summary": "边栏多一个「常用提示词」，存 5 条自己的提示词，点一下放进输入框。",
+        "kinds": [
+          "slot",
+          "panel"
+        ],
+        "permissions": [
+          "storage"
+        ],
+        "slots": [
+          {
+            "slot": "sider.features",
+            "id": "open",
+            "title": "常用提示词",
+            "icon": "FxSkill",
+            "action": {
+              "panel": "list"
+            }
+          }
+        ],
+        "panels": {
+          "list": {
+            "title": "常用提示词",
+            "html": "<!doctype html>\n<meta charset=\"utf-8\">\n<style>\n  * { box-sizing: border-box; }\n  body { margin: 0; padding: 4px 4px 8px; font: 15px/22px system-ui, -apple-system, \"PingFang SC\", sans-serif; color: var(--fg); background: transparent; }\n  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }\n  .head { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px 8px; color: var(--muted); font-size: 13px; }\n  .link { color: var(--brand); font-size: 15px; padding: 4px 0; }\n  .item { display: flex; align-items: center; gap: 4px; border-radius: 14px; }\n  .item .main { flex: 1; min-width: 0; text-align: left; padding: 10px 12px; border-radius: 14px; }\n  .item .main:active, .item .main:hover { background: var(--hover); }\n  .t { display: block; }\n  .p { display: block; color: var(--muted); font-size: 13px; line-height: 19px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }\n  .tool { width: 34px; height: 34px; border-radius: 17px; color: var(--muted); font-size: 16px; }\n  .tool:hover { background: var(--hover); }\n  .tool:disabled { opacity: .3; cursor: default; }\n  .tool.del { color: #e5484d; font-size: 14px; width: auto; padding: 0 10px; }\n  .editor { padding: 8px 12px 12px; }\n  input, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--input); color: inherit; font: inherit; outline: none; }\n  textarea { height: 96px; margin-top: 8px; resize: vertical; }\n  .row { display: flex; justify-content: flex-end; gap: 16px; margin-top: 10px; }\n  .empty { padding: 18px 12px; color: var(--muted); }\n  .add { display: block; width: 100%; padding: 12px; text-align: left; color: var(--brand); }\n</style>\n<div class=\"head\"><span id=\"count\"></span><button class=\"link\" id=\"mode\">编辑</button></div>\n<div id=\"list\"></div>\n<script>\n  const MAX = 5;\n  const DEFAULTS = [\n    { t: '总结要点', p: '总结上面的对话，列三条要点。' },\n    { t: '改得更简洁', p: '把你上一条回答改写得更简洁，保留关键信息。' },\n    { t: '写成周报', p: '把我们这次做的事整理成一段周报，分「完成」「问题」「下周」三部分。' },\n    { t: '解释给新人', p: '用新人能听懂的话解释一遍，避免术语。' },\n    { t: '找出风险', p: '列出这个方案可能出问题的地方，以及怎么提前发现。' },\n  ];\n  let items = [];\n  let editing = false;\n  let open = -1; // index being edited; items.length = a new one\n\n  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };\n  const save = () => apiDemo.storage.set('prompts', JSON.stringify(items));\n  const fit = () => requestAnimationFrame(() => apiDemo.resize(document.body.scrollHeight + 8));\n\n  function editor(i) {\n    const cur = items[i] || { t: '', p: '' };\n    const box = el('div', 'editor');\n    const t = el('input'); t.placeholder = '名称，例如「写成周报」'; t.maxLength = 20; t.value = cur.t;\n    const p = el('textarea'); p.placeholder = '提示词内容'; p.maxLength = 1000; p.value = cur.p;\n    const row = el('div', 'row');\n    const cancel = el('button', 'link', '取消');\n    const ok = el('button', 'link', '保存');\n    cancel.onclick = () => { open = -1; render(); };\n    ok.onclick = () => {\n      const v = { t: t.value.trim() || p.value.trim().slice(0, 10), p: p.value.trim() };\n      if (!v.p) return apiDemo.toast('提示词不能为空');\n      if (i < items.length) items[i] = v; else items.push(v);\n      open = -1; save(); render();\n    };\n    row.append(cancel, ok);\n    box.append(t, p, row);\n    setTimeout(() => (cur.t ? p : t).focus(), 0);\n    return box;\n  }\n\n  function render() {\n    const list = document.getElementById('list');\n    list.textContent = '';\n    document.getElementById('count').textContent = editing ? `最多 ${MAX} 条，可以改名、改内容、调整顺序` : '点一下放进输入框，不会自动发送';\n    document.getElementById('mode').textContent = editing ? '完成' : '编辑';\n    if (!items.length && open < 0) list.append(el('div', 'empty', '还没有提示词。'));\n    items.forEach((it, i) => {\n      if (open === i) return list.append(editor(i));\n      const row = el('div', 'item');\n      const main = el('button', 'main');\n      main.append(el('span', 't', it.t), el('span', 'p', it.p));\n      main.onclick = () => (editing ? ((open = i), render()) : apiDemo.insert(it.p).then(() => apiDemo.close()));\n      row.append(main);\n      if (editing) {\n        const up = el('button', 'tool', '↑'); up.setAttribute('aria-label', '上移'); up.disabled = i === 0;\n        const down = el('button', 'tool', '↓'); down.setAttribute('aria-label', '下移'); down.disabled = i === items.length - 1;\n        const del = el('button', 'tool del', '删除');\n        up.onclick = () => { [items[i - 1], items[i]] = [items[i], items[i - 1]]; save(); render(); };\n        down.onclick = () => { [items[i + 1], items[i]] = [items[i], items[i + 1]]; save(); render(); };\n        del.onclick = () => { items.splice(i, 1); save(); render(); };\n        row.append(up, down, del);\n      }\n      list.append(row);\n    });\n    if (open === items.length) list.append(editor(items.length));\n    else if (editing && items.length < MAX) {\n      const add = el('button', 'add', '＋ 添加提示词');\n      add.onclick = () => { open = items.length; render(); };\n      list.append(add);\n    }\n    fit();\n  }\n\n  document.getElementById('mode').onclick = () => { editing = !editing; open = -1; render(); };\n  apiDemo.ready().then(async () => {\n    try {\n      const raw = await apiDemo.storage.get('prompts');\n      const saved = raw ? JSON.parse(raw) : null;\n      items = Array.isArray(saved) ? saved.filter((x) => x && typeof x.p === 'string').slice(0, MAX) : DEFAULTS.slice();\n    } catch { items = DEFAULTS.slice(); }\n    render();\n  });\n</script>\n"
+          }
+        },
+        "description": "在边栏打开「常用提示词」，点一条就放进输入框，不会替你发送。\n\n最多存 5 条。点「编辑」可以改名、改内容、上移下移和删除；内容只保存在这台设备上。",
+        "highlights": [
+          "最多 5 条，自己写",
+          "改名、改内容、调整顺序",
+          "只填进输入框，不自动发送"
+        ],
+        "id": "@api-demo/quick-prompts",
+        "version": "1.1.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-vyBofCdop/iiACDvv3xMPoTKBinuXq6FaYaAzEAZ0yg=",
+      "manifest": {
+        "v": 1,
+        "title": "对话统计",
+        "summary": "统计最近的对话数量和正在运行的对话。演示沙箱面板通过受限接口只读访问引擎。",
+        "kinds": [
+          "slot",
+          "panel"
+        ],
+        "permissions": [
+          "engine.read"
+        ],
+        "slots": [
+          {
+            "slot": "sider.features",
+            "id": "open",
+            "title": "对话统计",
+            "icon": "IconDataOutline16",
+            "action": {
+              "panel": "main"
+            }
+          }
+        ],
+        "panels": {
+          "main": {
+            "title": "对话统计",
+            "html": "<!doctype html>\n<meta charset=\"utf-8\">\n<style>\n  body { margin: 0; font: 14px/22px system-ui, -apple-system, \"PingFang SC\", sans-serif; color: var(--fg); }\n  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }\n  .m { padding: 12px; border-radius: 12px; background: var(--hover); }\n  .m b { display: block; font-size: 22px; line-height: 30px; }\n  .m span { color: var(--muted); font-size: 12px; }\n  ul { padding-left: 18px; }\n  .err { color: #d93025; }\n</style>\n<div class=\"grid\"><div class=\"m\"><b id=\"n\">…</b><span>对话</span></div><div class=\"m\"><b id=\"r\">…</b><span>运行中</span></div><div class=\"m\"><b id=\"d\">…</b><span>今天更新</span></div></div>\n<p>最近更新：</p>\n<ul id=\"list\"></ul>\n<script>\n  apiDemo.ready().then(async () => {\n    try {\n      const v = await apiDemo.engine.call('session/list', { _request: {} });\n      const items = (v.items || []).filter((s) => !s.parentSessionId);\n      const t0 = new Date(); t0.setHours(0, 0, 0, 0);\n      document.getElementById('n').textContent = items.length;\n      document.getElementById('r').textContent = items.filter((s) => s.running).length;\n      document.getElementById('d').textContent = items.filter((s) => s.updatedAt >= t0.getTime()).length;\n      const ul = document.getElementById('list');\n      for (const s of items.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5)) {\n        const li = document.createElement('li');\n        li.textContent = (s.projections && s.projections.values && s.projections.values.title) || '新对话';\n        ul.append(li);\n      }\n    } catch (e) {\n      document.body.insertAdjacentHTML('beforeend', '<p class=\"err\"></p>');\n      document.querySelector('.err').textContent = '读取失败：' + e.message;\n    }\n  });\n</script>\n"
+          }
+        },
+        "description": "看看最近聊了多少：最近的对话数量、正在运行的对话。\n\n它通过受限接口只读访问引擎，只能读对话列表这类信息，不能发消息、不能改设置。",
+        "highlights": [
+          "最近对话数量一目了然",
+          "显示正在运行的对话",
+          "只读，不能发消息或改设置"
+        ],
+        "id": "@api-demo/session-stats",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-77TYLN1gB/LuB1zS/ZUZcS/jf7x6wYVJoqxjIMlMKFk=",
+      "manifest": {
+        "v": 1,
+        "title": "代码审查",
+        "summary": "按清单审查改动：正确性、边界、安全、可读性、测试，问题按严重程度排序。",
+        "permissions": [],
+        "description": "装好后在输入框里输入 /code-review。没指定范围时，它先看工作区里未提交的改动或最近一次提交。\n\n问题按「必须改 → 建议改 → 小问题」排列，每条带位置和改法；默认不直接改文件。",
+        "highlights": [
+          "固定的五项清单",
+          "每条问题带位置和改法",
+          "默认只提意见，不改文件"
+        ],
+        "kinds": [
+          "skill"
+        ],
+        "skills": [
+          {
+            "name": "code-review",
+            "files": {
+              "SKILL.md": "---\nname: code-review\ndescription: 按固定清单审查改动：正确性、边界条件、安全、可读性和测试，给出按严重程度排序的问题和改法。\n---\n\n# 代码审查\n\n审查用户指定的改动。没指定时，先在工作区里用 `git diff`（未提交的改动）或 `git diff HEAD~1` 看最近一次提交；改动太大时先问要看哪一部分。\n\n## 清单\n\n按顺序看，每一项只报真正的问题：\n\n1. **正确性**：逻辑错误、空值、越界、并发、错误处理吞掉了异常。\n2. **边界条件**：空输入、极大值、时区、编码、重复调用。\n3. **安全**：注入、路径穿越、把密钥写进代码或日志、权限检查缺失。\n4. **可读性**：命名、过长的函数、重复代码——只在明显影响维护时才提。\n5. **测试**：改动的行为有没有测试覆盖；缺了就写出该补的用例。\n\n## 输出\n\n- 先一句话总体结论（能合 / 改完再合 / 需要重做）。\n- 问题按严重程度排序：**必须改** → **建议改** → **小问题**。每条写：位置（文件:行）、问题、为什么、怎么改（给出改后的代码片段）。\n- 没发现问题的项不要硬凑。\n- 不要直接修改文件，除非用户要求。\n"
+            }
+          }
+        ],
+        "id": "@api-demo/skill-code-review",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-d7jy9SP5XEgKrBVJhuV9rK60zn3wAbCazc5q0TXEyKo=",
+      "manifest": {
+        "v": 1,
+        "title": "会议纪要",
+        "summary": "把会议记录、转写或群聊整理成纪要：结论、待办、待定问题。",
+        "permissions": [],
+        "description": "装好后在输入框里输入 /meeting-notes，再贴上会议记录、录音转写或群聊内容，AI 会整理成一份能直接发出去的纪要。\n\n只写材料里有的内容；没提到负责人或时间的待办会标「待定」，不会替人认领。",
+        "highlights": [
+          "结论、待办、待定问题三段",
+          "待办写清谁、做什么、什么时候",
+          "不编造材料里没有的内容"
+        ],
+        "kinds": [
+          "skill"
+        ],
+        "skills": [
+          {
+            "name": "meeting-notes",
+            "files": {
+              "SKILL.md": "---\nname: meeting-notes\ndescription: 把会议记录、录音转写或聊天记录整理成会议纪要：结论、待办（负责人和截止时间）、待定问题。\n---\n\n# 会议纪要\n\n用户给你一段会议相关的原始材料（速记、录音转写、群聊记录、附件里的文本），把它整理成一份能直接发出去的纪要。\n\n## 步骤\n\n1. 通读材料，找出会议主题、参会人和日期；材料里没有的不要编，写「未注明」。\n2. 只保留**做出的决定**和**要做的事**，讨论过程一笔带过。\n3. 待办逐条写成「谁 · 做什么 · 什么时候」。没提到负责人或时间的，标「待定」，不要替人认领。\n4. 有分歧、没结论的放进「待定问题」。\n5. 不确定的地方用「（原文：……）」附上原话，方便核对。\n\n## 输出格式\n\n```\n# <主题> 会议纪要（<日期>）\n参会：……\n\n## 结论\n- ……\n\n## 待办\n| 负责人 | 事项 | 截止 |\n|---|---|---|\n\n## 待定问题\n- ……\n```\n\n篇幅控制在一屏内；用户要「详细版」再展开讨论过程。\n"
+            }
+          }
+        ],
+        "id": "@api-demo/skill-meeting-notes",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 1,
+      "integrity": "sha256-A24+TjFTqvuzI4wrZouczT98XqcDhaGIOK2ckRgBfck=",
+      "manifest": {
+        "v": 1,
+        "title": "夜航",
+        "summary": "深蓝底色、青色强调的夜间皮肤。只改设计变量，浅色和深色各一套。",
+        "kinds": [
+          "skin"
+        ],
+        "permissions": [],
+        "skin": {
+          "light": {
+            "--dsw-alias-bg-base": "#f3f6fb",
+            "--dsw-specific-sidebar-fill": "#e8eef8",
+            "--dsw-alias-brand-primary": "#0e7490",
+            "--dsw-alias-brand-text": "#0e7490",
+            "--dsw-alias-button-primary-fill": "#0e7490",
+            "--dsw-specific-bubble": "#dceefa"
+          },
+          "dark": {
+            "--dsw-alias-bg-base": "#0b1220",
+            "--dsw-alias-bg-layer-2": "#111a2e",
+            "--dsw-specific-sidebar-fill": "#0e1729",
+            "--dsw-alias-brand-primary": "#22d3ee",
+            "--dsw-alias-brand-text": "#67e8f9",
+            "--dsw-alias-button-primary-fill": "#0891b2",
+            "--dsw-specific-bubble": "#16233d",
+            "--dsw-specific-input-major": "#111a2e"
+          }
+        },
+        "description": "深夜里看屏幕不刺眼的一套配色：深色是接近墨蓝的底，配青色的按钮和强调；浅色是带一点蓝的灰白。\n\n只改设计变量，不加任何自定义样式，所以手机和电脑上都一样稳妥，也不可能挡住授权卡或登录框。",
+        "highlights": [
+          "浅色、深色各一套，跟着系统切换",
+          "手机端和网页端都生效",
+          "只改配色，不动布局"
+        ],
+        "id": "@api-demo/skin-midnight",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-x44iZ2+ue9pT6pd3Bq0EDY3X9sGfL2GpxAtxg6aBfy8=",
+      "manifest": {
+        "v": 1,
+        "title": "纸张",
+        "summary": "米白底色、衬线正文。演示皮肤里的自定义 CSS：遮住授权卡或登录框会被自动停用。",
+        "kinds": [
+          "skin"
+        ],
+        "permissions": [],
+        "skin": {
+          "light": {
+            "--dsw-alias-bg-base": "#fbf8f1",
+            "--dsw-specific-sidebar-fill": "#f3eee2",
+            "--dsw-specific-bubble": "#efe6d2",
+            "--dsw-alias-brand-primary": "#9a5b13",
+            "--dsw-alias-brand-text": "#9a5b13",
+            "--dsw-alias-button-primary-fill": "#9a5b13",
+            "--dsw-specific-input-major": "#fffdf8"
+          },
+          "dark": {
+            "--dsw-alias-bg-base": "#1c1a16",
+            "--dsw-specific-sidebar-fill": "#221f1a",
+            "--dsw-specific-bubble": "#2d2921",
+            "--dsw-alias-brand-primary": "#e0a35a",
+            "--dsw-alias-brand-text": "#e7b779"
+          },
+          "css": ".md p, .md li { font-family: \"Songti SC\", \"Noto Serif SC\", Georgia, serif; font-size: 16px; line-height: 28px; }\n.bubble { border-radius: 14px; }\n.greeting { font-family: \"Songti SC\", \"Noto Serif SC\", Georgia, serif; }"
+        },
+        "description": "像在纸上读字：米白的底、暖棕色的强调，回答正文换成衬线字体，行距更松。\n\n这款皮肤带一小段自定义样式（改正文字体和气泡圆角）。如果样式遮住了授权卡或登录框，应用会自动暂停它。",
+        "highlights": [
+          "回答正文用衬线字体，长文更好读",
+          "浅色、深色各一套",
+          "自定义样式受保护规则约束"
+        ],
+        "id": "@api-demo/skin-paper",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 3,
+      "integrity": "sha256-bAhKNsvRvkUI3/7lho8k4wm4/vCSo/51kvzVSPTowX8=",
+      "manifest": {
+        "v": 1,
+        "title": "今日用量",
+        "summary": "输入框上方显示今天花了多少钱，点开看本周、本月的用量和各模型明细。",
+        "kinds": [
+          "engine"
+        ],
+        "permissions": [],
+        "engine": {
+          "package": "dsh-go-example-usage",
+          "version": "0.1.0",
+          "shows": {
+            "pills": [
+              "今日用量 ¥3.10"
+            ]
+          }
+        },
+        "description": "装在当前主机的引擎里：输入框上方多一个「今日用量」，显示今天的模型花费。点开是用量面板，可以切换本周 / 本月，看各模型的输入输出和花费，也能把用量放进输入框。\n\n不需要时卸载即可，界面上的按钮和面板会一起消失。",
+        "highlights": [
+          "输入框上方显示今日花费",
+          "本周 / 本月用量图表",
+          "各模型的明细"
+        ],
+        "id": "@api-demo/usage-today",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "name": "@api-demo/session-stats",
+  "version": "1.0.0",
+  "description": "对话统计：读一下引擎里的对话",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "对话统计",
+    "summary": "统计最近的对话数量和正在运行的对话。演示沙箱面板通过受限接口只读访问引擎。",
+    "kinds": [
+      "slot",
+      "panel"
+    ],
+    "permissions": [
+      "engine.read"
+    ],
+    "slots": [
+      {
+        "slot": "sider.features",
+        "id": "open",
+        "title": "对话统计",
+        "icon": "IconDataOutline16",
+        "action": {
+          "panel": "main"
+        }
+      }
+    ],
+    "panels": {
+      "main": {
+        "title": "对话统计",
+        "entry": "panel.html"
+      }
+    },
+    "description": "看看最近聊了多少：最近的对话数量、正在运行的对话。\n\n它通过受限接口只读访问引擎，只能读对话列表这类信息，不能发消息、不能改设置。",
+    "highlights": [
+      "最近对话数量一目了然",
+      "显示正在运行的对话",
+      "只读，不能发消息或改设置"
+    ]
+  }
+}

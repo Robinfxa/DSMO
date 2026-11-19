@@ -1,0 +1,88 @@
+[
+ {
+  "title": "Regex help",
+  "create_time": 1767225600.5,
+  "update_time": 1767225700.1,
+  "current_node": "c",
+  "conversation_id": "g1",
+  "mapping": {
+   "r": {
+    "id": "r",
+    "parent": null,
+    "children": [
+     "a"
+    ],
+    "message": null
+   },
+   "a": {
+    "id": "a",
+    "parent": "r",
+    "children": [
+     "b",
+     "x"
+    ],
+    "message": {
+     "author": {
+      "role": "user"
+     },
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "How to match an email?"
+      ]
+     }
+    }
+   },
+   "x": {
+    "id": "x",
+    "parent": "a",
+    "children": [],
+    "message": {
+     "author": {
+      "role": "assistant"
+     },
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "(old branch)"
+      ]
+     }
+    }
+   },
+   "b": {
+    "id": "b",
+    "parent": "a",
+    "children": [
+     "c"
+    ],
+    "message": {
+     "author": {
+      "role": "system"
+     },
+     "content": {
+      "content_type": "text",
+      "parts": [
+       ""
+      ]
+     }
+    }
+   },
+   "c": {
+    "id": "c",
+    "parent": "b",
+    "children": [],
+    "message": {
+     "author": {
+      "role": "assistant"
+     },
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "Use a simple pattern like `\\S+@\\S+`."
+      ]
+     }
+    }
+   }
+  }
+ }
+]

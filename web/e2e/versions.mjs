@@ -1,0 +1,93 @@
+// 修改 / 重新生成 stay one conversation (‹ 1 / 2 ›); 分叉 makes a separate one.
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { mkdirSync } from 'node:fs';
+const require = createRequire('/opt/npm-tools/node_modules/');
+const { chromium } = require('playwright');
+const here = dirname(fileURLToPath(import.meta.url));
+const url = 'file://' + join(here, '..', 'dist-proto', 'index.html');
+const shots = join(here, 'shots', 'v');
+mkdirSync(shots, { recursive: true });
+const errors = [];
+const fail = (m) => errors.push(m);
+const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const ctx = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, colorScheme: 'light' });
+const page = await ctx.newPage();
+page.on('pageerror', (e) => errors.push(e.message));
+page.on('console', (m) => m.type() === 'error' && errors.push('console: ' + m.text()));
+await page.goto(url);
+await page.waitForTimeout(700);
+const shot = (n) => page.screenshot({ path: join(shots, `${n}.png`) });
+const drawerTitles = async () => {
+  await page.click('[aria-label="打开边栏"]');
+  await page.waitForTimeout(400);
+  const t = await page.$$eval('.m-item-t', (els) => els.map((e) => e.textContent.trim()));
+  return t;
+};
+const closeDrawer = async () => {
+  await page.click('.m-stage-scrim');
+  await page.waitForTimeout(350);
+};
+const settle = () => page.waitForFunction(() => !document.querySelector('[aria-label="停止"]') && document.querySelectorAll('.m-act[aria-label="重新生成"]').length > 0, null, { timeout: 15000 });
+
+const before = await drawerTitles();
+await page.click('.m-item-t:has-text("SSH 隧道是什么")');
+await page.waitForTimeout(600);
+await settle();
+// regenerate
+await page.click('.m-act[aria-label="重新生成"] >> nth=-1');
+await page.waitForTimeout(400);
+await settle();
+await page.waitForSelector('.m-acts .ver-nav');
+await shot('01-regenerated');
+const nav1 = await page.textContent('.m-acts .ver-nav');
+if (!/2\s*\/\s*2/.test(nav1)) fail('expected 2 / 2 after regenerate, got ' + nav1);
+let now = await drawerTitles();
+if (now.length !== before.length) fail(`drawer grew after regenerate: ${before.length} → ${now.length}`);
+await shot('02-drawer-after-regen');
+await closeDrawer();
+await page.click('.m-acts .ver-nav [aria-label="上一个版本"]');
+await page.waitForTimeout(600);
+await shot('03-version-1');
+if (!/1\s*\/\s*2/.test(await page.textContent('.m-acts .ver-nav'))) fail('switching back failed');
+// edit the message
+const b = await page.locator('.bubble').first().boundingBox();
+await page.dispatchEvent('.bubble >> nth=0', 'touchstart', { touches: [{ identifier: 1, clientX: b.x + 20, clientY: b.y + 10 }] });
+await page.waitForTimeout(600);
+await page.dispatchEvent('.bubble >> nth=0', 'touchend', { touches: [] });
+await page.waitForTimeout(250);
+await page.click('.m-pop-row:has-text("修改")');
+await page.fill('#input', 'SSH 隧道是什么？用一句话。');
+await page.click('#sendBtn');
+await page.waitForTimeout(400);
+await settle();
+await page.waitForSelector('.u-ver .ver-nav');
+await shot('04-edited');
+const nav2 = await page.textContent('.u-ver .ver-nav');
+if (!/3\s*\/\s*3/.test(nav2)) fail('expected 3 / 3 after edit (siblings), got ' + nav2);
+now = await drawerTitles();
+if (now.length !== before.length) fail(`drawer grew after edit: ${before.length} → ${now.length}`);
+await closeDrawer();
+// fork from the reply
+await page.click('.m-act[aria-label="分叉到新对话"] >> nth=-1');
+await page.waitForTimeout(700);
+await shot('05-forked');
+now = await drawerTitles();
+await shot('06-drawer-forked');
+if (now.length !== before.length + 1 || !now.some((t) => /\(1\)$/.test(t))) fail('fork should add one "(1)" conversation: ' + now.join(' | '));
+// fork from the drawer (long-press menu)
+const it = page.locator('.m-item:has-text("周报草稿")');
+const bb = await it.boundingBox();
+await it.dispatchEvent('touchstart', { touches: [{ identifier: 1, clientX: bb.x + 30, clientY: bb.y + 20 }] });
+await page.waitForTimeout(600);
+await it.dispatchEvent('touchend', { touches: [] });
+await page.waitForTimeout(250);
+await shot('07-item-menu');
+await page.click('.m-pop-row:has-text("分叉")');
+await page.waitForTimeout(700);
+now = await drawerTitles();
+if (!now.includes('周报草稿 (1)')) fail('drawer fork missing: ' + now.join(' | '));
+await shot('08-drawer-fork2');
+await browser.close();
+console.log(errors.length ? errors.join('\n') : 'no errors');

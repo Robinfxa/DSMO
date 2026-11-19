@@ -1,0 +1,35 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; font: 14px/22px system-ui, -apple-system, "PingFang SC", sans-serif; color: var(--fg); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .m { padding: 12px; border-radius: 12px; background: var(--hover); }
+  .m b { display: block; font-size: 22px; line-height: 30px; }
+  .m span { color: var(--muted); font-size: 12px; }
+  ul { padding-left: 18px; }
+  .err { color: #d93025; }
+</style>
+<div class="grid"><div class="m"><b id="n">…</b><span>对话</span></div><div class="m"><b id="r">…</b><span>运行中</span></div><div class="m"><b id="d">…</b><span>今天更新</span></div></div>
+<p>最近更新：</p>
+<ul id="list"></ul>
+<script>
+  apiDemo.ready().then(async () => {
+    try {
+      const v = await apiDemo.engine.call('session/list', { _request: {} });
+      const items = (v.items || []).filter((s) => !s.parentSessionId);
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      document.getElementById('n').textContent = items.length;
+      document.getElementById('r').textContent = items.filter((s) => s.running).length;
+      document.getElementById('d').textContent = items.filter((s) => s.updatedAt >= t0.getTime()).length;
+      const ul = document.getElementById('list');
+      for (const s of items.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5)) {
+        const li = document.createElement('li');
+        li.textContent = (s.projections && s.projections.values && s.projections.values.title) || '新对话';
+        ul.append(li);
+      }
+    } catch (e) {
+      document.body.insertAdjacentHTML('beforeend', '<p class="err"></p>');
+      document.querySelector('.err').textContent = '读取失败：' + e.message;
+    }
+  });
+</script>

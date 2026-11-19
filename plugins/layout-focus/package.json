@@ -1,0 +1,31 @@
+{
+  "name": "@api-demo/layout-focus",
+  "version": "1.0.0",
+  "description": "专注布局：收起用不到的入口",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "专注布局",
+    "summary": "高级模式下隐藏手机操控、自动化任务入口和语音按钮，界面更清爽。授权卡、权限和登录不受影响。",
+    "kinds": [
+      "layout"
+    ],
+    "permissions": [],
+    "layout": {
+      "hide": [
+        "sider.features.phone",
+        "sider.features.schedules",
+        "composer.voice"
+      ]
+    },
+    "description": "高级模式的功能很多，不常用的入口会挤占边栏。专注布局把手机操控、自动化任务两个入口和输入框的语音按钮藏起来。\n\n装好后可以在「管理」里逐项决定藏哪些。授权卡、权限页和登录框不在可隐藏的范围内。",
+    "highlights": [
+      "隐藏不常用的边栏入口",
+      "可以逐项开关",
+      "随时停用，界面马上恢复"
+    ]
+  }
+}

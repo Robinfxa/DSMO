@@ -1,0 +1,5 @@
+{
+  "package": "@api-demo/skin-paper",
+  "version": "1.0.0",
+  "source": "plugins/skin-paper"
+}

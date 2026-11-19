@@ -1,0 +1,75 @@
+From 65895f50f870b0d9f9ee5a5931c9a7018ec9206c Mon Sep 17 00:00:00 2001
+From: API Demo <api-demo@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 08:40:20 -0500
+Subject: [PATCH] API Demo: one interface
+
+The bundled page is the only chat interface: a stored native choice from
+DSH Go is ignored and switching to the native interface is a no-op.
+Pets are hidden for now: no pet is drawn in the app or over other apps.
+---
+ app/lib/pets/pet_prefs.dart      | 12 +++---------
+ app/lib/state/ui_mode_state.dart | 11 ++++-------
+ 2 files changed, 7 insertions(+), 16 deletions(-)
+
+diff --git a/app/lib/pets/pet_prefs.dart b/app/lib/pets/pet_prefs.dart
+index a4e73cd..1d61bcc 100644
+--- a/app/lib/pets/pet_prefs.dart
++++ b/app/lib/pets/pet_prefs.dart
+@@ -159,11 +159,9 @@ class PetPrefsController extends Notifier<PetPrefs> {
+ 
+   @override
+   PetPrefs build() {
+-    ref.listen(performanceDefaultsProvider.select((p) => p.petEnabled), (_, next) {
+-      if (!state.packExplicit) state = state.copyWith(packId: next ? defaultPetId : noPetId);
+-    });
++    // API Demo: pets are hidden for now, whatever was chosen before.
+     _loaded = _load();
+-    return const PetPrefs(packExplicit: false);
++    return const PetPrefs(packId: noPetId, packExplicit: false);
+   }
+ 
+   Future<void> _load() async {
+@@ -189,11 +187,7 @@ class PetPrefsController extends Notifier<PetPrefs> {
+         // A corrupt framing preference cannot change the renderer default.
+       }
+       state = PetPrefs(
+-        packId: explicit
+-            ? pack!
+-            : ref.read(performanceDefaultsProvider).petEnabled
+-            ? defaultPetId
+-            : noPetId,
++        packId: noPetId,
+         packExplicit: explicit,
+         size: PetSize.fromName(prefs.getString(keys.size)),
+         customHeight: _customHeight(prefs.getDouble(keys.customHeight)),
+diff --git a/app/lib/state/ui_mode_state.dart b/app/lib/state/ui_mode_state.dart
+index 1b58982..744dd32 100644
+--- a/app/lib/state/ui_mode_state.dart
++++ b/app/lib/state/ui_mode_state.dart
+@@ -50,19 +50,16 @@ class UiModeController extends Notifier<UiModeState> {
+ 
+   Future<void> _load() async {
+     // API Demo: the bundled page (网页模式's seat) is the default home.
+-    var mode = UiMode.web;
+-    try {
+-      final prefs = await SharedPreferences.getInstance();
+-      mode = UiMode.values.asNameMap()[prefs.getString(key)] ?? UiMode.web;
+-    } catch (_) {
+-      // No preferences backend (tests) or an unreadable store: native.
+-    }
++    const mode = UiMode.web;
++    // API Demo: there is one interface; a stored 「原生界面」 from DSH Go is ignored.
+     // A switch made while reading back wins over the stored value.
+     if (!state.loaded) state = UiModeState(mode: mode, loaded: true);
+   }
+ 
+   /// Switches and remembers it for the next launch.
+   Future<void> set(UiMode mode) async {
++    // API Demo: the native chat interface is not offered; every page lives in the bundled one.
++    mode = UiMode.web;
+     state = UiModeState(mode: mode, loaded: true);
+     try {
+       final prefs = await SharedPreferences.getInstance();
+-- 
+2.43.0
+

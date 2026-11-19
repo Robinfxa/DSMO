@@ -1,0 +1,96 @@
+From 51c1c9b761100bc57c0654336186d5f50b7159c6 Mon Sep 17 00:00:00 2001
+From: API Demo <api-demo@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 14:57:25 -0500
+Subject: [PATCH] API Demo: first run drawn by the bundled page
+
+RootGate keeps deciding the first-run steps and their order; with API Demo
+it publishes the current step and its callbacks (api_demo_setup.dart) and
+shows the home, whose page draws the steps. Switching to a remote host from
+the page finishes first run as coming back from RemoteScreen does. One page
+stays from first run to home.
+---
+ app/lib/ui/shell/root_gate.dart | 40 +++++++++++++++++++++++++++++++--
+ 1 file changed, 38 insertions(+), 2 deletions(-)
+
+diff --git a/app/lib/ui/shell/root_gate.dart b/app/lib/ui/shell/root_gate.dart
+index d55e314..f93bb78 100644
+--- a/app/lib/ui/shell/root_gate.dart
++++ b/app/lib/ui/shell/root_gate.dart
+@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ 
++import '../../api_demo/api_demo_setup.dart';
+ import '../../l10n/l10n.dart';
+ import '../../launch/launch_state.dart';
+ import '../../launch/startup_trace.dart';
+@@ -317,6 +318,16 @@ class _RootGateState extends ConsumerState<RootGate> {
+         _goTo(OnboardingStep.runtime);
+       }
+     });
++    // API Demo: 「远程主机」 is the page's own host list; switching to a host
++    // there finishes first run the way coming back from RemoteScreen does.
++    ref.listen(activeHostProvider, (prev, next) {
++      if (!apiDemoTakesSetup || _step == null || _pickingRemote || next.isLocal) return;
++      if (_beside) _leaveBeside();
++      unawaited(ref.read(onboardingPrefsProvider.notifier).setLocalDeclined(true));
++      unawaited(ref.read(notifyChannelProvider).status().then<void>((_) {}, onError: (_) {}));
++      _autoStartDone = true;
++      _goTo(null);
++    });
+     // Setting up beside the unpack: the engine starts the moment the runtime
+     // is there (the waiting page goes on by itself and starts it then).
+     ref.listen(setupRuntimeProvider, (prev, next) {
+@@ -362,7 +373,30 @@ class _RootGateState extends ConsumerState<RootGate> {
+         if (_chooseRuntime && _step != null) ref.read(localFootprintProvider);
+         _resumeBeside(prefs.setupStep, runtime.status);
+       }
+-      if (_step case final step?) {
++      if (_step case final step? when apiDemoTakesSetup) {
++        // API Demo: the bundled page draws first run (web/src/setup/); the steps and
++        // their order stay here. It talks to these callbacks through the bridge.
++        final spec = ApiDemoSetupSpec(
++          step: step,
++          chooseRuntime: _chooseRuntime,
++          beside: _beside,
++          actions: {
++            'welcomeDone': () {
++              unawaited(ref.read(onboardingPrefsProvider.notifier).markWelcomeSeen());
++              _chooseRuntime = runtimeStepAsks(ref.read(localRuntimeProvider).status);
++              _goTo(OnboardingStep.runtime);
++            },
++            if (_chooseRuntime) 'local': _chooseLocal,
++            'appearanceDone': _afterAppearance,
++            'accessDone': _afterAccess,
++            'runtimeDone': _afterRuntime,
++            'keyDone': _afterKey,
++            'finished': _afterFinishing,
++          },
++        );
++        WidgetsBinding.instance.addPostFrameCallback((_) => apiDemoSetup.value = spec);
++        child = UsageUpgradeNotice(child: widget.home ?? const ModeHome());
++      } else if (_step case final step?) {
+         child = OnboardingFlow(
+           step: step,
+           chooseRuntime: _chooseRuntime,
+@@ -383,6 +417,7 @@ class _RootGateState extends ConsumerState<RootGate> {
+         );
+       } else {
+         WidgetsBinding.instance.addPostFrameCallback((_) {
++          apiDemoSetup.value = null;
+           if (mounted) _maybeAutoStart();
+         });
+         // The native shell or the web page, by 界面 (ui_mode_state.dart); an
+@@ -406,7 +441,8 @@ class _RootGateState extends ConsumerState<RootGate> {
+       switchInCurve: AppMotion.enter,
+       switchOutCurve: AppMotion.exit,
+       child: KeyedSubtree(
+-        key: ValueKey(child is _Splash ? 'splash' : (_step == null ? 'home' : 'onboarding')),
++        // API Demo keeps one page from first run to home: no switch between them.
++        key: ValueKey(child is _Splash ? 'splash' : (_step == null || apiDemoTakesSetup ? 'home' : 'onboarding')),
+         child: child,
+       ),
+     );
+-- 
+2.43.0
+

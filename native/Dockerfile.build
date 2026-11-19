@@ -1,0 +1,18 @@
+# x86_64 Linux build box for native/build-apk.sh (for macOS / Windows hosts).
+#
+#   docker build --platform linux/amd64 -t api-demo-build -f native/Dockerfile.build native
+#   docker run --rm -it --platform linux/amd64 \
+#     -v "$PWD":/work -v api-demo-build:/build -v api-demo-dev:/root/dev -v api-demo-gradle:/root/.gradle \
+#     api-demo-build bash native/build-apk.sh /build
+#
+# The named volumes keep dsh-Go, its toolchain and Gradle's cache between runs;
+# the APK lands in ./dist-apk/ on the host.
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8
+RUN apt-get update -q && apt-get install -y --no-install-recommends \
+      bash ca-certificates curl git tar unzip xz-utils zstd file python3 procps \
+      build-essential gpgv \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://nodejs.org/dist/v22.12.0/node-v22.12.0-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1 \
+    && git config --global --add safe.directory '*'
+WORKDIR /work

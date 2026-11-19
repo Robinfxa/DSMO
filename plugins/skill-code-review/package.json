@@ -1,0 +1,29 @@
+{
+  "name": "@api-demo/skill-code-review",
+  "version": "1.0.0",
+  "description": "按清单审查改动：正确性、边界、安全、可读性、测试，问题按严重程度排序。",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "代码审查",
+    "summary": "按清单审查改动：正确性、边界、安全、可读性、测试，问题按严重程度排序。",
+    "permissions": [],
+    "description": "装好后在输入框里输入 /code-review。没指定范围时，它先看工作区里未提交的改动或最近一次提交。\n\n问题按「必须改 → 建议改 → 小问题」排列，每条带位置和改法；默认不直接改文件。",
+    "highlights": [
+      "固定的五项清单",
+      "每条问题带位置和改法",
+      "默认只提意见，不改文件"
+    ],
+    "kinds": [
+      "skill"
+    ],
+    "skills": [
+      {
+        "name": "code-review"
+      }
+    ]
+  }
+}

@@ -1,0 +1,639 @@
+From 6cef517d47c3e60571c1ce85a4cc5d97d5663602 Mon Sep 17 00:00:00 2001
+From: API Demo <api-demo@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 16:37:25 -0500
+Subject: [PATCH] API Demo: import DeepSeek chat history as real sessions
+
+dsh-go-bridge gets GET|POST /dsh-go/v1/sessions/import (capability
+session-import). The page parses the export and sends normalized
+conversations in batches; each becomes a closed session log through the
+public sessionPersistence seam, without patching DSH:
+
+- completed turns, an empty system head at surface node 0 (the agent loop
+  replaces it with the live prompt when the chat continues), a user title
+  with no messageSeqs, and an ignorable plugin:dsh-go/import record;
+- ids derived from (source, sourceId), so a second import skips, and the
+  next generation once safe deletion has tombstoned an id;
+- each log is read back (the read path validates what append does not)
+  and folded into the projection cache, so the list shows titles at once.
+
+runtime/tests/session-import.test.mjs covers the builder and route;
+session-import-live.py runs a real DSH host with a fake model (stock and
+dsh-Go-patched 0.2.2-rc.1 both pass).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01EvNzunV3oTNc3v18wvhEA9
+---
+ runtime/bridge/dsh-go-bridge/lib/index.js     |   7 +-
+ .../dsh-go-bridge/lib/session-import.js       | 247 ++++++++++++++++++
+ runtime/bridge/dsh-go-bridge/package.json     |   1 +
+ runtime/tests/bridge-http-errors.test.mjs     |   2 +-
+ runtime/tests/session-import-live.py          | 124 +++++++++
+ runtime/tests/session-import.test.mjs         | 140 ++++++++++
+ 6 files changed, 519 insertions(+), 2 deletions(-)
+ create mode 100644 runtime/bridge/dsh-go-bridge/lib/session-import.js
+ create mode 100644 runtime/tests/session-import-live.py
+ create mode 100644 runtime/tests/session-import.test.mjs
+
+diff --git a/runtime/bridge/dsh-go-bridge/lib/index.js b/runtime/bridge/dsh-go-bridge/lib/index.js
+index a14d55e..a8b0635 100644
+--- a/runtime/bridge/dsh-go-bridge/lib/index.js
++++ b/runtime/bridge/dsh-go-bridge/lib/index.js
+@@ -5,6 +5,8 @@
+ //                               read (see probeGuard)
+ //   POST /dsh-go/v1/occupancy   the browser half reports the live slot composition of its page
+ //   GET  /dsh-go/v1/capabilities protocol major and implemented route families (not permissions)
++//   GET|POST /dsh-go/v1/sessions/import  chats exported from chat.deepseek.com (or another
++//                               user/assistant transcript) written as real Sessions (session-import.js)
+ //
+ //   /dsh-go/v1/{contributions,views,invoke,assets} + WS /dsh-go/v1/stream
+ //                               native plugin protocol v1 (docs/design/native-plugins-protocol.md),
+@@ -25,6 +27,7 @@ import { get as httpsGet } from "node:https";
+ import { createPluginConfig, pluginConfigUnavailable } from "./plugin-config.js";
+ import { injectPromiseWithResolvers } from "./web-promise.js";
+ import { createSessionDeletion, sessionDeletionUnavailable } from "./session-deletion.js";
++import { createSessionImport } from "./session-import.js";
+ import { createSpeechRoutes } from "./speech.js";
+ import { createCompanionRoutes } from "./companion/routes.js";
+ import { createCompanionPromptContext, FULL_PRESET } from './companion/prompt-context.js';
+@@ -45,7 +48,7 @@ const GUARD_PROBE_TTL_MS = 10000;
+ const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+ const CAPABILITIES = [
+   "inventory", "occupancy", "native-ui", "native-stream", "native-media", "native-files",
+-  "plugin-config", "session-deletion", "companion", "companion-prompt-context", "companion-recall", "companion-signals",
++  "plugin-config", "session-deletion", "session-import", "companion", "companion-prompt-context", "companion-recall", "companion-signals",
+   "speech",
+ ];
+ const ORIGINAL = Symbol.for("cordis.original");
+@@ -397,6 +400,7 @@ export function apply(ctx, config) {
+     const nativeRoutes = createNativeRoutes(native);
+     pluginConfig = createPluginConfig(webCtx, { readBody, send });
+     const sessionDeletion = createSessionDeletion(webCtx, { readBody, send });
++    const sessionImport = createSessionImport(webCtx, { readBody, send });
+     const speechRoutes = createSpeechRoutes(webCtx, { send, fetch: options.speech?.fetch, apiKeyEnv: options.speech?.apiKeyEnv });
+     webCtx.effect(() => () => speechRoutes.dispose(), "dsh-go-bridge: speech routes");
+     const companionRoutes = createCompanionRoutes({ send, store: companionStore, recall: companionRecall, signals: companionSignals, ctx: webCtx, promptContext: companionPrompt });
+@@ -419,6 +423,7 @@ export function apply(ctx, config) {
+       const url = new URL(req.url ?? "/", "http://dsh-go.invalid");
+       const path = url.pathname;
+       if (await sessionDeletion.handle(req, res, path)) return;
++      if (await sessionImport.handle(req, res, path)) return;
+       if (await pluginConfig.handle(req, res, path)) return;
+       if (await speechRoutes.handle(req, res, path)) return;
+       if (await companionRoutes.handle(req, res, path)) return;
+diff --git a/runtime/bridge/dsh-go-bridge/lib/session-import.js b/runtime/bridge/dsh-go-bridge/lib/session-import.js
+new file mode 100644
+index 0000000..bd27999
+--- /dev/null
++++ b/runtime/bridge/dsh-go-bridge/lib/session-import.js
+@@ -0,0 +1,247 @@
++// Native import of chats exported from chat.deepseek.com (or any user/assistant transcript)
++// into real Sessions on this host, through the public sessionPersistence seam only.
++//
++//   GET  /dsh-go/v1/sessions/import   {supported, version: 1, format: 4}
++//   POST /dsh-go/v1/sessions/import   {source, workspaceId? | cwd?, conversations: [...]}
++//                                     -> {results: [{sourceId, status, sessionId?, code?}]}
++//
++// The browser parses the export file and sends normalized conversations in small batches:
++//   {sourceId, title, createdAt, updatedAt?, messages: [{role, text, think?, model?, time?}]}
++//
++// Each conversation becomes one closed Session log: completed turns of one user message and
++// one assistant step, a user-sourced title (so the title model never renames it), and an
++// ignorable `plugin:dsh-go/import` record naming where it came from. The Session id is derived
++// from (source, sourceId), so importing the same file again skips what is already here; a chat
++// the user deleted (a permanent tombstone under dsh-Go's safe deletion) imports again.
++// Imported assistant messages carry provider `deepseek-import` and no replay state: when the
++// user continues the chat, every adapter sends them as plain history.
++import { createHash, randomUUID } from "node:crypto";
++
++const ROOT = "/dsh-go/v1/sessions/import";
++const FORMAT = 4;
++const PROVIDER = "deepseek-import";
++const MAX_BODY = 8 * 1024 * 1024;
++const MAX_CONVERSATIONS = 50;
++const MAX_MESSAGES = 4000;
++const MAX_TEXT = 512 * 1024;
++const MAX_GENERATIONS = 64;
++const SOURCES = new Set(["deepseek", "chatgpt", "api-demo", "dsh-go", "other"]);
++
++const errorBody = (code, message) => ({ error: { code, message } });
++const isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
++const text = (v, max) => (typeof v === "string" && v.length <= max ? v : undefined);
++const time = (v) => (typeof v === "number" && Number.isFinite(v) && v > 0 && v < 8.64e15 ? Math.round(v) : undefined);
++const clean = (s) => s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
++
++/**
++ * A stable UUID-shaped Session id for one source conversation. dsh-Go's safe deletion never
++ * reuses an id, so a chat deleted after import comes back under the next generation.
++ */
++export function importedSessionId(source, sourceId, generation = 0) {
++  const h = createHash("sha256").update(`dsh-go/import\u0000${source}\u0000${sourceId}${generation ? `\u0000${generation}` : ""}`).digest("hex");
++  return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${((parseInt(h[16], 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
++}
++
++/** Validates one conversation; returns it normalized or a reason string. */
++export function normalizeConversation(raw) {
++  if (!isObject(raw)) return "not an object";
++  const sourceId = text(raw.sourceId, 256);
++  if (!sourceId || /[\u0000-\u001f\u007f]/.test(sourceId)) return "sourceId";
++  if (!Array.isArray(raw.messages) || raw.messages.length === 0 || raw.messages.length > MAX_MESSAGES) return "messages";
++  const messages = [];
++  for (const m of raw.messages) {
++    if (!isObject(m) || (m.role !== "user" && m.role !== "assistant")) return "message role";
++    const body = text(m.text, MAX_TEXT);
++    const think = m.think === undefined ? "" : text(m.think, MAX_TEXT);
++    if (body === undefined || think === undefined) return "message text";
++    const model = text(m.model, 128);
++    // Same-role neighbours (an edited prompt, a reply split in two) merge into one message.
++    const last = messages.at(-1);
++    if (last && last.role === m.role) {
++      if (body.trim()) last.text = last.text ? `${last.text}\n\n${clean(body)}` : clean(body);
++      if (think) last.think = last.think ? `${last.think}\n\n${clean(think)}` : clean(think);
++      last.time ??= time(m.time);
++      continue;
++    }
++    messages.push({ role: m.role, text: clean(body), think: clean(think), model, time: time(m.time) });
++  }
++  if (!messages.some((m) => m.role === "user" && m.text.trim())) return "no user message";
++  const createdAt = time(raw.createdAt) ?? messages.find((m) => m.time)?.time ?? Date.now();
++  const updatedAt = Math.max(time(raw.updatedAt) ?? createdAt, createdAt);
++  const firstUser = messages.find((m) => m.role === "user" && m.text.trim()).text;
++  const title = clean((text(raw.title, 400) ?? "").replace(/\s+/g, " ").trim()).slice(0, 120)
++    || firstUser.replace(/\s+/g, " ").trim().slice(0, 30);
++  return { sourceId, title, createdAt, updatedAt, messages };
++}
++
++/**
++ * The stored events of one imported conversation (seq from 0), in DSH session format 4.
++ * Times are spread between createdAt and updatedAt when the export has no per-message time.
++ */
++export function importEvents(conv, { source, importedAt = Date.now(), uuid = randomUUID } = {}) {
++  const events = [];
++  // Each event takes its message's own time; messages the export did not date are spread
++  // evenly between createdAt and updatedAt. Times never go backwards.
++  const n = conv.messages.length;
++  const span = Math.max(conv.updatedAt - conv.createdAt, 0);
++  const dated = conv.messages.map((m, k) => m.time ?? conv.createdAt + Math.floor((span * k) / Math.max(n - 1, 1)));
++  let now = conv.createdAt;
++  const at = (t) => (now = Math.max(now, t));
++  const push = (type, data, extra) => {
++    events.push({ type, seq: events.length, time: now, data, ...extra });
++  };
++  push(`plugin:dsh-go/import`, { source, sourceId: conv.sourceId, importedAt, messages: conv.messages.length }, { ignorable: true });
++  let turn = 0;
++  for (let i = 0; i < conv.messages.length; i++) {
++    const m = conv.messages[i];
++    const user = m.role === "user" ? m : undefined;
++    at(dated[i]);
++    const reply = user ? (conv.messages[i + 1]?.role === "assistant" ? conv.messages[++i] : undefined) : m;
++    turn++;
++    push("turn/start", { turn });
++    push("step/start", { turn, step: 1 });
++    // Surface node 0 is reserved for the system prompt. An empty one is legal; the agent loop
++    // replaces it with the live prompt when the user continues the chat.
++    if (turn === 1) push("system/message", { turn, step: 1, message: { role: "system", id: uuid(), content: [], source: { kind: "system-prompt" } } }, { surfaceOp: "append" });
++    if (user) {
++      push("user/message", { role: "user", id: uuid(), content: [{ type: "text", text: user.text }], source: { kind: "user" } }, { surfaceOp: "append" });
++    }
++    if (reply && (reply.text.trim() || reply.think.trim())) {
++      const content = [];
++      if (reply.think.trim()) content.push({ type: "reasoning", text: reply.think });
++      if (reply.text.trim()) content.push({ type: "text", text: reply.text });
++      at(dated[i]);
++      push("assistant/message", {
++        turn, step: 1,
++        message: { role: "assistant", id: uuid(), content, source: { kind: "model", provider: PROVIDER, model: reply.model ?? "deepseek-chat" } },
++        stream: [],
++      }, { surfaceOp: "append" });
++    }
++    push("step/end", { turn, step: 1 });
++    push("turn/end", { turn, reason: { kind: "completed" } });
++  }
++  // A user-sourced title carries no messageSeqs (session-format rule), and the title model leaves it alone.
++  push("session/title", { title: conv.title, messageSeqs: [], source: { kind: "user" } });
++  return events;
++}
++
++export function createSessionImport(ctx, { readBody, send }) {
++  const seam = () => {
++    const persistence = ctx.get("sessionPersistence");
++    for (const m of ["create", "stat", "list", "open"]) if (typeof persistence?.[m] !== "function") return;
++    return { persistence, workspaces: ctx.get("workspaceRegistry") };
++  };
++  const exists = async (persistence, id) => {
++    try { return (await persistence.stat(id)) != null; }
++    catch (error) { if (/NotFound/.test(error?.name ?? "") || error?.code === "ENOENT") return false; throw error; }
++  };
++  const importOne = async ({ persistence }, raw, { source, cwd, workspace }) => {
++    const conv = normalizeConversation(raw);
++    const sourceId = isObject(raw) && typeof raw.sourceId === "string" ? raw.sourceId.slice(0, 256) : null;
++    if (typeof conv === "string") return { sourceId, status: "failed", code: "invalid", reason: conv };
++    const deleted = (id) => { try { return persistence.dshGoDeletion?.deleted?.(id) === true; } catch { return false; } };
++    let sessionId, generation = 0;
++    for (; generation < MAX_GENERATIONS; generation++) {
++      sessionId = importedSessionId(source, conv.sourceId, generation);
++      if (!deleted(sessionId)) break;
++    }
++    if (generation === MAX_GENERATIONS) return { sourceId, status: "failed", code: "too-many-deletions" };
++    if (await exists(persistence, sessionId)) return { sourceId, status: "skipped", sessionId };
++    let handle;
++    try {
++      handle = await persistence.create({ version: FORMAT, id: sessionId, createdAt: conv.createdAt, cwd, isSeeded: false, delegationDepth: 0 });
++    } catch (error) {
++      if (/AlreadyExists|AlreadyOwned/.test(error?.name ?? "")) return { sourceId, status: "skipped", sessionId };
++      throw error;
++    }
++    try {
++      await handle.append(importEvents(conv, { source }));
++      await handle.flush();
++    } finally {
++      await handle.close();
++    }
++    // Read the log back: the read path runs the format validator that append does not, and the
++    // folded projections seed the list cache so the title shows without opening the chat.
++    try {
++      const reader = await persistence.open(sessionId, "read");
++      try {
++        const { events } = await reader.read();
++        const stored = await persistence.stat(sessionId);
++        try { ctx.get("sessionProjectionCache")?.coldSnapshot(stored.header, 0, events); }
++        catch (error) { ctx.logger?.warn?.(`session import: projection cache: ${error?.name ?? "Error"}`); }
++      } finally {
++        await reader.close();
++      }
++    } catch (error) {
++      ctx.logger?.warn?.(`session import: read-back failed: ${error?.name ?? "Error"}: ${error?.message ?? error}`);
++      return { sourceId, status: "failed", sessionId, code: "verify-failed" };
++    }
++    if (workspace) {
++      try { await workspace.attachSession(sessionId); }
++      catch { return { sourceId, status: "imported", sessionId, code: "workspace-attach-failed" }; }
++    }
++    return { sourceId, status: "imported", sessionId };
++  };
++
++  return {
++    async handle(req, res, path) {
++      if (path !== ROOT) return false;
++      if (req.method === "GET") {
++        send(res, 200, { supported: seam() !== undefined, version: 1, format: FORMAT });
++        return true;
++      }
++      if (req.method !== "POST") {
++        req.resume();
++        send(res, 405, errorBody("method-not-allowed", "Use GET or POST."));
++        return true;
++      }
++      const services = seam();
++      if (!services) {
++        req.resume();
++        send(res, 503, errorBody("unavailable", "Session import is not available on this host."));
++        return true;
++      }
++      if (String(req.headers["content-type"]).split(";", 1)[0].trim().toLowerCase() !== "application/json") {
++        req.resume();
++        send(res, 415, errorBody("bad-request", "Content-Type must be application/json."));
++        return true;
++      }
++      let body;
++      try {
++        body = JSON.parse((await readBody(req, MAX_BODY)).toString("utf8"));
++      } catch (error) {
++        send(res, error?.status === 413 ? 413 : 400, errorBody(error?.status === 413 ? "too-large" : "bad-request", error?.status === 413 ? "Send fewer conversations per request." : "Body is not JSON."));
++        return true;
++      }
++      const source = SOURCES.has(body?.source) ? body.source : undefined;
++      if (!isObject(body) || !source || !Array.isArray(body.conversations) || body.conversations.length > MAX_CONVERSATIONS
++        || (body.workspaceId !== undefined && typeof body.workspaceId !== "string")
++        || (body.cwd !== undefined && typeof body.cwd !== "string") || (body.workspaceId !== undefined && body.cwd !== undefined)) {
++        send(res, 400, errorBody("bad-request", `Expected {source, workspaceId? | cwd?, conversations: [<= ${MAX_CONVERSATIONS}]}.`));
++        return true;
++      }
++      let workspace, cwd = body.cwd;
++      if (body.workspaceId !== undefined) {
++        workspace = services.workspaces?.get(body.workspaceId);
++        if (!workspace) {
++          send(res, 404, errorBody("workspace-not-found", "Workspace was not found."));
++          return true;
++        }
++        cwd = workspace.path;
++      }
++      cwd ??= process.cwd();
++      const results = [];
++      for (const raw of body.conversations) {
++        try {
++          results.push(await importOne(services, raw, { source, cwd, workspace }));
++        } catch (error) {
++          // Never send filesystem paths or engine stacks to clients.
++          ctx.logger?.warn?.(`session import: ${error?.name ?? "Error"}: ${error?.message ?? error}`);
++          results.push({ sourceId: isObject(raw) ? raw.sourceId ?? null : null, status: "failed", code: "write-failed" });
++        }
++      }
++      send(res, 200, { results });
++      return true;
++    },
++  };
++}
+diff --git a/runtime/bridge/dsh-go-bridge/package.json b/runtime/bridge/dsh-go-bridge/package.json
+index f71577d..0e47115 100644
+--- a/runtime/bridge/dsh-go-bridge/package.json
++++ b/runtime/bridge/dsh-go-bridge/package.json
+@@ -15,6 +15,7 @@
+     "lib/plugin-config.js",
+     "lib/web-promise.js",
+     "lib/session-deletion.js",
++    "lib/session-import.js",
+     "lib/speech.js",
+     "lib/config-source.js",
+     "lib/client.js",
+diff --git a/runtime/tests/bridge-http-errors.test.mjs b/runtime/tests/bridge-http-errors.test.mjs
+index 8bb1f28..8403c2e 100644
+--- a/runtime/tests/bridge-http-errors.test.mjs
++++ b/runtime/tests/bridge-http-errors.test.mjs
+@@ -217,7 +217,7 @@ test('capabilities advertise implemented families independently of service avail
+   assert.equal(response.status, 200);
+   assert.deepEqual(response.body, {v: 1, bridge: version, capabilities: [
+     'inventory', 'occupancy', 'native-ui', 'native-stream', 'native-media', 'native-files',
+-    'plugin-config', 'session-deletion', 'companion', 'companion-prompt-context', 'companion-recall', 'companion-signals',
++    'plugin-config', 'session-deletion', 'session-import', 'companion', 'companion-prompt-context', 'companion-recall', 'companion-signals',
+     'speech',
+   ]});
+   assert.equal(response.headers.get('cache-control'), 'no-store');
+diff --git a/runtime/tests/session-import-live.py b/runtime/tests/session-import-live.py
+new file mode 100644
+index 0000000..13cce2f
+--- /dev/null
++++ b/runtime/tests/session-import-live.py
+@@ -0,0 +1,124 @@
++# Live check of dsh-go-bridge's session import against a real DSH host and a fake DeepSeek model:
++# imported chats list with their titles and original dates (also after a restart), read back
++# without format errors, skip on re-import, and continue with the old turns as model history.
++#
++#   python3 runtime/tests/session-import-live.py --prefix <dir with node_modules/@deepseek-ai/dsh> --output <dir>
++import argparse, pathlib, tempfile, subprocess, os, time, re, urllib.request, urllib.error, json, socket, threading
++from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++
++ap = argparse.ArgumentParser(); ap.add_argument("--prefix", type=pathlib.Path, required=True); ap.add_argument("--output", type=pathlib.Path, required=True)
++a = ap.parse_args(); repo = pathlib.Path(__file__).resolve().parents[2]; a.output.mkdir(parents=True, exist_ok=True)
++BRIDGE = repo / "runtime/bridge/dsh-go-bridge/lib/index.js"
++DAY = 1772416800000  # 2026-03-02T10:00:00+08:00
++CONVERSATIONS = [
++  {"sourceId": "c1", "title": "周末去哪玩", "createdAt": DAY, "updatedAt": DAY + 300000, "messages": [
++    {"role": "user", "text": "周末在杭州有什么适合带父母去的地方？", "time": DAY},
++    {"role": "assistant", "text": "可以考虑西湖慢走、灵隐寺。", "think": "考虑老人体力……", "model": "deepseek-reasoner", "time": DAY + 60000},
++    {"role": "user", "text": "要避开人多的地方呢？", "time": DAY + 200000},
++    {"role": "assistant", "text": "九溪烟树，工作日上午人最少。", "time": DAY + 300000}]},
++  {"sourceId": "c2", "title": "", "createdAt": DAY - 86400000, "messages": [
++    {"role": "assistant", "text": "（开场白）"}, {"role": "user", "text": "番茄炒蛋先放哪个"}, {"role": "user", "text": "补一句"}, {"role": "user", "text": "没有回答"}]},
++]
++
++calls = []
++class Model(BaseHTTPRequestHandler):
++  def log_message(self, *args): pass
++  def do_POST(self):
++    calls.append(json.loads(self.rfile.read(int(self.headers["content-length"]))))
++    self.send_response(200); self.send_header("content-type", "text/event-stream"); self.end_headers()
++    def ev(t, d): self.wfile.write(f"event: {t}\ndata: {json.dumps({'type': t, **d})}\n\n".encode())
++    ev("message_start", {"message": {"id": "m", "type": "message", "role": "assistant", "model": "deepseek-flash", "content": [], "usage": {"input_tokens": 1, "output_tokens": 0}}})
++    ev("content_block_start", {"index": 0, "content_block": {"type": "text", "text": ""}})
++    ev("content_block_delta", {"index": 0, "delta": {"type": "text_delta", "text": "好的"}})
++    ev("content_block_stop", {"index": 0}); ev("message_delta", {"delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}}); ev("message_stop", {})
++model = ThreadingHTTPServer(("127.0.0.1", 0), Model); threading.Thread(target=model.serve_forever, daemon=True).start()
++
++def free():
++  s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
++
++class Host:
++  def __init__(self, home, n):
++    ws = home / "ws"; ws.mkdir(exist_ok=True); self.ws = str(ws)
++    off = [{"id": i, "disabled": True} for i in ["session-title-llm", "llm-pi-ai", "llm-deepseek-account", "session-telemetry-otel", "web-search-deepseek", "web-deepseek-api", "web-fetch-http", "tool-web"]]
++    patch = home / "patch.json"; patch.write_text(json.dumps(off + [
++      {"id": "llm-deepseek", "config": {"baseURL": f"http://127.0.0.1:{model.server_port}/v1", "apiKeyEnv": "IMPORT_TEST_KEY", "thinking": "disabled", "maxTokens": 256}},
++      {"id": "agent-default-model", "config": {"provider": "deepseek-official", "model": "deepseek-flash"}},
++      {"id": "session-persistence-jsonl", "config": {"root": str(home / "sessions"), "compression": "none"}},
++      {"insert": [{"id": "dsh-go-bridge", "name": str(BRIDGE)}]}]))
++    self.port = free(); self.log = a.output / f"host-{n}.log"
++    self.p = subprocess.Popen(["node", str(a.prefix / "node_modules/@deepseek-ai/dsh/lib/bin.js"), "web", "--patch", str(patch), "--host", "127.0.0.1", "--no-open", "--port", str(self.port)],
++      stdout=self.log.open("w"), stderr=subprocess.STDOUT, cwd=self.ws,
++      env={**os.environ, "HOME": str(home), "DSH_HOME": str(home / "dsh"), "TZ": "Asia/Shanghai", "IMPORT_TEST_KEY": "sk-import-test", "DSH_TELEMETRY_DISABLED": "1"})
++    for _ in range(600):
++      m = re.search(r"token=([\w-]+)", self.log.read_text())
++      if m: break
++      if self.p.poll() is not None: raise RuntimeError(self.log.read_text())
++      time.sleep(.1)
++    else: raise TimeoutError("boot")
++    self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor()); self.op.open(f"http://127.0.0.1:{self.port}/?token=" + m[1])
++  def req(self, path, data=None):
++    r = urllib.request.Request(f"http://127.0.0.1:{self.port}" + path, data=None if data is None else json.dumps(data).encode(), headers={"Content-Type": "application/json"})
++    try:
++      with self.op.open(r, timeout=30) as x: return x.status, json.load(x)
++    except urllib.error.HTTPError as e: return e.code, json.load(e)
++  def rpc(self, method, args):
++    status, body = self.req("/api/" + method, {"type": "client-request", "rpcId": "import-test", "method": method, "payload": {"args": args}})
++    assert status == 200 and body["result"]["ok"], body; return body["result"]["value"]
++  def listed(self):
++    for _ in range(50):  # the projection cache write is fire-and-forget
++      items = {i["sessionId"]: i for i in self.rpc("session/list", {"_request": {}})["items"]}
++      if all((i.get("projections") or {}).get("values", {}).get("title") for i in items.values()): return items
++      time.sleep(.1)
++    return items
++  def page(self, sid):
++    last = self.rpc("session/projections", {"request": {"sessionId": sid}})["asOfSeq"]
++    return [r["event"] for r in self.rpc("session/page", {"request": {"address": {"kind": "session", "sessionId": sid}, "throughSeq": last, "maxMessages": 100}})["records"]]
++  def close(self):
++    self.p.terminate()
++    try: self.p.wait(timeout=10)
++    except subprocess.TimeoutExpired: self.p.kill(); self.p.wait()
++
++def check(cond, what):
++  print(("ok   " if cond else "FAIL ") + what, flush=True)
++  if not cond: raise SystemExit(1)
++
++with tempfile.TemporaryDirectory(prefix="import-live-") as tmp:
++  home = pathlib.Path(tmp); h = Host(home, 1)
++  try:
++    check(h.req("/dsh-go/v1/sessions/import") == (200, {"supported": True, "version": 1, "format": 4}), "capability")
++    status, body = h.req("/dsh-go/v1/sessions/import", {"source": "deepseek", "cwd": h.ws, "conversations": CONVERSATIONS})
++    results = body["results"]; ids = [r["sessionId"] for r in results]
++    check(status == 200 and [r["status"] for r in results] == ["imported", "imported"], "import")
++    items = h.listed()
++    check([items[i]["projections"]["values"]["title"] for i in ids] == ["周末去哪玩", "番茄炒蛋先放哪个 补一句 没有回答"[:30]], "titles in the list")
++    check(items[ids[0]]["updatedAt"] == DAY + 200000 and items[ids[1]]["updatedAt"] < DAY, "original dates in the list")
++    events = h.page(ids[0])
++    kinds = [e["type"] for e in events if e["type"] in ("user/message", "assistant/message")]
++    check(kinds == ["user/message", "assistant/message", "user/message", "assistant/message"], "page reads back")
++    check(h.req("/dsh-go/v1/sessions/import", {"source": "deepseek", "cwd": h.ws, "conversations": CONVERSATIONS})[1]["results"][0]["status"] == "skipped", "re-import skips")
++  finally: h.close()
++  h = Host(home, 2)
++  try:
++    items = h.listed()
++    check(items[ids[0]]["projections"]["values"]["title"] == "周末去哪玩", "title after restart")
++    for n, sid in enumerate(ids):
++      before = sum(e["type"] == "turn/end" for e in h.page(sid))
++      h.rpc("session/prompt", {"request": {"requestId": f"go-{n}", "sessionId": sid, "mode": "queue", "content": [{"type": "text", "text": "接着聊"}]}})
++      for _ in range(150):
++        if sum(e["type"] == "turn/end" for e in h.page(sid)) > before: break
++        time.sleep(.2)
++      else: raise TimeoutError(f"continue {sid}")
++    sent = calls[0]["messages"]
++    texts = [(m["role"], [b.get("text") or b.get("thinking") for b in m["content"]]) for m in sent]
++    check(texts[:4] == [("user", ["周末在杭州有什么适合带父母去的地方？"]), ("assistant", ["考虑老人体力……", "可以考虑西湖慢走、灵隐寺。"]),
++      ("user", ["要避开人多的地方呢？"]), ("assistant", ["九溪烟树，工作日上午人最少。"])], "continued chat sends the imported turns")
++    check(texts[4][0] == "user" and texts[4][1][0] == "接着聊", "then the new prompt")
++    check(sent[1]["content"][0]["type"] == "thinking" and "signature" not in sent[1]["content"][0], "imported reasoning replays unsigned")
++    check(len(calls) == 2, "the leading-assistant chat continues too")
++    if h.req("/dsh-go/v1/sessions/deletion")[1].get("supported"):  # dsh-Go's patched DSH only
++      check(h.req("/dsh-go/v1/sessions/delete", {"sessionId": ids[0]})[0] == 200, "safe delete of an imported chat")
++      again = h.req("/dsh-go/v1/sessions/import", {"source": "deepseek", "cwd": h.ws, "conversations": CONVERSATIONS})[1]["results"]
++      check([r["status"] for r in again] == ["imported", "skipped"] and again[0]["sessionId"] != ids[0], "deleted chat imports again under a new id")
++  finally: h.close()
++  (a.output / "model-requests.json").write_text(json.dumps(calls, ensure_ascii=False, indent=1))
++  print("PASS: real Host import, list titles and dates, restart, re-import skip, continued chat history", flush=True)
+diff --git a/runtime/tests/session-import.test.mjs b/runtime/tests/session-import.test.mjs
+new file mode 100644
+index 0000000..16531ff
+--- /dev/null
++++ b/runtime/tests/session-import.test.mjs
+@@ -0,0 +1,140 @@
++// dsh-go-bridge session import: the pure log builder and the route over a fake persistence seam.
++// The live counterpart (a real DSH host, fake model) is runtime/tests/session-import-live.py.
++import assert from 'node:assert/strict';
++import { Readable } from 'node:stream';
++import { test } from 'node:test';
++import { createSessionImport, importEvents, importedSessionId, normalizeConversation } from '../bridge/dsh-go-bridge/lib/session-import.js';
++
++const conv = {
++  sourceId: 'c1', title: '周末去哪玩', createdAt: Date.parse('2026-03-02T10:00:00+08:00'), updatedAt: Date.parse('2026-03-02T10:05:00+08:00'),
++  messages: [
++    { role: 'user', text: '周末在杭州有什么适合带父母去的地方？', time: Date.parse('2026-03-02T10:00:00+08:00') },
++    { role: 'assistant', text: '西湖慢走。', think: '考虑老人体力', model: 'deepseek-reasoner' },
++    { role: 'user', text: '要避开人多的地方呢？' },
++    { role: 'assistant', text: '九溪烟树。' },
++  ],
++};
++
++test('session ids are stable, UUID-shaped and per source', () => {
++  const id = importedSessionId('deepseek', 'c1');
++  assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
++  assert.equal(id, importedSessionId('deepseek', 'c1'));
++  assert.notEqual(id, importedSessionId('chatgpt', 'c1'));
++});
++
++test('normalize merges same-role neighbours, strips control characters and falls back for the title', () => {
++  const n = normalizeConversation({ sourceId: 'x', createdAt: 1000, messages: [
++    { role: 'user', text: 'a\u0000b' }, { role: 'user', text: 'c' }, { role: 'assistant', text: 'd' }] });
++  assert.deepEqual(n.messages.map((m) => [m.role, m.text]), [['user', 'ab\n\nc'], ['assistant', 'd']]);
++  assert.equal(n.title, 'ab c');
++  for (const [bad, reason] of [[null, 'not an object'], [{ messages: [{ role: 'user', text: 'x' }] }, 'sourceId'],
++    [{ sourceId: 'x', messages: [] }, 'messages'], [{ sourceId: 'x', messages: [{ role: 'system', text: 'x' }] }, 'message role'],
++    [{ sourceId: 'x', messages: [{ role: 'assistant', text: 'x' }] }, 'no user message']]) assert.equal(normalizeConversation(bad), reason);
++});
++
++test('the log is a closed, model-replayable Session in format 4', () => {
++  let n = 0;
++  const events = importEvents(normalizeConversation(conv), { source: 'deepseek', importedAt: 5, uuid: () => `id-${n++}` });
++  events.forEach((e, i) => assert.equal(e.seq, i));
++  for (let i = 1; i < events.length; i++) assert.ok(events[i].time >= events[i - 1].time, 'times never go backwards');
++  assert.deepEqual(events[0], { type: 'plugin:dsh-go/import', seq: 0, time: conv.createdAt, ignorable: true,
++    data: { source: 'deepseek', sourceId: 'c1', importedAt: 5, messages: 4 } });
++  const surface = events.filter((e) => e.surfaceOp === 'append');
++  assert.deepEqual(surface.map((e) => e.type), ['system/message', 'user/message', 'assistant/message', 'user/message', 'assistant/message']);
++  assert.deepEqual(surface[0].data.message.content, [], 'empty system head reserves surface node 0');
++  assert.deepEqual(events.filter((e) => e.type === 'turn/end').map((e) => e.data), [
++    { turn: 1, reason: { kind: 'completed' } }, { turn: 2, reason: { kind: 'completed' } }]);
++  const reply = surface[2].data;
++  assert.deepEqual(reply.message.content, [{ type: 'reasoning', text: '考虑老人体力' }, { type: 'text', text: '西湖慢走。' }]);
++  assert.deepEqual(reply.message.source, { kind: 'model', provider: 'deepseek-import', model: 'deepseek-reasoner' });
++  assert.equal(reply.message.source.replayState, undefined);
++  assert.deepEqual(events.at(-1).data, { title: '周末去哪玩', messageSeqs: [], source: { kind: 'user' } });
++  assert.equal(surface[1].time, conv.createdAt);
++  assert.equal(surface[4].time, conv.updatedAt, 'undated messages spread to updatedAt');
++});
++
++test('a reply without a question and a question without a reply each get their own turn', () => {
++  const events = importEvents(normalizeConversation({ sourceId: 'e', createdAt: 1, messages: [
++    { role: 'assistant', text: '开场白' }, { role: 'user', text: '问' }, { role: 'assistant', text: '', think: '' }, { role: 'user', text: '没回答' }] }), { source: 'deepseek' });
++  // An empty reply is dropped; its question still closes as a completed turn.
++  const turns = [];
++  for (const e of events) {
++    if (e.type === 'turn/start') turns.push([]);
++    if (e.surfaceOp === 'append' && e.type !== 'system/message') turns.at(-1).push(e.data.message?.role ?? e.data.role);
++  }
++  assert.deepEqual(turns, [['assistant'], ['user'], ['user']]);
++});
++
++// ---------------------------------------------------------------- route
++
++function fakeHost({ corrupt = false } = {}) {
++  const stored = new Map(), attached = [], cached = [];
++  const persistence = {
++    async stat(id) { if (!stored.has(id)) throw Object.assign(new Error('missing'), { name: 'SessionPersistenceNotFoundError' }); return { header: stored.get(id).header }; },
++    async list() { return [...stored.values()].map((s) => ({ header: s.header })); },
++    async create(header) {
++      if (stored.has(header.id)) throw Object.assign(new Error('exists'), { name: 'SessionAlreadyExistsError' });
++      const s = { header, events: [] }; stored.set(header.id, s);
++      return { append: async (ev) => { s.events.push(...ev); }, flush: async () => {}, close: async () => {} };
++    },
++    async open(id) {
++      if (corrupt) throw Object.assign(new Error('bad'), { name: 'SessionPersistenceCorruptionError' });
++      return { read: async () => ({ events: stored.get(id).events }), close: async () => {} };
++    },
++  };
++  const workspace = { path: '/w/1', attachSession: async (id) => { attached.push(id); } };
++  const services = { sessionPersistence: persistence, workspaceRegistry: { get: (id) => (id === 'w1' ? workspace : undefined) },
++    sessionProjectionCache: { coldSnapshot: (header, n, events) => cached.push([header.id, n, events.length]) } };
++  const ctx = { get: (name) => services[name], logger: { warn() {} } };
++  return { ctx, stored, attached, cached };
++}
++const readBody = async (req) => Buffer.concat(await req.toArray());
++function route(host) {
++  let last;
++  const r = createSessionImport(host.ctx, { readBody, send: (_res, status, json) => { last = { status, json }; } });
++  return async (method, body, type) => { await r.handle(Object.assign(Readable.from(body === undefined ? [] : [Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))]), { method, headers: { 'content-type': type ?? 'application/json' } }), {}, '/dsh-go/v1/sessions/import'); return last; };
++}
++
++test('route: capability, import, read-back into the list cache, and re-import skips', async () => {
++  const host = fakeHost(), post = route(host);
++  assert.deepEqual(await post('GET'), { status: 200, json: { supported: true, version: 1, format: 4 } });
++  const first = await post('POST', { source: 'deepseek', workspaceId: 'w1', conversations: [conv, { sourceId: 'bad', messages: [] }] });
++  assert.equal(first.status, 200);
++  const id = importedSessionId('deepseek', 'c1');
++  assert.deepEqual(first.json.results, [{ sourceId: 'c1', status: 'imported', sessionId: id }, { sourceId: 'bad', status: 'failed', code: 'invalid', reason: 'messages' }]);
++  assert.deepEqual(host.stored.get(id).header, { version: 4, id, createdAt: conv.createdAt, cwd: '/w/1', isSeeded: false, delegationDepth: 0 });
++  assert.deepEqual(host.attached, [id]);
++  assert.deepEqual(host.cached, [[id, 0, host.stored.get(id).events.length]]);
++  const again = await post('POST', { source: 'deepseek', workspaceId: 'w1', conversations: [conv] });
++  assert.deepEqual(again.json.results, [{ sourceId: 'c1', status: 'skipped', sessionId: id }]);
++});
++
++test('route: a chat deleted under dsh-Go safe deletion imports again under the next generation', async () => {
++  const host = fakeHost(), post = route(host);
++  const first = importedSessionId('deepseek', 'c1');
++  host.ctx.get('sessionPersistence').dshGoDeletion = { deleted: (id) => id === first };
++  host.stored.delete(first);
++  const r = await post('POST', { source: 'deepseek', cwd: '/w', conversations: [conv] });
++  assert.deepEqual(r.json.results, [{ sourceId: 'c1', status: 'imported', sessionId: importedSessionId('deepseek', 'c1', 1) }]);
++  assert.notEqual(importedSessionId('deepseek', 'c1', 1), first);
++});
++
++test('route: refuses bad requests and reports logs the host cannot read back', async () => {
++  const post = route(fakeHost());
++  assert.equal((await post('PUT')).status, 405);
++  assert.equal((await post('POST', '{}', 'text/plain')).status, 415);
++  assert.equal((await post('POST', 'not json')).status, 400);
++  assert.equal((await post('POST', { source: 'evil', conversations: [] })).status, 400);
++  assert.equal((await post('POST', { source: 'deepseek', cwd: '/x', workspaceId: 'w1', conversations: [] })).status, 400);
++  assert.equal((await post('POST', { source: 'deepseek', conversations: Array(51).fill(conv) })).status, 400);
++  assert.equal((await post('POST', { source: 'deepseek', workspaceId: 'nope', conversations: [] })).status, 404);
++  const broken = route(fakeHost({ corrupt: true }));
++  const r = await broken('POST', { source: 'deepseek', cwd: '/w', conversations: [conv] });
++  assert.equal(r.json.results[0].code, 'verify-failed');
++});
++
++test('route: unavailable without a persistence seam', async () => {
++  const post = route({ ctx: { get: () => undefined } });
++  assert.deepEqual((await post('GET')).json.supported, false);
++  assert.equal((await post('POST', { source: 'deepseek', conversations: [] })).status, 503);
++});
+-- 
+2.43.0
+

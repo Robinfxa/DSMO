@@ -1,0 +1,5 @@
+{
+  "package": "@api-demo/auto-weekly-review",
+  "version": "1.0.0",
+  "source": "plugins/auto-weekly-review"
+}

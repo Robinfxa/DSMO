@@ -1,0 +1,125 @@
+[
+ {
+  "id": "c1",
+  "title": "周末去哪玩",
+  "inserted_at": "2026-03-02T10:00:00+08:00",
+  "updated_at": "2026-03-02T10:05:00+08:00",
+  "mapping": {
+   "root": {
+    "id": "root",
+    "parent": null,
+    "children": [
+     "1"
+    ],
+    "message": null
+   },
+   "1": {
+    "id": "1",
+    "parent": "root",
+    "children": [
+     "2"
+    ],
+    "message": {
+     "inserted_at": "2026-03-02T10:00:00+08:00",
+     "fragments": [
+      {
+       "type": "REQUEST",
+       "content": "周末在杭州有什么适合带父母去的地方？"
+      }
+     ]
+    }
+   },
+   "2": {
+    "id": "2",
+    "parent": "1",
+    "children": [
+     "3"
+    ],
+    "message": {
+     "model": "deepseek-reasoner",
+     "fragments": [
+      {
+       "type": "THINK",
+       "content": "考虑老人体力……"
+      },
+      {
+       "type": "RESPONSE",
+       "content": "可以考虑**西湖**慢走、灵隐寺、龙井村喝茶。"
+      }
+     ]
+    }
+   },
+   "3": {
+    "id": "3",
+    "parent": "2",
+    "children": [
+     "4"
+    ],
+    "message": {
+     "fragments": [
+      {
+       "type": "REQUEST",
+       "content": "要避开人多的地方呢？"
+      }
+     ]
+    }
+   },
+   "4": {
+    "id": "4",
+    "parent": "3",
+    "children": [],
+    "message": {
+     "fragments": [
+      {
+       "type": "RESPONSE",
+       "content": "可以去九溪烟树或者满觉陇，工作日上午人最少。"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "c2",
+  "title": "番茄炒蛋",
+  "inserted_at": "2026-01-10T19:00:00Z",
+  "updated_at": "2026-01-10T19:02:00Z",
+  "mapping": {
+   "root": {
+    "id": "root",
+    "parent": null,
+    "children": [
+     "1"
+    ]
+   },
+   "1": {
+    "id": "1",
+    "parent": "root",
+    "children": [
+     "2"
+    ],
+    "message": {
+     "fragments": [
+      {
+       "type": "REQUEST",
+       "content": "番茄炒蛋先放蛋还是先放番茄？"
+      }
+     ]
+    }
+   },
+   "2": {
+    "id": "2",
+    "parent": "1",
+    "children": [],
+    "message": {
+     "fragments": [
+      {
+       "type": "RESPONSE",
+       "content": "先炒蛋，盛出来，再炒番茄出汁后回锅。"
+      }
+     ]
+    }
+   }
+  }
+ }
+]

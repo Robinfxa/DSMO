@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; font: 14px/22px system-ui, -apple-system, "PingFang SC", sans-serif; color: var(--fg); }
+  textarea { box-sizing: border-box; width: 100%; height: 180px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--input); color: inherit; font: inherit; resize: vertical; outline: none; }
+  .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+  button { font: inherit; border: 0; border-radius: 16px; padding: 6px 14px; cursor: pointer; background: var(--hover); color: inherit; }
+  button.primary { background: var(--brand); color: #fff; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+</style>
+<textarea id="t" placeholder="随手记点什么…"></textarea>
+<div class="hint" id="h">自动保存在这台设备上</div>
+<div class="row"><button id="clear">清空</button><button class="primary" id="ins">放进输入框</button></div>
+<script>
+  const t = document.getElementById('t');
+  let timer = 0;
+  apiDemo.ready().then(async () => {
+    t.value = (await apiDemo.storage.get('note')) || '';
+    t.oninput = () => { clearTimeout(timer); timer = setTimeout(() => apiDemo.storage.set('note', t.value), 300); };
+    document.getElementById('clear').onclick = () => { t.value = ''; apiDemo.storage.set('note', ''); };
+    document.getElementById('ins').onclick = () => t.value.trim() && apiDemo.insert(t.value).then(() => apiDemo.toast('已放进输入框'));
+  });
+</script>

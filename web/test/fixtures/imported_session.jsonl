@@ -1,0 +1,15 @@
+{"type": "plugin:dsh-go/import", "seq": 0, "time": 1772416800000, "data": {"source": "deepseek", "sourceId": "c1", "importedAt": 1795036835235, "messages": 4}, "ignorable": true}
+{"type": "turn/start", "seq": 1, "time": 1772416800000, "data": {"turn": 1}}
+{"type": "step/start", "seq": 2, "time": 1772416800000, "data": {"turn": 1, "step": 1}}
+{"type": "system/message", "seq": 3, "time": 1772416800000, "data": {"turn": 1, "step": 1, "message": {"role": "system", "id": "f8cfee89-bf76-4c90-9dec-c22ed9af84e8", "content": [], "source": {"kind": "system-prompt"}}}, "surfaceOp": "append"}
+{"type": "user/message", "seq": 4, "time": 1772416800000, "data": {"role": "user", "id": "e3356f1b-174e-4222-acb2-c44df849dd43", "content": [{"type": "text", "text": "周末在杭州有什么适合带父母去的地方？"}], "source": {"kind": "user"}}, "surfaceOp": "append"}
+{"type": "assistant/message", "seq": 5, "time": 1772416900000, "data": {"turn": 1, "step": 1, "message": {"role": "assistant", "id": "29484f4a-0cf0-49dc-bdf3-fe7718ed48e6", "content": [{"type": "reasoning", "text": "考虑老人体力……"}, {"type": "text", "text": "可以考虑**西湖**慢走、灵隐寺、龙井村喝茶。"}], "source": {"kind": "model", "provider": "deepseek-import", "model": "deepseek-reasoner"}}, "stream": []}, "surfaceOp": "append"}
+{"type": "step/end", "seq": 6, "time": 1772416900000, "data": {"turn": 1, "step": 1}}
+{"type": "turn/end", "seq": 7, "time": 1772416900000, "data": {"turn": 1, "reason": {"kind": "completed"}}}
+{"type": "turn/start", "seq": 8, "time": 1772417000000, "data": {"turn": 2}}
+{"type": "step/start", "seq": 9, "time": 1772417000000, "data": {"turn": 2, "step": 1}}
+{"type": "user/message", "seq": 10, "time": 1772417000000, "data": {"role": "user", "id": "56ec6e8b-791b-4061-988f-3c54727aa690", "content": [{"type": "text", "text": "要避开人多的地方呢？"}], "source": {"kind": "user"}}, "surfaceOp": "append"}
+{"type": "assistant/message", "seq": 11, "time": 1772417100000, "data": {"turn": 2, "step": 1, "message": {"role": "assistant", "id": "e64c2baa-6bf6-4b30-8a08-6cbee3dc25a5", "content": [{"type": "text", "text": "可以去九溪烟树或者满觉陇，工作日上午人最少。"}], "source": {"kind": "model", "provider": "deepseek-import", "model": "deepseek-chat"}}, "stream": []}, "surfaceOp": "append"}
+{"type": "step/end", "seq": 12, "time": 1772417100000, "data": {"turn": 2, "step": 1}}
+{"type": "turn/end", "seq": 13, "time": 1772417100000, "data": {"turn": 2, "reason": {"kind": "completed"}}}
+{"type": "session/title", "seq": 14, "time": 1772417100000, "data": {"title": "周末去哪玩", "messageSeqs": [], "source": {"kind": "user"}}}

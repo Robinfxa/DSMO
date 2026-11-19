@@ -1,0 +1,14 @@
+// The DSMO mark: a speech bubble with a D cut out of it, in the launcher's 108 grid
+// (native/brand/make_brand.py draws the launcher icon from the same path). On the
+// accent tile it reads like the app icon: the tile shows through the D.
+
+const BODY = 'M42 32C50 32 58 32 66 32C72.627 32 78 37.373 78 44C78 48.667 78 53.333 78 58C78 64.627 72.627 70 66 70C61.333 70 56.667 70 52 70C46.667 73.333 41.333 76.667 36 80C38 76.667 40 73.333 42 70C35.373 70 30 64.627 30 58C30 53.333 30 48.667 30 44C30 37.373 35.373 32 42 32ZM47 41C47 47.667 47 54.333 47 61C49 61 51 61 53 61C58.523 61 63 56.523 63 51C63 45.477 58.523 41 53 41C51 41 49 41 47 41ZM52 46C52.333 46 52.667 46 53 46C55.761 46 58 48.239 58 51C58 53.761 55.761 56 53 56C52.667 56 52.333 56 52 56C52 52.667 52 49.333 52 46Z';
+
+/** The bubble in currentColor; [tile] crops to the icon's visible 72-unit square. */
+export function DsmoMark({ size = 38, tile = false }: { size?: number; tile?: boolean }) {
+  return (
+    <svg class="dsmo-mark" width={size} height={size} viewBox={tile ? '18 18 72 72' : '30 32 48 48'} aria-hidden="true">
+      <path fill="currentColor" d={BODY} />
+    </svg>
+  );
+}
