@@ -122,7 +122,7 @@ adb install -r dist-apk/dsmo-arm64.apk
 或者把 APK 传到手机上点开安装（要允许「安装未知来源应用」）。
 
 - 包名是 `io.github.dsmo.app`，和 DSH Go 不冲突，可以两个都装。（以前按 `io.github.apidemo.app` 装过测试包的话，它会作为另一个 App 留着，手动卸掉即可。）
-- 没有配置签名时用 debug 签名，自己用没问题。要用自己的签名，在 dsh-Go 的 `app/android/key.properties` 里写好 `storeFile`、`storePassword`、`keyAlias`、`keyPassword` 后再打包（签名文件不要提交进仓库）。**同一个包名换签名不能覆盖安装**，得先卸载旧的，卸载会清空对话和 Linux 环境。
+- **签名**：每个 DSMO 安装包都用同一把密钥签名，手机才能直接覆盖更新、保留数据。GitHub Actions 从仓库 Secrets（`DSMO_KEYSTORE_BASE64`、`DSMO_KEYSTORE_PASSWORD`、`DSMO_KEY_ALIAS`）取这把密钥，缺了就直接报错。本地 Docker 打包时设好 `DSMO_KEYSTORE`（密钥文件路径）、`DSMO_KEYSTORE_PASSWORD`、`DSMO_KEY_ALIAS` 再运行 `native/build-apk.sh`；不设的话用这台机器自己的 debug 密钥，装不到别处打的包上面。密钥的备份在仓库外面（不要提交进仓库）。证书 SHA-256：`FE:33:5D:B8:1C:EC:1A:2E:39:27:1B:92:52:E8:4F:71:79:6E:5A:68:33:3B:6E:C4:4D:DD:52:A4:D6:4E:47:F3`。**同一个包名换签名不能覆盖安装**，得先卸载旧的，卸载会清空对话和 Linux 环境。
 - 第一次打开会解包 Linux 运行时，需要一点时间，和 DSH Go 一样。
 
 ## 装好后检查一遍
