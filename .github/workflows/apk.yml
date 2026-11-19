@@ -47,6 +47,14 @@ jobs:
             build-apk/dsh-go/runtime/.cache
           key: dshgo-${{ hashFiles('native/BASE') }}
 
+      - name: Pre-download Flutter from official CDN
+        run: |
+          mkdir -p ~/dev/.downloads
+          if [ ! -f ~/dev/.downloads/flutter_linux_3.47.7-stable.tar.xz ]; then
+            curl -fL --retry 3 -o ~/dev/.downloads/flutter_linux_3.47.7-stable.tar.xz \
+              "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.7-stable.tar.xz"
+          fi
+
       - name: Build
         env:
           ABI: ${{ inputs.abi }}

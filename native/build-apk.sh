@@ -45,6 +45,12 @@ fi
 
 if [ "${SKIP_TOOLCHAIN:-0}" != 1 ]; then
   echo "→ toolchain (JDK 17, Flutter, Android SDK/NDK into ${DEV_ROOT:-~/dev}; first run downloads several GB)"
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${USE_OFFICIAL_MIRROR:-0}" = 1 ]; then
+    echo "  (CI / Official Mirror: configuring setup-toolchain.sh to use official Google/Pub endpoints)"
+    sed -i.bak 's|https://storage.flutter-io.cn|https://storage.googleapis.com|g' tooling/setup-toolchain.sh
+    sed -i.bak 's|https://pub.flutter-io.cn|https://pub.dev|g' tooling/setup-toolchain.sh
+    rm -f tooling/setup-toolchain.sh.bak
+  fi
   bash tooling/setup-toolchain.sh
   # shellcheck disable=SC1091
   source tooling/env.sh
