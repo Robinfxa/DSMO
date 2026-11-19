@@ -6,7 +6,7 @@
 // own and handed on. Only the conversation being read is in memory.
 
 import { Unzip, UnzipInflate } from 'fflate';
-import { parseJson, type ImportedChat } from './imported';
+import { NOT_CONVERSATIONS, parseJson, type ImportedChat } from './imported';
 
 /** A document that isn't a top-level array is read whole, up to this size. */
 const MAX_WHOLE = 64 * 1024 * 1024;
@@ -161,10 +161,10 @@ export async function* readChats(src: StreamSource, progress?: (p: ReadProgress)
   const ready: ImportedChat[] = [];
   const state: ReadProgress = { read: 0, unreadable: 0 };
   let failure: unknown = null;
-  const splitter = () =>
+  const splitter = (file?: string) =>
     new JsonArraySplitter((text) => {
       try {
-        const found = parseJson(JSON.parse(text));
+        const found = parseJson(JSON.parse(text), file);
         if (found.length) ready.push(...found);
         else state.unreadable++;
       } catch {
@@ -184,11 +184,11 @@ export async function* readChats(src: StreamSource, progress?: (p: ReadProgress)
   let push: (chunk: Uint8Array, final: boolean) => void;
   if ((first.value[0] === 0x50 && first.value[1] === 0x4b) || /\.zip$/i.test(src.name)) {
     const unzip = new Unzip((file) => {
-      if (!/\.json$/i.test(file.name) || /(^|\/)__MACOSX\//.test(file.name)) {
+      if (!/\.json$/i.test(file.name) || /(^|\/)__MACOSX\//.test(file.name) || NOT_CONVERSATIONS.test(file.name)) {
         file.terminate();
         return;
       }
-      const split = splitter();
+      const split = splitter(file.name);
       file.ondata = (err, data, final) => {
         if (err) failure ??= err;
         else
@@ -202,7 +202,7 @@ export async function* readChats(src: StreamSource, progress?: (p: ReadProgress)
     unzip.register(UnzipInflate);
     push = (chunk, final) => guard(() => unzip.push(chunk, final));
   } else {
-    const split = splitter();
+    const split = splitter(src.name);
     push = (chunk, final) =>
       guard(() => {
         split.push(chunk);

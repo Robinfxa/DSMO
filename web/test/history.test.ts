@@ -53,7 +53,8 @@ describe('导入历史对话', () => {
     const f2 = source('conversations.json', strToU8(fx('deepseek-conversations.json')));
     const { chats, skipped } = await parseFiles([f1, f2]);
     expect(chats).toHaveLength(2);
-    expect(skipped).toBe(1);
+    // user.json is an account file, not a conversation: skipped without counting as unreadable.
+    expect(skipped).toBe(0);
   });
 
   it('saves on the device, replaces re-imports, and makes context for 接着聊', async () => {

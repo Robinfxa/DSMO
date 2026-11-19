@@ -2,6 +2,7 @@
 // grouped cards with icons and chevrons like a native settings app.
 
 import { importHistory, openImportedPage } from '../../history/ui';
+import { exportConversations, exportFileName } from '../../history/export';
 import { ACCOUNT_SIGN_IN, accountView, balance, cancelSignIn, canSignIn, CURRENCY, isActive, money, PHASE_TEXT, profile, refreshAccountDetails, reopenBrowser, signIn, signOut, type Wallet } from '../../account/account';
 import { onLocalHost } from '../../setup/state';
 import { imported } from '../../history/imported';
@@ -12,7 +13,6 @@ import { installed } from '../../plugins/frontend';
 import {
   clearApiKey,
   confirm,
-  copyText,
   credential,
   deleteAll,
   errText,
@@ -458,14 +458,28 @@ function DeepSeekAccount() {
 // ------------------------------------------------------------------ 数据管理
 
 function Data() {
-  const exportAll = () => {
-    const json = JSON.stringify(topSessions.value.map((s) => ({ id: s.sessionId, title: s.title, updatedAt: s.updatedAt })), null, 2);
-    void native.saveFile('api-demo-conversations.json', 'application/json', new Blob([json], { type: 'application/json' })).catch(() => copyText(json));
+  const [exporting, setExporting] = useState(false);
+  // The whole conversations (every message), in the JSON 导入历史对话 reads back.
+  const exportAll = async () => {
+    if (exporting) return;
+    const list = topSessions.value;
+    if (!list.length) return showToast('还没有对话可以导出');
+    setExporting(true);
+    try {
+      const r = await exportConversations(list, (done, total) => showToast(`正在导出… ${done}/${total}`));
+      if (!r.count) return showToast('没能读出对话内容，稍后再试');
+      await native.saveFile(exportFileName('对话'), 'application/json', new Blob([r.json], { type: 'application/json' }));
+      showToast(r.failed ? `已导出 ${r.count} 个对话，${r.failed} 个没读出来` : `已导出 ${r.count} 个对话`);
+    } catch (e) {
+      showToast(errText(e));
+    } finally {
+      setExporting(false);
+    }
   };
   return (
     <>
       <Group note="对话保存在引擎所在的设备上（本机或你的电脑），不会上传到别处。">
-        <Row label="导出所有历史对话" onClick={exportAll} />
+        <Row label="导出所有历史对话" value={exporting ? '正在导出' : undefined} onClick={() => void exportAll()} />
       </Group>
       <Group note="支持 DeepSeek、ChatGPT 网页导出的文件（zip 或 conversations.json）和本应用导出的 JSON。导入的对话会出现在对话列表里，保留原来的日期，可以直接接着聊。">
         <Row label="导入历史对话" onClick={() => void importHistory()} />

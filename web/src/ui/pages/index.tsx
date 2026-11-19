@@ -26,6 +26,7 @@ import { A11yRestorePage, AndroidShellPage, PhoneDndPage, PhoneLogPage } from '.
 import { PresetsPage, TeamPage } from './agents';
 import { PersonaPage } from './persona';
 import { imported } from '../../history/imported';
+import { exportConversations, exportFileName } from '../../history/export';
 import { ShareImportPage, ShareOpenPage, ShareOutPage, ShareProfilePage } from '../../share/pages';
 import { BotChatPage, BotDetailsPage, BotModelPage, BotsHomePage, FolderPage, MemoryPage, NewBotPage, NewRoomPage, RoomChatPage, RoomDetailsPage, botStatusLine, homeSub, roomStatusLine } from '../../bots/pages';
 import { dsBot } from '../../bots/store';
@@ -396,8 +397,10 @@ function ExportPage() {
   const run = async () => {
     setBusy(true);
     try {
-      const blob = await getClient().exportLog(sid()!);
-      await native.saveFile(`${(s?.title ?? 'session').replace(/[\\/:*?"<>|]/g, '_')}.json`, 'application/json', blob);
+      // DSMO's own JSON (导入历史对话 reads it back); DSH's /api/session.export zip can't be imported.
+      const r = await exportConversations([{ sessionId: sid()!, title: s?.title }]);
+      if (!r.count) throw new Error('empty');
+      await native.saveFile(exportFileName(s?.title || '对话'), 'application/json', new Blob([r.json], { type: 'application/json' }));
       showToast('已导出');
     } catch {
       // The prototype (and relay hosts) have no HTTP export route: fall back to the loaded log.
@@ -411,7 +414,7 @@ function ExportPage() {
   };
   return (
     <>
-      <div class="p-body">把这个对话的完整记录（含子代理）保存成 JSON 文件，可以留档或在别处导入。</div>
+      <div class="p-body">把这个对话的完整记录保存成 JSON 文件，可以留档，也能在「数据管理 › 导入历史对话」里导回来。</div>
       <div class="pg-foot">
         <button class="btn primary" type="button" disabled={busy} onClick={run}>
           {busy ? '正在导出…' : '导出'}

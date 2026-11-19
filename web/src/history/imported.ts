@@ -3,9 +3,10 @@
 // conversations live on this device: read-only, listed with the others, and
 // 「接着聊」 starts a new conversation that carries the old one as context.
 //
-// Accepted files: the export zip / conversations.json from the DeepSeek or
-// ChatGPT websites (both use a `mapping` tree), this app's own JSON export
-// (a DSH session log), and a plain [{ title, messages: [{ role, content }] }].
+// Accepted files: the DeepSeek website's 导出所有历史对话 zip (one
+// chat_sessions/<id>.json per conversation, see fromDeepSeekSession), the
+// ChatGPT export (a `mapping` tree), this app's own JSON export (DSH session
+// logs), and a plain [{ title, messages: [{ role, content }] }].
 
 import { signal } from '@preact/signals';
 import { list, obj, str } from '../engine/json';
@@ -156,17 +157,90 @@ function fromPlain(c: Record<string, unknown>): ImportedChat | null {
   return { id: `other:${str(c.id) ?? hash(JSON.stringify(messages.slice(0, 2)) + created)}`, title: str(c.title) || messages[0].text.slice(0, 20), createdAt: created, updatedAt: ms(c.updatedAt ?? c.updated_at) || created, source: 'other', messages };
 }
 
-/** One JSON document → the conversations in it. */
-export function parseJson(v: unknown): ImportedChat[] {
+/**
+ * One conversation file of DeepSeek's own export (chat.deepseek.com › 导出所有历史对话):
+ * `chat_sessions/<id>.json` = `{title, current_message_id, messages: [{id, parent_id,
+ * role: USER|ASSISTANT, status, inserted_at, fragments: [{type, content, files}]}]}`.
+ * The messages are a tree; the branch last on screen ends at `current_message_id`.
+ * Field meanings follow DeepSeek's own importer (deepseek-harness deepseek-chat-import)
+ * as dsh-Go reads them (packages/dsh_tavern/lib/src/io/deepseek_export.dart).
+ */
+function fromDeepSeekSession(c: Record<string, unknown>, fileId?: string): ImportedChat | null {
+  const raw = new Map<number, Record<string, unknown>>();
+  for (const m of list(c.messages).map(obj)) if (typeof m.id === 'number') raw.set(m.id, m);
+  if (!raw.size) return null;
+  // The branch on screen: back from current_message_id (or the newest message with any text) to the root.
+  const hasText = (m: Record<string, unknown>) => list(m.fragments).some((f) => typeof obj(f).content === 'string' && (obj(f).content as string).trim() !== '');
+  const newest = Math.max(...[...raw].filter(([, m]) => hasText(m)).map(([id]) => id), Math.min(...raw.keys()));
+  let at = typeof c.current_message_id === 'number' && raw.has(c.current_message_id) ? c.current_message_id : newest;
+  const path: Record<string, unknown>[] = [];
+  const seen = new Set<number>();
+  while (raw.has(at) && !seen.has(at)) {
+    seen.add(at);
+    const m = raw.get(at)!;
+    path.unshift(m);
+    if (typeof m.parent_id !== 'number') break;
+    at = m.parent_id;
+  }
+  const messages: ImportedMessage[] = [];
+  for (const m of path) {
+    const user = String(m.role ?? '').toUpperCase() === 'USER';
+    const text: string[] = [];
+    const think: string[] = [];
+    for (const f of list(m.fragments).map(obj)) {
+      const type = String(f.type ?? '').toUpperCase();
+      const content = typeof f.content === 'string' ? f.content : '';
+      if ((type === 'REQUEST' || type === 'RESPONSE' || type === 'TEMPLATE_RESPONSE') && content) text.push(content);
+      else if (type === 'THINK' && content) think.push(content);
+      else if (type === 'FILE' && user) for (const file of list(f.files).map(obj)) if (typeof file.file_name === 'string') text.push(`〔${file.file_name}〕`);
+    }
+    const body = text.join('\n\n').trim();
+    // A reply that failed before a word is not a message.
+    if (!body) continue;
+    const time = ms(m.inserted_at) || undefined;
+    const model = !user ? str(m.model) : undefined;
+    const thought = think.join('\n\n').trim();
+    messages.push({ role: user ? 'user' : 'assistant', text: body, ...(thought && !user ? { think: thought } : {}), ...(time ? { time } : {}), ...(model ? { model } : {}) });
+  }
+  if (!messages.length) return null;
+  const times = messages.map((m) => m.time ?? 0).filter(Boolean);
+  const id = fileId ?? str(c.id) ?? hash(JSON.stringify(messages[0]));
+  return {
+    id: `deepseek:${id}`,
+    title: (str(c.title) ?? '').replace(/\s+/g, ' ').trim() || messages[0].text.slice(0, 20),
+    createdAt: ms(c.inserted_at) || (times.length ? Math.min(...times) : Date.now()),
+    updatedAt: ms(c.updated_at) || (times.length ? Math.max(...times) : Date.now()),
+    source: 'deepseek',
+    messages,
+  };
+}
+const isDeepSeekSession = (c: Record<string, unknown>) => list(c.messages).some((m) => Array.isArray(obj(m).fragments));
+
+/** The conversation id DeepSeek's export puts in a file's name (`chat_sessions/<id>.json`). */
+const deepSeekFileId = (name?: string) => name?.match(/(?:^|\/)chat_sessions\/([^/]+)\.json$/i)?.[1];
+
+/** One JSON document → the conversations in it. [file]: its name (inside a zip: its path there). */
+export function parseJson(v: unknown, file?: string): ImportedChat[] {
   const root = Array.isArray(v) ? v : isConversationList(v) ? list(obj(v).conversations ?? obj(v).items) : [v];
   const out: ImportedChat[] = [];
   for (const raw of root) {
     const c = obj(raw);
-    const chat = c.mapping ? fromMapping(c) : Array.isArray(c.events) ? fromDshLog(c) : Array.isArray(c.messages) ? fromPlain(c) : null;
+    const chat = c.mapping
+      ? fromMapping(c)
+      : Array.isArray(c.events)
+        ? fromDshLog(c)
+        : isDeepSeekSession(c)
+          ? fromDeepSeekSession(c, root.length === 1 ? deepSeekFileId(file) : undefined)
+          : Array.isArray(c.messages)
+            ? fromPlain(c)
+            : null;
     if (chat) out.push(chat);
   }
   return out;
 }
+
+/** Files in an export that hold no conversations (DeepSeek's index and account files): skipped, not counted as unreadable. */
+export const NOT_CONVERSATIONS = /(?:^|\/)(?:chat_session_index|user|users|shared_conversations|message_feedback|model_comparisons)\.json$/i;
 const isConversationList = (v: unknown) => Array.isArray(obj(v).conversations) || Array.isArray(obj(v).items);
 
 // ---------------------------------------------------------------- storage (IndexedDB on this device)

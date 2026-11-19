@@ -450,6 +450,11 @@ export class DshClient {
       .find((n) => n.ns === 'agent-preset-registry');
     await this.call('settings/update', clean({ ns: 'agent-preset-registry', patch: { selectedDefault: id }, expectedRevision: typeof ns?.revision === 'number' ? ns.revision : undefined }));
   }
+  /** The newest record's seq (`session/projections` asOfSeq); -1 for an empty session. */
+  async lastSeq(sessionId: string) {
+    const p = obj(await this.call('session/projections', { request: { sessionId } }));
+    return typeof p.asOfSeq === 'number' ? p.asOfSeq : -1;
+  }
   /** The last [max] raw records of a session (`session/projections` for the cut, then `session/page`). */
   async latestRecords(sessionId: string, max = 200) {
     const p = obj(await this.call('session/projections', { request: { sessionId } }));
