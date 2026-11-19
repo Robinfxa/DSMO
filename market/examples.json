@@ -1,0 +1,163 @@
+{
+  "v": 1,
+  "plugins": [
+    {
+      "tier": 1,
+      "integrity": "sha256-pRRPr/39bvHgOGFuWo+5gLmoTScFdN5SAsnTC760CAs=",
+      "manifest": {
+        "v": 1,
+        "title": "专注布局",
+        "summary": "高级模式下隐藏手机操控、自动化任务入口和语音按钮，界面更清爽。授权卡、权限和登录不受影响。",
+        "kinds": [
+          "layout"
+        ],
+        "permissions": [],
+        "layout": {
+          "hide": [
+            "sider.features.phone",
+            "sider.features.schedules",
+            "composer.voice"
+          ]
+        },
+        "description": "高级模式的功能很多，不常用的入口会挤占边栏。专注布局把手机操控、自动化任务两个入口和输入框的语音按钮藏起来。\n\n装好后可以在「管理」里逐项决定藏哪些。授权卡、权限页和登录框不在可隐藏的范围内。",
+        "highlights": [
+          "隐藏不常用的边栏入口",
+          "可以逐项开关",
+          "随时停用，界面马上恢复"
+        ],
+        "id": "@api-demo/layout-focus",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-V2LGifTRe8jG1LNXEZv9vYEhqxs9aggbq09giGzBhus=",
+      "manifest": {
+        "v": 1,
+        "title": "随手记",
+        "summary": "一个保存在这台设备上的便签面板，可以把便签放进输入框。演示沙箱面板的存储能力。",
+        "kinds": [
+          "slot",
+          "panel"
+        ],
+        "permissions": [
+          "storage"
+        ],
+        "slots": [
+          {
+            "slot": "sider.features",
+            "id": "open",
+            "title": "随手记",
+            "icon": "IconEditOutline16",
+            "action": {
+              "panel": "main"
+            }
+          }
+        ],
+        "panels": {
+          "main": {
+            "title": "随手记",
+            "html": "<!doctype html>\n<meta charset=\"utf-8\">\n<style>\n  body { margin: 0; font: 14px/22px system-ui, -apple-system, \"PingFang SC\", sans-serif; color: var(--fg); }\n  textarea { box-sizing: border-box; width: 100%; height: 180px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--input); color: inherit; font: inherit; resize: vertical; outline: none; }\n  .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }\n  button { font: inherit; border: 0; border-radius: 16px; padding: 6px 14px; cursor: pointer; background: var(--hover); color: inherit; }\n  button.primary { background: var(--brand); color: #fff; }\n  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }\n</style>\n<textarea id=\"t\" placeholder=\"随手记点什么…\"></textarea>\n<div class=\"hint\" id=\"h\">自动保存在这台设备上</div>\n<div class=\"row\"><button id=\"clear\">清空</button><button class=\"primary\" id=\"ins\">放进输入框</button></div>\n<script>\n  const t = document.getElementById('t');\n  let timer = 0;\n  apiDemo.ready().then(async () => {\n    t.value = (await apiDemo.storage.get('note')) || '';\n    t.oninput = () => { clearTimeout(timer); timer = setTimeout(() => apiDemo.storage.set('note', t.value), 300); };\n    document.getElementById('clear').onclick = () => { t.value = ''; apiDemo.storage.set('note', ''); };\n    document.getElementById('ins').onclick = () => t.value.trim() && apiDemo.insert(t.value).then(() => apiDemo.toast('已放进输入框'));\n  });\n</script>\n"
+          }
+        },
+        "description": "一个随手记的便签面板。想到什么先记下来，需要时一键放进输入框。\n\n便签只存在这台设备上，在「管理」里能看到占了多少空间，也能一键清除。",
+        "highlights": [
+          "便签保存在本机",
+          "一键把便签放进输入框",
+          "可在管理页清除数据"
+        ],
+        "id": "@api-demo/notes-panel",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-vyBofCdop/iiACDvv3xMPoTKBinuXq6FaYaAzEAZ0yg=",
+      "manifest": {
+        "v": 1,
+        "title": "对话统计",
+        "summary": "统计最近的对话数量和正在运行的对话。演示沙箱面板通过受限接口只读访问引擎。",
+        "kinds": [
+          "slot",
+          "panel"
+        ],
+        "permissions": [
+          "engine.read"
+        ],
+        "slots": [
+          {
+            "slot": "sider.features",
+            "id": "open",
+            "title": "对话统计",
+            "icon": "IconDataOutline16",
+            "action": {
+              "panel": "main"
+            }
+          }
+        ],
+        "panels": {
+          "main": {
+            "title": "对话统计",
+            "html": "<!doctype html>\n<meta charset=\"utf-8\">\n<style>\n  body { margin: 0; font: 14px/22px system-ui, -apple-system, \"PingFang SC\", sans-serif; color: var(--fg); }\n  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }\n  .m { padding: 12px; border-radius: 12px; background: var(--hover); }\n  .m b { display: block; font-size: 22px; line-height: 30px; }\n  .m span { color: var(--muted); font-size: 12px; }\n  ul { padding-left: 18px; }\n  .err { color: #d93025; }\n</style>\n<div class=\"grid\"><div class=\"m\"><b id=\"n\">…</b><span>对话</span></div><div class=\"m\"><b id=\"r\">…</b><span>运行中</span></div><div class=\"m\"><b id=\"d\">…</b><span>今天更新</span></div></div>\n<p>最近更新：</p>\n<ul id=\"list\"></ul>\n<script>\n  apiDemo.ready().then(async () => {\n    try {\n      const v = await apiDemo.engine.call('session/list', { _request: {} });\n      const items = (v.items || []).filter((s) => !s.parentSessionId);\n      const t0 = new Date(); t0.setHours(0, 0, 0, 0);\n      document.getElementById('n').textContent = items.length;\n      document.getElementById('r').textContent = items.filter((s) => s.running).length;\n      document.getElementById('d').textContent = items.filter((s) => s.updatedAt >= t0.getTime()).length;\n      const ul = document.getElementById('list');\n      for (const s of items.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5)) {\n        const li = document.createElement('li');\n        li.textContent = (s.projections && s.projections.values && s.projections.values.title) || '新对话';\n        ul.append(li);\n      }\n    } catch (e) {\n      document.body.insertAdjacentHTML('beforeend', '<p class=\"err\"></p>');\n      document.querySelector('.err').textContent = '读取失败：' + e.message;\n    }\n  });\n</script>\n"
+          }
+        },
+        "description": "看看最近聊了多少：最近的对话数量、正在运行的对话。\n\n它通过受限接口只读访问引擎，只能读对话列表这类信息，不能发消息、不能改设置。",
+        "highlights": [
+          "最近对话数量一目了然",
+          "显示正在运行的对话",
+          "只读，不能发消息或改设置"
+        ],
+        "id": "@api-demo/session-stats",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 2,
+      "integrity": "sha256-x44iZ2+ue9pT6pd3Bq0EDY3X9sGfL2GpxAtxg6aBfy8=",
+      "manifest": {
+        "v": 1,
+        "title": "纸张",
+        "summary": "米白底色、衬线正文。演示皮肤里的自定义 CSS：遮住授权卡或登录框会被自动停用。",
+        "kinds": [
+          "skin"
+        ],
+        "permissions": [],
+        "skin": {
+          "light": {
+            "--dsw-alias-bg-base": "#fbf8f1",
+            "--dsw-specific-sidebar-fill": "#f3eee2",
+            "--dsw-specific-bubble": "#efe6d2",
+            "--dsw-alias-brand-primary": "#9a5b13",
+            "--dsw-alias-brand-text": "#9a5b13",
+            "--dsw-alias-button-primary-fill": "#9a5b13",
+            "--dsw-specific-input-major": "#fffdf8"
+          },
+          "dark": {
+            "--dsw-alias-bg-base": "#1c1a16",
+            "--dsw-specific-sidebar-fill": "#221f1a",
+            "--dsw-specific-bubble": "#2d2921",
+            "--dsw-alias-brand-primary": "#e0a35a",
+            "--dsw-alias-brand-text": "#e7b779"
+          },
+          "css": ".md p, .md li { font-family: \"Songti SC\", \"Noto Serif SC\", Georgia, serif; font-size: 16px; line-height: 28px; }\n.bubble { border-radius: 14px; }\n.greeting { font-family: \"Songti SC\", \"Noto Serif SC\", Georgia, serif; }"
+        },
+        "description": "像在纸上读字：米白的底、暖棕色的强调，回答正文换成衬线字体，行距更松。\n\n这款皮肤带一小段自定义样式（改正文字体和气泡圆角）。如果样式遮住了授权卡或登录框，应用会自动暂停它。",
+        "highlights": [
+          "回答正文用衬线字体，长文更好读",
+          "浅色、深色各一套",
+          "自定义样式受保护规则约束"
+        ],
+        "id": "@api-demo/skin-paper",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    }
+  ]
+}

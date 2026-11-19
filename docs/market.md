@@ -8,9 +8,10 @@
 market/
   policy.json          官方名单、是否只收官方、「发现 › 精选」推荐哪些（featured，按顺序）
   plugins/<名字>.json   一个上架条目：{ package, version（固定）, source }
+  examples/<名字>.json  开发示例（policy.examples）：同样检查，只进 examples.json，只有原型列出
   scripts/rules.mjs    审核规则（App 运行时也执行同样的硬规定）
   scripts/check.mjs    node market/scripts/check.mjs <插件目录>…
-  scripts/build-index.mjs  生成 index.json
+  scripts/build-index.mjs  生成 index.json 和 examples.json
   index.json           App 打包时内置的索引：{ v, featured, plugins:[{ tier, integrity, manifest }] }
 ```
 
@@ -38,4 +39,4 @@ market/
 1. 作者提 PR：在 `plugins/` 下放源码（或指向固定版本的 npm 包），在 `market/plugins/` 加条目。
 2. CI 跑 `check.mjs` 和 `build-index.mjs`，贴出级别。
 3. 按级别人工审核；通过后合并，`index.json` 随下一个 App 版本发布。
-4. 下架：从 `market/plugins/` 删条目；App 更新索引后，已装的插件标记为「已下架」并停用（第二版做）。
+4. 下架：从 `market/plugins/` 删条目（想留作例子就挪到 `market/examples/`，列进 `policy.examples`），重建索引。只在页面里的插件（没有引擎部分、技能、任务）加进 `official.ts` 的 `RETIRED`，装过的手机会把它和它的数据清掉；有引擎部分的另说（第二版做）。

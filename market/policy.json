@@ -3,11 +3,7 @@
   "officialOnly": true,
   "official": [
     "@api-demo/skin-midnight",
-    "@api-demo/skin-paper",
-    "@api-demo/layout-focus",
     "@api-demo/quick-prompts",
-    "@api-demo/notes-panel",
-    "@api-demo/session-stats",
     "@api-demo/usage-today",
     "@api-demo/skill-meeting-notes",
     "@api-demo/skill-code-review",
@@ -24,5 +20,11 @@
     "@api-demo/skin-midnight",
     "@api-demo/skill-code-review",
     "@api-demo/auto-daily-plan"
+  ],
+  "examples": [
+    "@api-demo/session-stats",
+    "@api-demo/notes-panel",
+    "@api-demo/skin-paper",
+    "@api-demo/layout-focus"
   ]
 }

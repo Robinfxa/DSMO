@@ -12,7 +12,7 @@ import { computed, signal } from '@preact/signals';
 import { native } from '../bridge/native';
 import { prefs, getClient, draft, openOverlay, showToast, openPage } from '../state/store';
 import type { IconName } from '../ui/icons';
-import { OFFICIAL } from './official';
+import { OFFICIAL, RETIRED } from './official';
 import { loadContributions } from './dshgo';
 import { createSchedules, deleteSchedules, skillsInstallable } from './automation';
 
@@ -148,7 +148,13 @@ export async function loadInstalled() {
   try {
     const raw = await native.storageGet('plugins');
     const list = raw ? (JSON.parse(raw) as Installed[]) : [];
-    installed.value = list.filter((x) => x && typeof x.id === 'string');
+    const all = list.filter((x) => x && typeof x.id === 'string');
+    const retired = all.filter((x) => RETIRED.has(x.id) && !findPlugin(x.id));
+    installed.value = all.filter((x) => !retired.includes(x));
+    if (retired.length) {
+      for (const x of retired) await clearPluginData(x.id).catch(() => {});
+      await save();
+    }
   } catch {
     installed.value = [];
   }
