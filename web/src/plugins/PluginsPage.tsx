@@ -84,19 +84,13 @@ function ClashCard({ p }: { p: ApiDemoManifest }) {
                     class="plg-btn plg-clash-fix"
                     type="button"
                     disabled={busy}
-                    onClick={async () => {
+                    onClick={() => {
                       setBusy(true);
-                      try {
-                        await setPersonaSkipBots(true);
-                        showToast('Bot 的对话里不再用人设');
-                      } catch (e) {
-                        showToast(errText(e));
-                      } finally {
-                        setBusy(false);
-                      }
+                      showToast('Bot 的对话里不再用人设，可以在「人设」里改回来');
+                      setPersonaSkipBots(true).catch((e) => showToast(`没能告诉人设库：${errText(e)}`));
                     }}
                   >
-                    {busy ? '正在设置…' : 'Bot 的对话里不用人设'}
+                    Bot 的对话里不用人设
                   </button>
                 ) : (
                   <div class="plg-row-s wrap">装好后，可以在「人设」里设成 Bot 的对话不用人设。</div>

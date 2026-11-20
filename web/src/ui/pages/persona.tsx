@@ -17,7 +17,7 @@
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { dsBot } from '../../bots/store';
-import { personaSkipBots, setPersonaSkipBots } from '../../plugins/conflicts';
+import { personaSkipBots, personaSkipSyncing, setPersonaSkipBots, syncPersonaSkipBots } from '../../plugins/conflicts';
 import { backPage, confirm, errText, openPage, showToast } from '../../state/store';
 import { Switch } from '../common';
 import { MIc } from '../mobile/MIc';
@@ -247,19 +247,22 @@ export function PersonaPage() {
 
 /** 和 DS Bot：each Bot has its own role; the persona would go into its conversations too. */
 function BotsSwitch() {
-  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const on = personaSkipBots.value;
-  const set = async (v: boolean) => {
-    setBusy(true);
-    try {
-      await setPersonaSkipBots(v);
-      showToast(v ? 'Bot 的对话里不再用人设' : 'Bot 的对话也会用人设');
-    } catch (e) {
-      showToast(errText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const run = (p: Promise<void>) =>
+    p.then(
+      () => setFailed(null),
+      (e) => setFailed(errText(e)),
+    );
+  // a run that failed earlier (the engine was restarting, …) is tried again here
+  useEffect(() => void run(syncPersonaSkipBots()), []);
+  const sub = personaSkipSyncing.value
+    ? '正在应用…'
+    : failed
+      ? `没能告诉人设库：${failed}。下次打开这一页会再试。`
+      : on
+        ? '每个 Bot 按自己的角色和说明来，人设只用在你自己的对话里。'
+        : '现在人设也会加进 Bot 的对话，可能盖过 Bot 自己的角色和说明。';
   return (
     <section class="plg-sec">
       <h2 class="plg-sec-t">和 DS Bot</h2>
@@ -267,9 +270,9 @@ function BotsSwitch() {
         <div class="plg-row static">
           <div class="plg-row-m">
             <div class="plg-row-t">Bot 的对话里不用人设</div>
-            <div class="plg-row-s wrap">{on ? '每个 Bot 按自己的角色和说明来，人设只用在你自己的对话里。' : '现在人设也会加进 Bot 的对话，可能盖过 Bot 自己的角色和说明。'}</div>
+            <div class={`plg-row-s wrap ${failed ? 'danger' : ''}`}>{sub}</div>
           </div>
-          <Switch on={on} label="Bot 的对话里不用人设" disabled={busy} onChange={(v) => void set(v)} />
+          <Switch on={on} label="Bot 的对话里不用人设" onChange={(v) => void run(setPersonaSkipBots(v))} />
         </div>
       </div>
     </section>

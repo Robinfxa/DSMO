@@ -15,7 +15,6 @@
 import { effect, signal } from '@preact/signals';
 import { native } from '../bridge/native';
 import { dsBot } from '../bots/store';
-import { teamSessionIds } from '../bots/api';
 import { getClient } from '../state/store';
 import { catalogPlugins, findPlugin, installed, type ApiDemoManifest } from './frontend';
 
@@ -92,6 +91,13 @@ export function clashesOf(p: ApiDemoManifest): Clash[] {
 }
 
 // ---------------------------------------------------------------- persona: off in Bot conversations
+//
+// The switch flips at once and is saved; the package is brought to it in the background, one
+// run at a time, always towards the latest choice (a run checks between requests and stops if
+// the choice changed). On: remember the package's mode, switch it to `session`, then `none` for
+// each Bot conversation. Off: put the mode back first — in `global` the package ignores
+// per-conversation choices, so the persona is back in Bot conversations with one request — then
+// clear what was set. Re-runs only when the set of Bot conversations changes.
 
 const PERSONA = '/api/dsh-persona-dafeiyu';
 const personaOn = () => installed.value.some((x) => x.id === '@api-demo/persona-library' && x.enabled);
@@ -103,41 +109,95 @@ async function personaCall(body: Record<string, unknown>) {
   return j.value ?? {};
 }
 
-/** Bot conversations already switched off (this launch); new Bots are added as they appear. */
-const excluded = new Set<string>();
+async function personaMode(): Promise<string> {
+  const res = await fetch(`${PERSONA}/status`, { credentials: 'same-origin' });
+  const j = (await res.json().catch(() => ({}))) as { value?: { mode?: unknown } };
+  return typeof j.value?.mode === 'string' ? j.value.mode : 'global';
+}
 
-async function excludeBots() {
+/** The Bots' conversations (not the Bot and room ids, which aren't conversations). */
+function botSessions(): string[] {
   const team = dsBot.value.team;
-  if (!team) return;
-  const ids = [...teamSessionIds(team)].filter((id) => !excluded.has(id));
-  if (!ids.length) return;
-  // per-conversation choices only count in the package's session mode; elsewhere it still falls back to the global persona
-  await personaCall({ action: 'set-mode', mode: 'session' });
-  for (const sessionId of ids) {
-    await personaCall({ action: 'set-session-persona', sessionId, none: true });
-    excluded.add(sessionId);
+  if (!team) return [];
+  return [...new Set([...team.bots.flatMap((b) => [b.sessionId, ...b.parts]), ...team.rooms.flatMap((r) => r.parts)])].filter(Boolean);
+}
+
+/** Bringing the package to the switch, in the background. */
+export const personaSkipSyncing = signal(false);
+/** Set to `none` by this app (this launch); cleared again when the switch goes off. */
+const done = new Set<string>();
+let running: Promise<void> | null = null;
+let again = false;
+let lastKey = '';
+
+async function step() {
+  if (!personaOn()) return;
+  const want = personaSkipBots.value;
+  if (want) {
+    if ((await native.storageGet('persona-skip-bots-mode').catch(() => null)) == null) {
+      const mode = await personaMode();
+      await native.storageSet('persona-skip-bots-mode', mode === 'session' ? 'session' : mode);
+    }
+    await personaCall({ action: 'set-mode', mode: 'session' });
+    for (const sessionId of botSessions()) {
+      if (personaSkipBots.value !== want) return;
+      if (done.has(sessionId)) continue;
+      await personaCall({ action: 'set-session-persona', sessionId, none: true });
+      done.add(sessionId);
+    }
+  } else {
+    const saved = await native.storageGet('persona-skip-bots-mode').catch(() => null);
+    // never turned on (or already undone): nothing to put back
+    if (saved == null && !done.size) return;
+    const before = saved ?? 'global';
+    if (before !== 'session') await personaCall({ action: 'set-mode', mode: before });
+    for (const sessionId of new Set([...done, ...botSessions()])) {
+      if (personaSkipBots.value !== want) return;
+      await personaCall({ action: 'set-session-persona', sessionId, personaId: null });
+      done.delete(sessionId);
+    }
+    await native.storageSet('persona-skip-bots-mode', null);
   }
 }
 
-/** Turns 「Bot 的对话里不用人设」 on or off, and remembers it. */
-export async function setPersonaSkipBots(on: boolean) {
-  if (on) {
-    excluded.clear();
-    await excludeBots();
-  } else {
-    const team = dsBot.value.team;
-    for (const sessionId of team ? teamSessionIds(team) : excluded) await personaCall({ action: 'set-session-persona', sessionId, personaId: null }).catch(() => {});
-    excluded.clear();
+/** Runs [step] until the package matches the latest choice; one run at a time. */
+function sync(): Promise<void> {
+  if (running) {
+    again = true;
+    return running;
   }
+  personaSkipSyncing.value = true;
+  running = (async () => {
+    try {
+      do {
+        again = false;
+        await step();
+      } while (again);
+    } finally {
+      running = null;
+      personaSkipSyncing.value = false;
+    }
+  })();
+  return running;
+}
+
+/** Brings the package to the switch again (after a failure, when 人设 opens). */
+export const syncPersonaSkipBots = () => (personaOn() ? sync() : Promise.resolve());
+
+/** Turns 「Bot 的对话里不用人设」 on or off: at once on screen and saved; the package follows. */
+export async function setPersonaSkipBots(on: boolean) {
   personaSkipBots.value = on;
   await native.storageSet('persona-skip-bots', on ? '1' : null);
+  await sync();
 }
 
 /** At start: read the choice, and keep Bot conversations without a persona as Bots are added. */
 export async function watchConflicts() {
   personaSkipBots.value = (await native.storageGet('persona-skip-bots').catch(() => null)) === '1';
   effect(() => {
-    void dsBot.value.team;
-    if (personaSkipBots.value && personaOn()) void excludeBots().catch(() => {});
+    const key = botSessions().sort().join('\n');
+    if (!personaSkipBots.value || !personaOn() || key === lastKey) return;
+    lastKey = key;
+    void sync().catch(() => {});
   });
 }

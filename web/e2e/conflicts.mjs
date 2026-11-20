@@ -39,6 +39,8 @@ await ctx.addInitScript(() => {
     if (/status/.test(url)) return json({ ok: true, value: snapshot() });
     const b = JSON.parse(init.body);
     calls.push(b);
+    // like the package behind the proxy on a phone: every write takes a while
+    await new Promise((r) => setTimeout(r, 120));
     if (b.action === 'set-mode') state.mode = b.mode;
     if (b.action === 'set-session-persona') {
       if (b.none) state.sessions[b.sessionId] = 'none';
@@ -96,7 +98,8 @@ await page.waitForTimeout(400);
 
 // the fix, from the card
 await page.click('.plg-clash-fix');
-check(await toastIs('Bot 的对话里不再用人设'), 'fix applied');
+check(await toastIs('Bot 的对话里不再用人设，可以在「人设」里改回来'), 'fix applied');
+await page.waitForFunction(() => Object.values(window.__personaState.sessions).length >= 2 && !document.querySelector('.plg-clash'), null, { timeout: 15000 }).catch(() => {});
 const st = await page.evaluate(() => window.__personaState);
 const none = Object.values(st.sessions).filter((v) => v === 'none').length;
 check(st.mode === 'session' && none >= 2, `the package: session mode, ${none} Bot conversations without a persona`);
@@ -133,12 +136,60 @@ await page.waitForTimeout(400);
 await page.click('.m-row:has-text("人设")');
 await page.waitForTimeout(700);
 const sw = page.locator('[role="switch"][aria-label="Bot 的对话里不用人设"]');
+const settled = (mode, nones) =>
+  page
+    .waitForFunction(([m, n]) => !document.body.textContent.includes('正在应用') && window.__personaState.mode === m && Object.values(window.__personaState.sessions).length === n, [mode, nones], {
+      timeout: 20000,
+    })
+    .then(
+      () => true,
+      () => false,
+    );
 check((await sw.getAttribute('aria-checked')) === 'true', '人设 page: the switch shows it is on (kept across a reload)');
+await page.waitForTimeout(300);
 await shot('05-persona-switch');
+
+// off: the switch flips at once, the package goes back to global with its first request
 await sw.click();
-check(await toastIs('Bot 的对话也会用人设'), 'switched off');
-const after = await page.evaluate(() => window.__personaState);
-check(Object.keys(after.sessions).length === 0, 'the Bot conversations fall back to the global persona');
+await page.waitForTimeout(80);
+check((await sw.getAttribute('aria-checked')) === 'false', 'off: the switch flips at once');
+check(await page.isVisible('text=正在应用…'), 'off: says it is applying');
+await page.waitForFunction(() => window.__personaState.mode === 'global', null, { timeout: 3000 }).catch(() => {});
+check((await page.evaluate(() => window.__personaState.mode)) === 'global', 'off: the package is back in its old mode right away');
+check(await settled('global', 0), 'off: every Bot conversation cleared');
+
+// on, then off while it is still going: ends off and clean
+await sw.click();
+await page.waitForTimeout(200);
+await sw.click();
+check(await settled('global', 0), 'on then off mid-run: ends off, nothing left set');
+// a burst of taps: the last one wins
+for (let i = 0; i < 5; i++) {
+  await sw.click();
+  await page.waitForTimeout(60);
+}
+check((await sw.getAttribute('aria-checked')) === 'true', 'five taps: on');
+check(
+  await page
+    .waitForFunction(
+      () =>
+        !document.body.textContent.includes('正在应用') &&
+        window.__personaState.mode === 'session' &&
+        Object.values(window.__personaState.sessions).every((v) => v === 'none') &&
+        Object.keys(window.__personaState.sessions).length >= 2,
+      null,
+      { timeout: 20000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    ),
+  'five taps: the package ends on, every Bot conversation without a persona',
+);
+await sw.click();
+check(await settled('global', 0), 'and off again');
+const sent = await page.evaluate(() => window.__personaCalls.filter((c) => c.action === 'set-session-persona').map((c) => c.sessionId));
+check(sent.length > 0 && !sent.includes('r-weekly') && !sent.includes(''), 'only conversation ids are sent (not the room id)');
 
 await browser.close();
 if (errors.length) {
