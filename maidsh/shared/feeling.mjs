@@ -3,6 +3,19 @@
 
 export const LABELS = Object.freeze(['开心', '害羞', '感动', '想念', '平静', '惊讶', '困惑', '委屈', '吃醋', '难过', '生气', '害怕', '厌烦']);
 
+/** 每个标签大致的愉悦度（-1..1），给记忆做「心境一致」召回等粗略比较用。 */
+export const VALENCE = Object.freeze({
+  开心: 0.8, 害羞: 0.4, 感动: 0.7, 想念: 0.2, 平静: 0.1, 惊讶: 0.1, 困惑: -0.2,
+  委屈: -0.5, 吃醋: -0.4, 难过: -0.7, 生气: -0.8, 害怕: -0.6, 厌烦: -0.5,
+});
+
+/** 今天的日期和星期（给模型换算「明天」「上周」用），按主机本地时区。 */
+export function todayLine(now = Date.now()) {
+  const d = new Date(now);
+  const p = (n) => String(n).padStart(2, '0');
+  return `今天是 ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}（星期${'日一二三四五六'[d.getDay()]}）。`;
+}
+
 /** 合并分析里固定的一项，键名保留，面不能用。 */
 export const FEELING_KEY = 'feeling';
 

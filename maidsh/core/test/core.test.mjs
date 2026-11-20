@@ -59,7 +59,7 @@ test('prompt: ordered, each face clipped, the whole cut from the end', () => {
   assert.equal(assemble([t('a', 1, '一二三四五六', 4)]), '一二三…');
   const long = 'x'.repeat(LIMITS.totalChars - 5);
   assert.equal(assemble([t('a', 1, long, 2000), t('b', 2, '会被丢掉的一段')]), long);
-  assert.equal(assemble([t('a', 1, 'y'.repeat(700), 800), t('b', 2, 'z'.repeat(200), 200)]), 'y'.repeat(700));
+  assert.equal(assemble([t('a', 1, 'y'.repeat(900), 1000), t('b', 2, 'z'.repeat(200), 200)]), 'y'.repeat(900));
 });
 
 test('a failing face only costs itself', () => {

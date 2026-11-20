@@ -22,7 +22,7 @@ export function createCompanion({ complete, log = () => {}, now = Date.now, rand
 
   async function analyze(turn) {
     const aspects = ordered();
-    const req = analysisRequest(aspects, turn);
+    const req = analysisRequest(aspects, turn, now());
     if (!req) return;
     let text = '';
     try {
@@ -70,9 +70,9 @@ export function createCompanion({ complete, log = () => {}, now = Date.now, rand
       else queued = turn;
       return running;
     },
-    /** 现在的陪伴段落；同一轮里多次调用结果一致（随机数一轮只掷一次）。 */
-    promptText() {
-      const ctx = { feeling: lastFeeling, roll };
+    /** 现在的陪伴段落；同一轮里多次调用结果一致（随机数一轮只掷一次）。[latest]：这一轮对方的话。 */
+    promptText(latest = '') {
+      const ctx = { feeling: lastFeeling, roll, latest: String(latest ?? '') };
       return assemble(
         ordered()
           .filter((a) => a.prompt)

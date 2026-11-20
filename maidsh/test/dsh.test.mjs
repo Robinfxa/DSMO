@@ -167,3 +167,71 @@ test('config is validated', () => {
   assert.ok(bond.Config['~standard'].validate({ gain: 'x' }).issues);
   assert.deepEqual(core.Config['~standard'].validate(undefined).value.maxOutputTokens, 600);
 });
+
+import * as memory from '../memory/lib/index.mjs';
+
+const memoryAnswer = {
+  memory: {
+    facts: [{ text: '对方养了一只猫叫团子', cat: 'stable', kw: ['团子', '猫'], quote: '我家团子' }],
+    event: { title: '团子', summary: '团子打翻了杯子，对方哭笑不得', at: '2026-11-20', kw: ['团子', '杯子'], salience: 4 },
+    cue: '聊团子的糗事，气氛轻松',
+  },
+};
+const catSession = (text) =>
+  session({
+    deriveMessages: () => [
+      { role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text }] },
+      { role: 'assistant', content: [{ type: 'text', text: '哈哈，团子真可爱' }] },
+    ],
+  });
+const assembleWith = (text) => ({ agent: { id: 's1', session: catSession(text) } });
+
+test('memory alone: one call per turn, remembers, and recalls when the topic comes back', async () => {
+  const h = host({ extra: memoryAnswer });
+  const dir = tmp();
+  await h.root.plugin(memory, { dataDir: dir });
+  h.root.emit('session/event', catSession('我家团子今天把杯子打翻了'), turnEnd());
+  await settle();
+  assert.equal(h.calls.length, 1);
+  assert.match(h.calls[0].system, /"memory"/);
+  const svc = h.root.get('companionMemory');
+  assert.equal(svc.facts()[0].cat, 'stable', 'quote found in the user message');
+  assert.equal(svc.episodes()[0].feeling.label, '开心');
+  // DSH 组装提示时这一轮的话还在收件箱：从 agent/inbox/claimed 里拿
+  h.root.emit('agent/inbox/claimed', { agent: { id: 's1' }, message: { role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '团子又调皮了' }] }, turn: 2 });
+  const text = h.prompts.get('maidsh:memory').text(assembleWith('（上一轮的话）'));
+  assert.match(text, /【关于对方】\n- 对方养了一只猫叫团子/);
+  assert.match(text, /【此刻想起】\n- 今天，团子打翻了杯子/);
+  assert.ok(fs.existsSync(path.join(dir, 'memory.json')));
+});
+
+test('full suite with memory: still one merged call; memory sits in the one block after mood', async () => {
+  const h = host({ extra: memoryAnswer });
+  await h.root.plugin(mood, { dataDir: tmp() });
+  await h.root.plugin(bond, { dataDir: tmp() });
+  await h.root.plugin(memory, { dataDir: tmp() });
+  await h.root.plugin(core, {});
+  await settle();
+  h.root.emit('session/event', catSession('我家团子今天把杯子打翻了'), turnEnd());
+  await settle();
+  assert.equal(h.calls.length, 1, 'one merged call for mood + bond + memory');
+  assert.match(h.calls[0].system, /"memory"/);
+  assert.match(h.calls[0].system, /今天是 \d{4}-\d{2}-\d{2}/);
+  assert.equal(h.prompts.get('maidsh:memory').text(assembleWith('团子')), '', 'quiet under the controller');
+  const block = h.prompts.get('maidsh').text(assembleWith('团子又调皮了'));
+  assert.match(block, /^你现在的心情：[\s\S]*【关于对方】[\s\S]*【此刻想起】/);
+  const st = h.root.get('companion').state().aspects.find((a) => a.id === 'memory').state;
+  assert.equal(st.facts, 1);
+});
+
+test('memory page: add / pin / edit / delete through the same object the routes use', async () => {
+  const h = host();
+  await h.root.plugin(memory, { dataDir: tmp() });
+  const svc = h.root.get('companionMemory');
+  const f = svc.remember('对方的生日是 3 月 12 日', { cat: 'identity' });
+  assert.equal(f.pinned, true);
+  assert.equal(svc.facts().length, 1);
+  assert.equal(svc.forget(f.id), true);
+  assert.equal(svc.facts().length, 0);
+  assert.equal(svc.remember('对方的银行卡密码是 123'), null);
+});

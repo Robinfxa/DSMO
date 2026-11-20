@@ -155,3 +155,90 @@ export function promptContext(ctx, { name, order, text }) {
   if (typeof sp.context === 'function') return sp.context({ name, order, text, interpolate: false });
   return sp.section({ name, order, text, interpolate: false });
 }
+
+/**
+ * 组装提示时这一轮对方的话。DSH 组装提示（refreshContext）时，这一轮的用户消息还在收件箱里、没写进会话，
+ * 所以从 `agent/inbox/claimed` 事件里记下每个 agent 刚领走的那条；没有时退回会话里最后一条用户消息。
+ * 用法：const latestOf = trackLatest(ctx)；之后 latestOf(assembleContext)。
+ */
+export function trackLatest(ctx) {
+  const latest = new Map();
+  ctx.on('agent/inbox/claimed', (payload) => {
+    const id = payload?.agent?.id;
+    const m = payload?.message;
+    if (id === undefined || m?.role !== 'user' || (m.source?.kind ?? 'user') !== 'user') return;
+    const text = textOf(m);
+    if (text) latest.set(id, text);
+    if (latest.size > 64) latest.delete(latest.keys().next().value);
+  });
+  return (assembleContext) => {
+    const agent = assembleContext?.agent;
+    if (!agent) return '';
+    if (latest.has(agent.id)) return latest.get(agent.id);
+    try {
+      const msgs = agent.session?.deriveMessages?.();
+      return Array.isArray(msgs) ? textOf(msgs.findLast((m) => m?.role === 'user' && (m.source?.kind ?? 'user') === 'user')) : '';
+    } catch {
+      return '';
+    }
+  };
+}
+
+/** 本机、同源、JSON 的写请求才放行（挡住本机浏览器里别的网页借道）；返回拒绝时的 [状态码, 原因] 或 null。 */
+export function rejectWrite(ctx, req) {
+  const addr = req.socket?.remoteAddress ?? '';
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(addr)) return [403, 'loopback requests only'];
+  const conn = ctx.get('connection');
+  const rejected = typeof conn?.requestRejection === 'function' ? conn.requestRejection(req) : undefined;
+  if (rejected) return [rejected, 'unauthorized'];
+  if (req.method !== 'POST') return [405, 'method not allowed'];
+  if (!/^application\/json\b/i.test(req.headers?.['content-type'] ?? '')) return [415, 'content-type must be application/json'];
+  const origin = req.headers?.origin;
+  if (origin) {
+    try {
+      if (new URL(origin).host !== req.headers.host) return [403, 'cross-origin requests are not allowed'];
+    } catch {
+      return [403, 'bad origin'];
+    }
+  }
+  return null;
+}
+
+/** 本机的读请求才放行；返回拒绝时的 [状态码, 原因] 或 null。 */
+export function rejectRead(ctx, req) {
+  const addr = req.socket?.remoteAddress ?? '';
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(addr)) return [403, 'loopback requests only'];
+  const conn = ctx.get('connection');
+  const rejected = typeof conn?.requestRejection === 'function' ? conn.requestRejection(req) : undefined;
+  if (rejected) return [rejected, 'unauthorized'];
+  if ((req.method ?? 'GET') !== 'GET') return [405, 'method not allowed'];
+  return null;
+}
+
+export function sendJson(res, status, body) {
+  res.statusCode = status;
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.setHeader('cache-control', 'no-store');
+  res.end(JSON.stringify(body));
+}
+
+/** 读 JSON 请求体（≤ 64 KB）；读不出返回 undefined。 */
+export function readJsonBody(req, limit = 65_536) {
+  return new Promise((resolve) => {
+    let raw = '';
+    let over = false;
+    req.on('data', (c) => {
+      raw += c;
+      if (raw.length > limit) over = true;
+    });
+    req.on('end', () => {
+      if (over) return resolve(undefined);
+      try {
+        resolve(JSON.parse(raw || '{}'));
+      } catch {
+        resolve(undefined);
+      }
+    });
+    req.on('error', () => resolve(undefined));
+  });
+}

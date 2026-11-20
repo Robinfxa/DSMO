@@ -1,6 +1,6 @@
 {
   "name": "maidsh-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MaiDSH·总控：把心情、羁绊等「面」（含第三方）组织起来，每轮只调一次模型、统一注入",
   "license": "MIT",
   "type": "module",

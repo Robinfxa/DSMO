@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PACKAGES = ['core', 'mood', 'bond'];
+const PACKAGES = ['core', 'mood', 'bond', 'memory'];
 const check = process.argv.includes('--check');
 const files = readdirSync(join(root, 'shared')).filter((f) => f.endsWith('.mjs'));
 let stale = [];

@@ -4,7 +4,7 @@
 // 对外提供服务 companion：register(aspect) / aspects() / state()。
 
 import { createCompanion } from './runtime.mjs';
-import { completeText, configSchema, loggerOf, promptContext, turnOf } from './shared/dsh.mjs';
+import { completeText, configSchema, trackLatest, loggerOf, promptContext, rejectRead, sendJson, turnOf } from './shared/dsh.mjs';
 
 export const name = 'maidsh-core';
 export const inject = ['systemPrompt', 'llm'];
@@ -45,7 +45,8 @@ export function apply(ctx, config = {}) {
     state: companion.state,
   });
 
-  ctx.effect(() => promptContext(ctx, { name: 'maidsh', order: 300, text: () => companion.promptText() }));
+  const latestOf = trackLatest(ctx);
+  ctx.effect(() => promptContext(ctx, { name: 'maidsh', order: 300, text: (ac) => companion.promptText(latestOf(ac)) }));
 
   ctx.on('session/event', (a, b) => {
     const turn = turnOf(a, b);
@@ -59,19 +60,9 @@ export function apply(ctx, config = {}) {
         kind: 'exact',
         path: STATE_PATH,
         handler: (req, res) => {
-          const send = (status, body) => {
-            res.statusCode = status;
-            res.setHeader('content-type', 'application/json; charset=utf-8');
-            res.setHeader('cache-control', 'no-store');
-            res.end(JSON.stringify(body));
-          };
-          const addr = req.socket?.remoteAddress ?? '';
-          if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(addr)) return send(403, { ok: false, error: 'loopback requests only' });
-          const conn = ctx.get('connection');
-          const rejected = typeof conn?.requestRejection === 'function' ? conn.requestRejection(req) : undefined;
-          if (rejected) return send(rejected, { ok: false, error: 'unauthorized' });
-          if ((req.method ?? 'GET') !== 'GET') return send(405, { ok: false, error: 'method not allowed' });
-          send(200, { ok: true, value: companion.state() });
+          const no = rejectRead(ctx, req);
+          if (no) return sendJson(res, no[0], { ok: false, error: no[1] });
+          sendJson(res, 200, { ok: true, value: companion.state() });
         },
       }),
     );
