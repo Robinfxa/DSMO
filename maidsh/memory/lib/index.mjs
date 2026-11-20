@@ -88,6 +88,8 @@ export function apply(ctx, config = {}) {
       bondLevel: () => ctx.get('companionBond')?.get?.(id).level ?? 2,
       moodFeel: (label, intensity) => ctx.get('companionMood')?.feel?.(label, intensity, 'memory', id),
       onConsolidate: () => queueMicrotask(() => consolidate(id)),
+      // 装了设定集、这段对话用了作品：故事世界设定以设定集为准
+      hideWorld: (sessionId) => !!sessionId && !!ctx.get('lore')?.covers?.(sessionId),
     }),
   );
   const memory = memories.of(DEFAULT_PROFILE);
@@ -126,7 +128,7 @@ export function apply(ctx, config = {}) {
   });
 
   const latestOf = trackLatest(ctx);
-  ctx.effect(() => promptContext(ctx, { name: 'maidsh:memory', order: 303, text: (ac) => (underCore ? '' : memory.compose(latestOf(ac))) }));
+  ctx.effect(() => promptContext(ctx, { name: 'maidsh:memory', order: 303, text: (ac) => (underCore ? '' : memory.compose(latestOf(ac), ac?.agent?.session?.id ?? '')) }));
 
   let busy = false;
   ctx.on('session/event', (a, b) => {

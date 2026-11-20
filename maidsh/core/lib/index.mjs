@@ -6,6 +6,7 @@
 import { createJobs } from './jobs.mjs';
 import { createCompanion } from './runtime.mjs';
 import { createScope } from './scope.mjs';
+import { workspaceFinder } from './shared/layers.mjs';
 import { completeText, configSchema, jsonStore, loggerOf, promptContext, readJsonBody, rejectRead, rejectWrite, sendJson, storageDir, textOf, trackLatest, turnOf } from './shared/dsh.mjs';
 
 export const name = 'maidsh-core';
@@ -29,15 +30,7 @@ export const JOBS_PATH = '/api/maidsh/jobs';
 export const SCOPE_PATH = '/api/maidsh/scope';
 export const PROFILES_PATH = '/api/maidsh/profiles';
 
-/** DSH 的工作区里哪一个装着这段对话（workspaceRegistry.list() 是同步的，每个工作区带 sessionIds）。 */
-export function workspaceFinder(ctx) {
-  return (sessionId) => {
-    const reg = ctx.get('workspaceRegistry');
-    if (!reg?.list) return '';
-    for (const w of reg.list()) if (w?.sessionIds?.includes?.(sessionId)) return w.id;
-    return '';
-  };
-}
+export { workspaceFinder };
 
 export function apply(ctx, config = {}) {
   const c = { ...DEFAULTS, ...config };
@@ -95,8 +88,9 @@ export function apply(ctx, config = {}) {
       name: 'maidsh',
       order: 300,
       text: (ac) => {
-        const profile = scope.profileOf(sessionOf(ac));
-        return profile === null ? '' : companion.promptText(latestOf(ac), profile);
+        const sid = sessionOf(ac);
+        const profile = scope.profileOf(sid);
+        return profile === null ? '' : companion.promptText(latestOf(ac), profile, sid);
       },
     }),
   );

@@ -4,7 +4,7 @@
 import { effect, signal } from '@preact/signals';
 import { botSessions } from '../plugins/conflicts';
 import { errText, showToast } from '../state/store';
-import { hasUpdate } from '../plugins/frontend';
+import { hasUpdate, installed } from '../plugins/frontend';
 import { MaidshError, PLUGIN_ID, get, hasModule, post } from './api';
 
 const SCOPE = '/api/maidsh/scope';
@@ -33,9 +33,28 @@ export async function setConversationScope(sessionId: string, enabled: boolean) 
 
 export const isScopeOff = (sessionId: string) => scopeOff.value.has(sessionId);
 
+/** 设定集（dsmo-lore，maidsh/LORE-DESIGN.md §7）也认 Bot 对话：它和陪伴无关，单独装着时也要同步。 */
+const LORE_ID = '@api-demo/dsmo-lore';
+const LORE_BINDING = '/api/dsmo-lore/binding';
+const hasLore = () => installed.value.some((x) => x.id === LORE_ID && x.enabled);
+
 let lastBots = '';
-/** 启动时：装了总控就读一次范围，并把 Bot 对话同步过去；Bot 变了再同步。 */
+let lastLoreBots = '';
+/** 启动时：装了总控就读一次范围，并把 Bot 对话同步过去；Bot 变了再同步。设定集同理。 */
 export function watchMaidshScope() {
+  effect(() => {
+    if (!hasLore()) {
+      lastLoreBots = '';
+      return;
+    }
+    const ids = botSessions();
+    const key = [...ids].sort().join('\n');
+    if (key === lastLoreBots) return;
+    lastLoreBots = key;
+    void post(LORE_BINDING, { action: 'set-bots', sessionIds: ids }).catch(() => {
+      lastLoreBots = ''; // 下次再试（引擎还没重启时路由不在）
+    });
+  });
   let readOnce = false;
   effect(() => {
     if (!hasModule('core')) {

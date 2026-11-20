@@ -92,11 +92,11 @@ export function createCompanion({ complete, log = () => {}, now = Date.now, rand
       else queued.set(profileId(turn.profile), turn);
       return running;
     },
-    /** 现在的陪伴段落；同一轮里多次调用结果一致（随机数一轮只掷一次）。[latest]：这一轮对方的话。 */
-    promptText(latest = '', profile = DEFAULT_PROFILE) {
+    /** 现在的陪伴段落；同一轮里多次调用结果一致（随机数一轮只掷一次）。[latest]：这一轮对方的话；[sessionId]：这段对话。 */
+    promptText(latest = '', profile = DEFAULT_PROFILE, sessionId = '') {
       const id = profileId(profile);
       const p = live(id);
-      const ctx = { profile: id, feeling: p.lastFeeling, roll: p.roll, latest: String(latest ?? '') };
+      const ctx = { profile: id, sessionId: String(sessionId ?? ''), feeling: p.lastFeeling, roll: p.roll, latest: String(latest ?? '') };
       return assemble(
         ordered()
           .filter((a) => a.prompt)

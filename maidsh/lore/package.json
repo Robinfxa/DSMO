@@ -1,0 +1,40 @@
+{
+  "name": "dsmo-lore",
+  "version": "0.1.0",
+  "description": "设定集：写小说、跑团时让 AI 记得人物是谁、写到第几章时处在什么状态、世界有哪些规矩；兼容 SillyTavern 角色卡和世界书",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "dsh-plugin",
+    "lore",
+    "worldbook",
+    "novel",
+    "deepseek-harness"
+  ],
+  "main": "lib/index.mjs",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Robinfxa/DSMO.git",
+    "directory": "maidsh/lore"
+  }
+}

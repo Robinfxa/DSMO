@@ -11,8 +11,9 @@ import { parseLenient } from './shared/json.mjs';
  * [store]：{ load(), save(记忆) }。[moodValence]、[bondLevel]：读心情 / 羁绊（没装时 0 / 2）。
  * [moodFeel]：(label, intensity) => void，想起带感情的往事时轻轻带动心情。
  * [onConsolidate]：() => void，该压印象时通知外壳去调一次模型。
+ * [hideWorld]：(sessionId) => 这段对话用了设定集吗；是的话故事世界设定（world）让位给设定集，不回忆、不常驻（不删）。
  */
-export function createMemory({ store, now = Date.now, log = () => {}, moodValence = () => 0, bondLevel = () => 2, moodFeel = () => {}, onConsolidate = () => {} }) {
+export function createMemory({ store, now = Date.now, log = () => {}, moodValence = () => 0, bondLevel = () => 2, moodFeel = () => {}, onConsolidate = () => {}, hideWorld = () => false }) {
   let mem = store.load();
   if (!mem || mem.v !== 1) mem = emptyMemory();
   const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -36,19 +37,21 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
   // 同一轮里提示会被组装多次：按（第几轮 + 对方的话）缓存，保证一致，也只把最后一次想起的算数
   let cache = null;
   let pendingTaken = null;
-  function compose(latest = '') {
-    const key = `${mem.turn}\u0000${latest}`;
+  function compose(latest = '', sessionId = '') {
+    const noWorld = !!safe(() => hideWorld(sessionId), false);
+    const key = `${mem.turn}\u0000${latest}\u0000${noWorld}`;
     if (cache?.key === key) return cache.text;
     const t = now();
     const bond = num(safe(bondLevel, 2), 2);
-    const res = residents(mem, { now: t, bondLevel: bond });
+    const keep = (f) => !(noWorld && f?.cat === 'world');
+    const res = residents(mem, { now: t, bondLevel: bond }).filter(keep);
     // 先按对方这一轮的话找；什么都没想起时，再按上一轮的聊天印象找（话题延续）[MaiBot 启发式召回]
     const opts = { now: t, moodValence: num(safe(moodValence, 0), 0), bondLevel: bond, exclude: new Set(res.map((f) => f.id)) };
-    let rec = recall(mem, { ...opts, query: latest });
+    let rec = recall(mem, { ...opts, query: latest }).filter((r) => keep(r.item));
     // 话题延续想起的只是「萦绕」：不强化、不占 6 轮不重复的名额，等对方真提起时还能正式想起
     let lingering = false;
     if (!rec.length && mem.cue) {
-      rec = recall(mem, { ...opts, query: mem.cue, limit: 1 });
+      rec = recall(mem, { ...opts, query: mem.cue, limit: 1 }).filter((r) => keep(r.item));
       lingering = true;
     }
     const out = render(mem, { residents: res, recalled: rec, now: t });
@@ -155,7 +158,7 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
     version: 1,
     analysis: { schema: MEMORY_SCHEMA, instructions: MEMORY_INSTRUCTIONS },
     onAnalysis: (result, turn) => afterTurn(result, turn),
-    prompt: { order: 600, maxChars: LIMITS.budget, text: (turn) => compose(turn?.latest ?? '') },
+    prompt: { order: 600, maxChars: LIMITS.budget, text: (turn) => compose(turn?.latest ?? '', turn?.sessionId ?? '') },
     batch: {
       schema: MEMORY_BATCH_SCHEMA,
       instructions: memoryBatchInstructions,

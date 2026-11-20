@@ -4,10 +4,12 @@
   "tags": {
     "prompt.persona": { "title": "人设", "what": "给 AI 定下身份、性格和说话方式，加进每一轮对话" },
     "prompt.memory": { "title": "长期记忆", "what": "把记住的事加进每一轮对话" },
-    "prompt.mood": { "title": "情绪", "what": "给 AI 一个会变的心情，让它每一轮带着这个心情说话" }
+    "prompt.mood": { "title": "情绪", "what": "给 AI 一个会变的心情，让它每一轮带着这个心情说话" },
+    "prompt.lore": { "title": "人物与设定", "what": "按对话里提到的人物和名词，把人物卡、当前状态和世界设定加进对话" }
   },
   "engines": {
     "@7gzgn/dsh-emotion": { "title": "dsh-emotion", "affects": ["prompt.mood"] },
-    "dsh-agentmemory": { "title": "dsh-agentmemory", "affects": ["prompt.memory"] }
+    "dsh-agentmemory": { "title": "dsh-agentmemory", "affects": ["prompt.memory"] },
+    "dsh-novel-forge": { "title": "dsh-novel-forge", "affects": ["prompt.lore"] }
   }
 }
