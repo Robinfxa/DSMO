@@ -47,18 +47,28 @@ export function apply(ctx, config = {}) {
   // 最近一个主会话：压印象时用它的模型路由
   let lastSession = null;
   let consolidating = false;
+  let again = false;
   function consolidate() {
-    if (consolidating || !alive) return;
+    if (!alive) return;
+    if (consolidating) {
+      // 正在压：做完再看一次，别把这次的请求丢了
+      again = true;
+      return;
+    }
     const req = memory.consolidation();
     if (!req) return;
     consolidating = true;
-    completeText(ctx, req, { session: lastSession, provider: c.provider, model: c.model, maxTokens: 600, timeoutMs: 60_000 })
+    completeText(ctx, req, { session: lastSession, provider: c.provider, model: c.model, maxTokens: 1000, timeoutMs: 60_000 })
       .then((text) => {
         if (alive && !memory.applyConsolidation(text)) log('压印象的回答读不出来，下次再试');
       })
       .catch((e) => log(`压印象失败：${e?.message ?? e}`))
       .finally(() => {
         consolidating = false;
+        if (again) {
+          again = false;
+          queueMicrotask(consolidate);
+        }
       });
   }
 
@@ -95,7 +105,7 @@ export function apply(ctx, config = {}) {
     lastSession = turn.session;
     if (underCore || busy) return;
     busy = true;
-    completeText(ctx, memory.standaloneRequest(turn), { session: turn.session, provider: c.provider, model: c.model, maxTokens: 500 })
+    completeText(ctx, memory.standaloneRequest(turn), { session: turn.session, provider: c.provider, model: c.model, maxTokens: 1200 })
       .then((text) => {
         if (alive && !underCore && !memory.standaloneApply(text, turn)) log('记忆判断的回答读不出来，这一轮跳过');
       })

@@ -1,6 +1,6 @@
 {
   "name": "maidsh-mood",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MaiDSH·心情：AI 角色有会起伏、会慢慢平复的心情，单独可用",
   "license": "MIT",
   "type": "module",

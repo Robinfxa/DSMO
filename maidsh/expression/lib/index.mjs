@@ -51,7 +51,7 @@ export function apply(ctx, config = {}) {
     const turn = turnOf(a, b);
     if (!turn) return;
     busy = true;
-    completeText(ctx, expression.standaloneRequest(turn), { session: turn.session, provider: c.provider, model: c.model, maxTokens: 300 })
+    completeText(ctx, expression.standaloneRequest(turn), { session: turn.session, provider: c.provider, model: c.model, maxTokens: 600 })
       .then((text) => {
         if (alive && !underCore && !expression.standaloneApply(text, turn)) log('表达判断的回答读不出来，这一轮跳过');
       })

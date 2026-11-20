@@ -1,6 +1,8 @@
 // 共用的「这一轮让 TA 有什么感受」（CONTRACT.md §5）。总控的合并分析和各面单独判断都用它。
 // 打包时复制进每个包（每个包要能单独装），源文件只有这一份。
 
+import { parseLenient } from './json.mjs';
+
 export const LABELS = Object.freeze(['开心', '害羞', '感动', '想念', '平静', '惊讶', '困惑', '委屈', '吃醋', '难过', '生气', '害怕', '厌烦']);
 
 /** 每个标签大致的愉悦度（-1..1），给记忆做「心境一致」召回等粗略比较用。 */
@@ -51,17 +53,7 @@ export function feelingRequest(turn, clip = 2000) {
   };
 }
 
-/** 读模型的回答；容忍外面包了 ```json 或前后有字。 */
+/** 读模型的回答；容忍外面包了 ```json、前后有字或被截断。 */
 export function parseFeeling(text) {
-  const raw = String(text ?? '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-  for (const s of [raw, raw.match(/\{[\s\S]*?\}/)?.[0]]) {
-    if (!s) continue;
-    try {
-      const f = normalizeFeeling(JSON.parse(s));
-      if (f) return f;
-    } catch {
-      /* 下一种 */
-    }
-  }
-  return null;
+  return normalizeFeeling(parseLenient(text));
 }

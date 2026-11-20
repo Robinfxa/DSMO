@@ -102,6 +102,18 @@ export function onUserTurn(st, { now, sessionId, followup, topic, random = Math.
   planNext(st, now, { random, o });
 }
 
+/**
+ * 过期的回访（过了约定时间 2 小时还没发出去：碰上安静时段、次数用完、App 没开……）不再单独发，
+ * 只把它的由头留给下一次主动。返回是否有变化。
+ */
+export function pruneFollowups(st, now, { o = DEFAULTS } = {}) {
+  const stale = st.followups.filter((f) => now - f.at > o.graceHours * HOUR);
+  if (!stale.length) return false;
+  st.followups = st.followups.filter((f) => now - f.at <= o.graceHours * HOUR);
+  st.lastTopic = stale.map((f) => f.reason).filter(Boolean).join('、') || st.lastTopic;
+  return true;
+}
+
 /** 记一次约好的回访（总控分析出的 followup）。 */
 export function addFollowup(st, followup, now) {
   const after = Number(followup?.afterMin);
@@ -127,6 +139,7 @@ export function onStartup(st, now, { random = Math.random, o = DEFAULTS } = {}) 
  * [bondLevel]：好感度档位，「冷淡」「厌恶」（≤1）不主动。
  */
 export function due(st, now, { bondLevel = 2, o = DEFAULTS } = {}) {
+  pruneFollowups(st, now, { o });
   if (st.pending || bondLevel <= 1 || st.ignored >= o.stopAfterIgnored || quiet(now, o) || !st.sessionId) return null;
   if (dayOf(now) === st.day && st.count >= o.perDay) return null;
   const f = st.followups.find((x) => x.at <= now);
@@ -153,7 +166,10 @@ export function onInitiativeDone(st) {
   if (st.pending) st.pending.done = true;
 }
 export function settlePending(st, now, { o = DEFAULTS } = {}) {
-  if (!st.pending?.done) return;
+  if (!st.pending) return;
+  // TA 主动的那一轮一直没等到结束的消息（App 在那一轮里被杀了）：两小时后当作已经结束
+  if (!st.pending.done && now - st.pending.at > 2 * HOUR) st.pending.done = true;
+  if (!st.pending.done) return;
   if (now - st.pending.at >= gapHours(st, o) * HOUR) {
     st.ignored += 1;
     st.pending = null;

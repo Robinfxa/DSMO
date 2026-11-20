@@ -165,7 +165,7 @@ test('the controller alone injects nothing and calls nothing', async () => {
 test('config is validated', () => {
   assert.ok(mood.Config['~standard'].validate({ neuroticism: 2 }).issues);
   assert.ok(bond.Config['~standard'].validate({ gain: 'x' }).issues);
-  assert.deepEqual(core.Config['~standard'].validate(undefined).value.maxOutputTokens, 600);
+  assert.deepEqual(core.Config['~standard'].validate(undefined).value.maxOutputTokens, 1500);
 });
 
 import * as memory from '../memory/lib/index.mjs';

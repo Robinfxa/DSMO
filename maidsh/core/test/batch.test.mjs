@@ -37,7 +37,7 @@ test('estimate: chunks + 1 calls', () => {
   const job = newJob({ id: 'j', textType: 'story', text: '字'.repeat(100_000), now: T0 });
   assert.equal(job.est.calls, job.est.chunks + 1);
   assert.ok(job.est.chunks >= 80 && job.est.chunks <= 90, `${job.est.chunks}`);
-  assert.ok(job.est.tokens > 200_000 && job.est.tokens < 300_000, `${job.est.tokens}`);
+  assert.ok(job.est.tokens > 250_000 && job.est.tokens < 350_000, `${job.est.tokens}`);
 });
 
 const memoryLike = (log) =>

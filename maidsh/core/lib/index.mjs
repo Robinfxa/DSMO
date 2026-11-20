@@ -14,13 +14,13 @@ const DEFAULTS = {
   /** 合并分析用的模型；provider 和 model 要成对给，不给就用会话当前的模型。 */
   provider: '',
   model: '',
-  /** 合并分析最多输出多少 token。 */
-  maxOutputTokens: 600,
+  /** 合并分析最多输出多少 token（截断时写完整的部分仍然有效）。 */
+  maxOutputTokens: 1500,
   /** 学习任务的数据目录，默认 <DSH_HOME>/storages/maidsh-core。 */
   dataDir: '',
 };
 
-export const Config = configSchema(name, DEFAULTS, { maxOutputTokens: [100, 4000] });
+export const Config = configSchema(name, DEFAULTS, { maxOutputTokens: [200, 8000] });
 
 export const STATE_PATH = '/api/maidsh/state';
 export const LEARN_PATH = '/api/maidsh/learn';
@@ -99,7 +99,7 @@ export function apply(ctx, config = {}) {
     complete: (req) => {
       const r = route();
       if (!r.provider && !lastSession) throw Object.assign(new Error('还不知道用哪个模型：先在 DSMO 里聊一句，或在总控的设置里填 provider 和 model'), { fatal: true });
-      return completeText(ctx, req, { session: lastSession, ...r, maxTokens: 1500, timeoutMs: 90_000 });
+      return completeText(ctx, req, { session: lastSession, ...r, maxTokens: 3000, timeoutMs: 120_000 });
     },
     readSession,
   });
@@ -133,7 +133,7 @@ export function apply(ctx, config = {}) {
         handler: async (req, res) => {
           const no = rejectWrite(ctx, req);
           if (no) return sendJson(res, no[0], { ok: false, error: no[1] });
-          const body = await readJsonBody(req, 1_000_000);
+          const body = await readJsonBody(req, 2 * 1024 * 1024); // 20 万字约 600 KB，留足余量
           if (!body || typeof body !== 'object') return sendJson(res, 400, { ok: false, error: 'bad json（内容太大时请分几次）' });
           const out = await jobs.learn(body);
           sendJson(res, out.ok ? 200 : 400, out);

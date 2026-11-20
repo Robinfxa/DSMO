@@ -1,6 +1,6 @@
 {
   "name": "maidsh-memory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MaiDSH·记忆：会自动记、会淡忘、带着感情的记忆，按话题自然想起，单独可用",
   "license": "MIT",
   "type": "module",

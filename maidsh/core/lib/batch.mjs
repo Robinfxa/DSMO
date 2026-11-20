@@ -8,7 +8,7 @@ export const TEXT_TYPES = Object.freeze(['aboutme', 'backstory', 'story', 'chatl
 export const TYPE_NAMES = Object.freeze({ aboutme: '关于对方的介绍', backstory: '你们的关系设定和过往', story: '你们一起写的故事 / 剧情', chatlog: '你们的聊天记录', session: '你们的一段对话' });
 
 /** promptTokens：每块的说明和结构；outputTokens：每块大约的输出；tokensPerChar：中文在 DeepSeek 上约 0.6–0.8 token / 字。 */
-export const LIMITS = Object.freeze({ chunk: 1500, overlap: 300, maxChars: 200_000, promptTokens: 1200, outputTokens: 600, tokensPerChar: 0.8 });
+export const LIMITS = Object.freeze({ chunk: 1500, overlap: 300, maxChars: 200_000, promptTokens: 1200, outputTokens: 1200, tokensPerChar: 0.8 });
 
 export const hashOf = (s) => createHash('sha256').update(String(s)).digest('hex').slice(0, 32);
 

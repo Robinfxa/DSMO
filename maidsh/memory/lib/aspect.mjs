@@ -1,10 +1,11 @@
 // 记忆面：服务 companionMemory + 交给总控的面登记 + 单独模式的请求。DSH 相关由插件外壳传入。
 
 import {
-  LIMITS, MEMORY_BATCH_SCHEMA, MEMORY_INSTRUCTIONS, MEMORY_SCHEMA, addEpisode, addFact, applyAnalysis, applyBatch, applyConsolidation, consolidationRequest,
+  LIMITS, MEMORY_BATCH_SCHEMA, MEMORY_INSTRUCTIONS, MEMORY_SCHEMA, addEpisode, addFact, applyAnalysis, applyBatch, applyConsolidation, consolidationDue, consolidationRequest,
   emptyMemory, finishBatch, forget, maintain, markRecalled, memoryBatchInstructions, recall, render, residents, retention, undoBatch,
 } from './core.mjs';
 import { FEELING_INSTRUCTIONS, FEELING_SCHEMA, normalizeFeeling, todayLine } from './shared/feeling.mjs';
+import { parseLenient } from './shared/json.mjs';
 
 /**
  * [store]：{ load(), save(记忆) }。[moodValence]、[bondLevel]：读心情 / 羁绊（没装时 0 / 2）。
@@ -34,6 +35,7 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
 
   // 同一轮里提示会被组装多次：按（第几轮 + 对方的话）缓存，保证一致，也只把最后一次想起的算数
   let cache = null;
+  let pendingTaken = null;
   function compose(latest = '') {
     const key = `${mem.turn}\u0000${latest}`;
     if (cache?.key === key) return cache.text;
@@ -189,17 +191,7 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
     };
   }
   function standaloneApply(text, turn) {
-    const raw = String(text ?? '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-    let obj = null;
-    for (const s of [raw, raw.match(/\{[\s\S]*\}/)?.[0]]) {
-      if (!s) continue;
-      try {
-        obj = JSON.parse(s);
-        break;
-      } catch {
-        /* 下一种 */
-      }
-    }
+    const obj = parseLenient(text);
     if (!obj) return false;
     afterTurn(obj.memory ?? null, { ...turn, feeling: normalizeFeeling(obj.feeling) });
     return true;
@@ -214,12 +206,20 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
     snapshot,
     standaloneRequest,
     standaloneApply,
-    consolidation: () => consolidationRequest(mem, now()),
+    /** 压印象的请求（null = 不需要）；记下这次用了哪些材料，写回时只清这些。 */
+    consolidation() {
+      const req = consolidationRequest(mem, now());
+      pendingTaken = req?.taken ?? null;
+      return req;
+    },
     applyConsolidation(text) {
-      const ok = applyConsolidation(mem, text);
+      const ok = applyConsolidation(mem, text, pendingTaken);
+      pendingTaken = null;
       if (ok) {
         cache = null;
         save();
+        // 调用期间又攒够了（比如刚导入完）：再压一次
+        if (consolidationDue(mem)) queueMicrotask(onConsolidate);
       }
       return ok;
     },

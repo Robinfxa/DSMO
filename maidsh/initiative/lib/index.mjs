@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { DEFAULTS as PLAN_DEFAULTS, INITIATIVE_INSTRUCTIONS, INITIATIVE_SCHEMA, addFollowup, due, emptyInitiative, gapLine, initiativePrompt, onInitiated, onInitiativeDone, onStartup, onUserTurn, planNext, settlePending } from './core.mjs';
-import { configSchema, endedSession, jsonStore, loggerOf, promptContext, readJsonBody, rejectRead, rejectWrite, sendJson, startedBy, storageDir, turnOf } from './shared/dsh.mjs';
+import { configSchema, jsonStore, loggerOf, promptContext, readJsonBody, rejectRead, rejectWrite, sendJson, startedBy, storageDir, turnEnded, turnOf } from './shared/dsh.mjs';
 
 export const name = 'maidsh-initiative';
 export const inject = ['systemPrompt'];
@@ -108,8 +108,10 @@ export function apply(ctx, config = {}) {
   function tick() {
     if (!c.enabled) return Promise.resolve(null);
     const now = Date.now();
+    const before = JSON.stringify([st.pending, st.followups, st.ignored, st.lastTopic]);
     settlePending(st, now, { o });
     const plan = due(st, now, { bondLevel: bondLevel(), o });
+    if (!plan && JSON.stringify([st.pending, st.followups, st.ignored, st.lastTopic]) !== before) save();
     return plan ? fire(plan).then(() => plan) : Promise.resolve(null);
   }
   ctx.effect(() => {
@@ -120,8 +122,10 @@ export function apply(ctx, config = {}) {
 
   // 一轮结束：对方说的 → 记下、重排；TA 主动的那一轮 → 等对方回话
   ctx.on('session/event', (a, b) => {
-    const session = endedSession(a, b);
-    if (!session) return;
+    // 不论这一轮是正常结束、出错还是被中止：TA 主动的那一轮结束了就不再等它
+    const ended = turnEnded(a, b);
+    if (!ended) return;
+    const { session } = ended;
     let kind = '';
     try {
       kind = startedBy(session.deriveMessages());

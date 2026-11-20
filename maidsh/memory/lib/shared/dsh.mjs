@@ -102,6 +102,15 @@ export function startedBy(msgs) {
   return m ? (m.source?.kind ?? 'user') : '';
 }
 
+/** `session/event` 是不是一轮结束（不论正常结束、出错还是被中止）；是就返回 { session, reason }，否则 null。 */
+export function turnEnded(a, b) {
+  const session = b ? a : a?.session;
+  const ev = b ?? a?.event;
+  if (!session || ev?.type !== 'turn/end') return null;
+  const h = session.header ?? {};
+  return h.origin === 'subagent' || h.parentSession ? null : { session, reason: ev.data?.reason?.kind ?? 'completed' };
+}
+
 /** `session/event` 是不是一轮正常结束；是就返回会话，否则 null（不看是谁发起的）。 */
 export function endedSession(a, b) {
   const session = b ? a : a?.session;
@@ -147,6 +156,11 @@ export async function completeText(ctx, { system, user }, { session, provider, m
     const c = session?.requestHeader?.()?.config;
     if (c?.provider && c?.model) route = { provider: c.provider, model: c.model };
   }
+  if (!route) {
+    // 没有会话可借（比如刚启动就要压印象）：用 DSH 的默认模型
+    const d = ctx.get?.('agentDefaultModel')?.currentSelection?.();
+    if (d?.provider && d?.model) route = { provider: d.provider, model: d.model };
+  }
   if (!route) throw new Error('不知道用哪个模型：这个会话还没有主请求记录，也没在插件设置里配 provider + model');
   const signal = AbortSignal.timeout(timeoutMs);
   const messages = [{ role: 'user', content: [{ type: 'text', text: user }] }];
@@ -167,6 +181,7 @@ export async function completeText(ctx, { system, user }, { session, provider, m
     else if (chunk?.type === 'finish') finish = chunk.reason;
   }
   if (finish && (finish.kind === 'error' || finish.kind === 'aborted')) throw new Error(finish.failure?.message ?? finish.kind);
+  // max-tokens：输出被截断，照样返回已有的文字（parseLenient 会保留写完整的部分）
   return text;
 }
 
@@ -243,19 +258,30 @@ export function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-/** 读 JSON 请求体（≤ 64 KB）；读不出返回 undefined。 */
+/**
+ * 读 JSON 请求体（默认 ≤ 64 KB，按字节算）；读不出或太大返回 undefined。
+ * 先把所有分块拼成一个 Buffer 再整体按 UTF-8 解码：逐块解码会把切在两块之间的汉字变成乱码。
+ */
 export function readJsonBody(req, limit = 65_536) {
   return new Promise((resolve) => {
-    let raw = '';
+    const chunks = [];
+    let size = 0;
     let over = false;
     req.on('data', (c) => {
-      raw += c;
-      if (raw.length > limit) over = true;
+      if (over) return;
+      const b = Buffer.isBuffer(c) ? c : Buffer.from(String(c));
+      size += b.length;
+      if (size > limit) {
+        over = true;
+        chunks.length = 0; // 超了就不再攒
+        return;
+      }
+      chunks.push(b);
     });
     req.on('end', () => {
       if (over) return resolve(undefined);
       try {
-        resolve(JSON.parse(raw || '{}'));
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'));
       } catch {
         resolve(undefined);
       }

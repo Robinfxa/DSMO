@@ -2,8 +2,9 @@
 // 设计参考 MaiBot（旧版海马体的关键词图与扩散激活、A_Memorix 的人物事实与用进废退、0.8 的印象压缩），代码从头写。
 // 函数直接修改传入的记忆对象（插件里只有一份），时间都由参数给出，便于测试。
 
-import { bm25, information, sameThing, similarity, squash } from './shared/text.mjs';
+import { bm25, covered, information, sameThing, similarity, squash } from './shared/text.mjs';
 import { LABELS, VALENCE } from './shared/feeling.mjs';
+import { parseLenient } from './shared/json.mjs';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -220,8 +221,16 @@ export function forget(mem, phrases) {
   let n = 0;
   for (const p of (Array.isArray(phrases) ? phrases : []).map((x) => clip(x, 60)).filter(Boolean)) {
     const hit = (item) => {
-      const kwHit = item.kw.length ? item.kw.filter((k) => p.toLowerCase().includes(k)).length / item.kw.length : 0;
-      return Math.max(similarity(p, textOf(item)), kwHit) >= 0.4;
+      // 这条记忆的字有多少出现在对方要忘掉的话里（去掉「对方」这种每条都有的开头）
+      const cover = covered(textOf(item).replace(/^对方/, ''), p);
+      // 关键词全都说到了（单字关键词太宽，不算）
+      const kws = item.kw.filter((k) => k.length >= 2);
+      const said = kws.filter((k) => p.toLowerCase().includes(k));
+      const allKw = kws.length > 0 && kws.length === item.kw.length && said.length === kws.length;
+      // 钉住的（导入的、你亲手加的、约定）要说得更准才删
+      if (item.pinned) return cover >= 0.8 || allKw;
+      // 说到了它的一个两字以上的关键词，并且字面上也沾边（「前任的事」→「对方的前任叫小王」）
+      return cover >= 0.6 || allKw || (said.length > 0 && cover >= 0.2);
     };
     const before = mem.facts.length + mem.episodes.length;
     mem.facts = mem.facts.filter((f) => !hit(f));
@@ -412,11 +421,17 @@ export function maintain(mem, now) {
   return mem.profile.fading.length >= LIMITS.fadingBatch;
 }
 
-/** 压印象的那一次调用 [MaiBot 0.8：遗忘区攒满后并进第一人称长印象和一句话短印象]。 */
+/** 现在是否该压一次印象。 */
+export const consolidationDue = (mem) => mem.profile.fading.length >= LIMITS.fadingBatch || (mem.profile.learned ?? []).length > 0;
+
+/**
+ * 压印象的那一次调用 [MaiBot 0.8：遗忘区攒满后并进第一人称长印象和一句话短印象]。
+ * 返回的 `taken` 记下这次用了哪些材料：调用期间新来的材料不在里面，不会被 applyConsolidation 清掉。
+ */
 export function consolidationRequest(mem, now) {
   const p = mem.profile;
   const learned = p.learned ?? [];
-  if (p.fading.length < LIMITS.fadingBatch && !learned.length) return null;
+  if (!consolidationDue(mem)) return null;
   const forgetNote = p.forgetNotes.length ? `\n对方要求忘掉的内容（印象里不能再出现）：${p.forgetNotes.join('；')}` : '';
   return {
     system:
@@ -424,28 +439,31 @@ export function consolidationRequest(mem, now) {
       `${dateOf(now)} 为止，把「渐渐淡忘的旧事」和「新了解到的」融进「原来的印象」：保留能看出对方是怎样一个人、你们关系如何的部分，具体细节可以模糊掉；故事里的设定不要当成对方本人的事。` +
       '只输出一个 JSON 对象：{"impression":"第一人称，≤300 字，以「截至某月，我对 TA 的了解：」开头","short":"一句话印象，≤30 字"}，不要输出别的。' +
       '密码、证件号、银行卡、住址门牌这类信息不要写进去。' + forgetNote,
+    taken: { fading: [...p.fading], learned: [...learned], forgetNotes: [...p.forgetNotes] },
     user: `【原来的印象】\n${p.impression || '（还没有）'}\n\n【一句话印象】\n${p.short || '（还没有）'}\n\n【渐渐淡忘的旧事】\n${p.fading.map((x) => `- ${x}`).join('\n') || '（没有）'}\n\n【新了解到的】\n${learned.map((x) => `- ${x}`).join('\n') || '（没有）'}`,
   };
 }
 
-export function applyConsolidation(mem, text) {
-  const raw = String(text ?? '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-  let obj = null;
-  for (const s of [raw, raw.match(/\{[\s\S]*\}/)?.[0]]) {
-    if (!s) continue;
-    try {
-      obj = JSON.parse(s);
-      break;
-    } catch {
-      /* 下一种 */
-    }
+/** 从数组里去掉 used 中的每一项（各去一次，按出现顺序），其余保留。 */
+const without = (list, used) => {
+  const left = [...(list ?? [])];
+  for (const u of used ?? []) {
+    const i = left.indexOf(u);
+    if (i >= 0) left.splice(i, 1);
   }
+  return left;
+};
+
+/** 写回压好的印象；只清掉这次请求用过的材料（[taken]），调用期间新来的留给下一次。 */
+export function applyConsolidation(mem, text, taken) {
+  const obj = parseLenient(text);
   if (!obj || typeof obj.impression !== 'string' || !obj.impression.trim()) return false;
   mem.profile.impression = clip(obj.impression, 300);
   if (typeof obj.short === 'string' && obj.short.trim()) mem.profile.short = clip(obj.short, 30);
-  mem.profile.fading = [];
-  mem.profile.forgetNotes = [];
-  mem.profile.learned = [];
+  const t = taken ?? { fading: mem.profile.fading, learned: mem.profile.learned, forgetNotes: mem.profile.forgetNotes };
+  mem.profile.fading = without(mem.profile.fading, t.fading);
+  mem.profile.learned = without(mem.profile.learned, t.learned);
+  mem.profile.forgetNotes = without(mem.profile.forgetNotes, t.forgetNotes);
   return true;
 }
 

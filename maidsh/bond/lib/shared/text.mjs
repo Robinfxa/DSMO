@@ -56,6 +56,16 @@ export function sameThing(a, b) {
   return small >= 4 && inter / small >= 0.9;
 }
 
+/** a 的二元组有多大比例出现在 b 里（0–1）：a 被 b「说到」了多少。 */
+export function covered(a, b) {
+  const A = new Set(tokens(a));
+  if (!A.size) return 0;
+  const B = new Set(tokens(b));
+  let n = 0;
+  for (const t of A) if (B.has(t)) n++;
+  return n / A.size;
+}
+
 /** 信息量：不同二元组的个数（去重时保留信息多的说法）。 */
 export const information = (text) => new Set(tokens(text)).size;
 

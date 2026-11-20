@@ -2,6 +2,7 @@
 // 不碰 DSH：插件外壳负责事件、调模型和注入。
 
 import { FEELING_INSTRUCTIONS, FEELING_KEY, FEELING_SCHEMA, normalizeFeeling, todayLine } from './shared/feeling.mjs';
+import { parseLenient } from './shared/json.mjs';
 
 export const CONTRACT_VERSION = 1;
 /** 接受的约定版本：当前版本和上一个。 */
@@ -138,23 +139,13 @@ const clip = (s, n) => {
   return t.length > n ? `${t.slice(0, n)}…` : t;
 };
 
-/** 模型的回答 → 每个面一份结果；读不出 JSON 时每个面都是 null。容忍外面包了 ```json。 */
+/**
+ * 模型的回答 → 每个面一份结果；读不出 JSON 时每个面都是 null。容忍外面包了 ```json，
+ * 也容忍输出到一半被截断：写完整的面照常拿到结果，没写到的是 null。
+ */
 export function splitAnalysis(text, ids) {
-  let obj = null;
-  const raw = String(text ?? '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-  try {
-    obj = JSON.parse(raw);
-  } catch {
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (m) {
-      try {
-        obj = JSON.parse(m[0]);
-      } catch {
-        obj = null;
-      }
-    }
-  }
-  const ok = obj && typeof obj === 'object' && !Array.isArray(obj);
+  const obj = parseLenient(text);
+  const ok = !!obj;
   return Object.fromEntries(ids.map((id) => [id, ok && obj[id] !== undefined ? obj[id] : null]));
 }
 

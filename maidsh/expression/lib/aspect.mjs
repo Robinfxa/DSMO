@@ -2,6 +2,7 @@
 
 import { EXPRESSION_BATCH_SCHEMA, EXPRESSION_INSTRUCTIONS, EXPRESSION_SCHEMA, addSlang, expressionBatchInstructions, addStyle, emptyExpression, learn, maintain, markUsed, render, select, weight } from './core.mjs';
 import { todayLine } from './shared/feeling.mjs';
+import { parseLenient } from './shared/json.mjs';
 
 export function createExpression({ store, now = Date.now, log = () => {}, moodValence = () => 0, bondLevel = () => 2, random = Math.random }) {
   let st = store.load();
@@ -117,18 +118,10 @@ export function createExpression({ store, now = Date.now, log = () => {}, moodVa
     };
   }
   function standaloneApply(text, turn) {
-    const raw = String(text ?? '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-    for (const s of [raw, raw.match(/\{[\s\S]*\}/)?.[0]]) {
-      if (!s) continue;
-      try {
-        const obj = JSON.parse(s);
-        afterTurn(obj?.expression ?? null, turn);
-        return true;
-      } catch {
-        /* 下一种 */
-      }
-    }
-    return false;
+    const obj = parseLenient(text);
+    if (!obj) return false;
+    afterTurn(obj.expression ?? null, turn);
+    return true;
   }
 
   /** 批量学习（§11）时的入口：一块的结果，按任务编号记下，免衰减 30 天。 */
