@@ -94,8 +94,9 @@ export function clashesOf(p: ApiDemoManifest): Clash[] {
     .filter((x) => x.enabled && x.id !== p.id)
     .map((x) => findPlugin(x.id))
     .filter((x): x is ApiDemoManifest => !!x);
-  // packages DSMO installs show up as their plugin, not again as an engine package
-  const ownPackages = new Set([p.engine?.package, ...catalogPlugins.value.map((x) => x.engine?.package)].filter(Boolean));
+  // a package DSMO installed shows up as its plugin, not again as an engine package; the same
+  // package installed by hand (its plugin not installed here) counts as an engine package
+  const ownPackages = new Set([p.engine?.package, ...installed.value.map((x) => findPlugin(x.id)?.engine?.package)].filter(Boolean));
   for (const tag of mine) {
     const { what } = tagInfo(tag);
     for (const o of others)

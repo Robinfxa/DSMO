@@ -6,8 +6,10 @@ import { affectsOf, clashesOf, hostBundles, personaSkipBots } from '../src/plugi
 
 const m = (id: string, title: string, extra: Partial<ApiDemoManifest>): ApiDemoManifest =>
   ({ v: 1, id, title, summary: '', version: '1.0.0', kinds: ['engine'], permissions: [], ...extra }) as ApiDemoManifest;
-const persona = m('@api-demo/persona-library', '人设库', { engine: { package: 'dsh-persona-dafeiyu', version: '0.8.0' } });
-const memory = m('@api-demo/memory-share', '长期记忆', { engine: { package: 'dsh-plugin-memory-share', version: '0.6.0' } });
+const persona = m('@api-demo/persona-library', '人设库', { affects: ['prompt.persona'], engine: { package: 'dsh-persona-dafeiyu', version: '0.8.0' } });
+const memory = m('@api-demo/memory-share', '长期记忆', { affects: ['prompt.memory'], engine: { package: 'dsh-plugin-memory-share', version: '0.6.0' } });
+const companionMemory = m('@api-demo/maidsh-memory', 'MaiDSH 记忆', { affects: ['prompt.memory'], engine: { package: 'maidsh-memory', version: '0.1.0' } });
+const mood = m('@api-demo/maidsh-mood', 'MaiDSH 心情', { affects: ['prompt.mood'], engine: { package: 'maidsh-mood', version: '0.1.0' } });
 const otherPersona = m('@x/roleplay', '角色扮演', { affects: ['prompt.persona'] });
 const usage = m('@api-demo/usage-today', '今日用量', { engine: { package: 'dsh-go-example-usage', version: '0.1.0' } });
 const bots = (n: number) => ({
@@ -18,7 +20,7 @@ const bots = (n: number) => ({
 });
 
 beforeEach(() => {
-  catalogPlugins.value = [persona, memory, otherPersona, usage];
+  catalogPlugins.value = [persona, memory, companionMemory, mood, otherPersona, usage];
   installed.value = [];
   hostBundles.value = [];
   personaSkipBots.value = false;
@@ -26,8 +28,10 @@ beforeEach(() => {
 });
 
 describe('conflicts', () => {
-  it('knows where the listed community packages write, and what a listing declares', () => {
+  it('a listing declares its tags; an engine package is known by its listing’s tags', () => {
     expect(affectsOf(persona)).toEqual(['prompt.persona']);
+    expect(affectsOf({ engine: { package: 'dsh-plugin-memory-share', version: '9' } })).toEqual(['prompt.memory']);
+    expect(affectsOf({ engine: { package: '@7gzgn/dsh-emotion', version: '1' } })).toEqual(['prompt.mood']); // market/tags.json engines
     expect(affectsOf(memory)).toEqual(['prompt.memory']);
     expect(affectsOf(otherPersona)).toEqual(['prompt.persona']);
     expect(affectsOf(usage)).toEqual([]);
@@ -46,6 +50,21 @@ describe('conflicts', () => {
   it('an engine package installed by hand that does the same counts too (not the plugin’s own)', () => {
     hostBundles.value = ['dsh-agentmemory', 'dsh-plugin-memory-share', 'dsh-subagent'];
     expect(clashesOf(memory).map((c) => [c.kind, c.with])).toEqual([['engine', 'dsh-agentmemory']]);
+  });
+
+  it('same tag, any two plugins: no pair written anywhere', () => {
+    installed.value = [{ id: memory.id, enabled: true, version: '1.0.0' }] as never;
+    expect(clashesOf(companionMemory).map((c) => [c.kind, c.with, c.position])).toEqual([['plugin', '长期记忆', 'prompt.memory']]);
+    expect(clashesOf(mood)).toEqual([]);
+    hostBundles.value = ['@7gzgn/dsh-emotion'];
+    expect(clashesOf(mood).map((c) => [c.kind, c.with, c.position])).toEqual([['engine', '@7gzgn/dsh-emotion', 'prompt.mood']]);
+  });
+
+  it('a listed package installed by hand, its plugin not installed here, counts as an engine package', () => {
+    hostBundles.value = ['dsh-plugin-memory-share'];
+    expect(clashesOf(companionMemory).map((c) => [c.kind, c.with])).toEqual([['engine', 'dsh-plugin-memory-share']]);
+    installed.value = [{ id: memory.id, enabled: true, version: '1.0.0' }] as never;
+    expect(clashesOf(companionMemory).map((c) => [c.kind, c.with])).toEqual([['plugin', '长期记忆']]); // once, as the plugin
   });
 
   it('DS Bot: a persona reaches the Bots’ conversations, with a fix; memory only explained', () => {

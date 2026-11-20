@@ -2,7 +2,7 @@
 // The same hard rules are enforced again at runtime by the app
 // (web/src/plugins/frontend.ts, guard.ts, ui/Protected.tsx).
 
-import { readFileSync } from 'node:fs';
+import TAGS_FILE from '../tags.json' with { type: 'json' };
 
 export const HIDEABLE = new Set([
   'composer.think', 'composer.search', 'composer.voice', 'composer.attach', 'sider.host',
@@ -12,7 +12,7 @@ export const SLOTS = new Set(['sider.features', 'composer.buttons']);
 export const KINDS = new Set(['skin', 'layout', 'slot', 'panel', 'engine', 'skill', 'schedule']);
 export const PERMISSIONS = new Set(['storage', 'engine.read', 'session.prompt', 'network']);
 /** Clash tags (market/tags.json): plugins with the same tag write to the same place (web/src/plugins/conflicts.ts). */
-export const TAGS = JSON.parse(readFileSync(new URL('../tags.json', import.meta.url), 'utf8'));
+export const TAGS = TAGS_FILE;
 export const AFFECTS = new Set(Object.keys(TAGS.tags));
 for (const [pkg, x] of Object.entries(TAGS.engines ?? {}))
   if (!Array.isArray(x.affects) || x.affects.some((a) => !AFFECTS.has(a))) throw new Error(`market/tags.json: ${pkg} 的 affects 里有没定义的标签`);
