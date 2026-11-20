@@ -226,7 +226,7 @@ export function describeTool(t: Pick<Tool, 'name' | 'arguments'>): { verb: strin
 
 function GroupView({ g, busy, last, sib, forkSeq }: { g: Group; busy: boolean; last: boolean; sib?: Siblings; forkSeq?: number }) {
   const adv = prefs.value.advanced;
-  const [thinkOpen, setThinkOpen] = useState(true);
+  const [thinkOpen, setThinkOpen] = useState(prefs.value.thinkExpanded);
   const [openStep, setOpenStep] = useState<string | null>(null);
   const finalTextRef = useRef('');
   const asst = g.parts.filter((p): p is Asst => p.kind === 'assistant');

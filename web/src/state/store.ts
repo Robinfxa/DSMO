@@ -29,6 +29,8 @@ export interface Prefs {
   voice: string;
   lang: 'zh' | 'en';
   cotTranslate: boolean;
+  /** Thinking starts expanded in replies (off: the 已思考 row only, tap to open). */
+  thinkExpanded: boolean;
   voiceInput: boolean;
   notifyDone: boolean;
   /** 字体大小: chat text scale (1 = 标准). */
@@ -50,6 +52,7 @@ const DEFAULT_PREFS: Prefs = {
   voice: 'stella',
   lang: 'zh',
   cotTranslate: false,
+  thinkExpanded: false,
   voiceInput: true,
   notifyDone: true,
   fontScale: 1,

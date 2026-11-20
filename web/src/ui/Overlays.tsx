@@ -319,6 +319,13 @@ function Settings({ tab: initial }: { tab?: 'general' | 'data' }) {
                   </div>
                   <div class="cell">
                     <div class="cell-text">
+                      <div>展开思考过程</div>
+                      <div class="cell-desc">关闭时只显示「已思考」，点一下再展开</div>
+                    </div>
+                    <Switch on={p.thinkExpanded} label="展开思考过程" onChange={(v) => setPref('thinkExpanded', v)} />
+                  </div>
+                  <div class="cell">
+                    <div class="cell-text">
                       <div>回复完成时通知</div>
                       <div class="cell-desc">不在这个对话或 App 在后台时提醒</div>
                     </div>

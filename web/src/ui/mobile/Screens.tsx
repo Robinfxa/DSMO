@@ -257,6 +257,7 @@ function SettingsHome() {
         <Row icon="globe" label="语言" value={p.lang === 'zh' ? '中文（简体中文）' : 'English'} onClick={() => pushScreen('language')} />
         <Row icon="moon" label="外观" value={theme} onClick={() => pushScreen('appearance')} />
         <Row icon="text" label="字体大小" onClick={() => pushScreen('font')} />
+        <Row icon="eye" label="展开思考过程" right={<Toggle on={p.thinkExpanded} label="展开思考过程" onChange={(v) => setPref('thinkExpanded', v)} />} />
         <Row icon="sparkle" label="个性化" onClick={() => pushScreen('personal')} />
         <Row icon="location" label="位置信息" value={p.locationOn ? (p.province ? `${p.province}${p.city && p.city !== p.province ? ' ' + p.city : ''}` : '已开启') : '已关闭'} onClick={() => pushScreen('location')} />
       </Group>
