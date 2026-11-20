@@ -38,7 +38,7 @@ import {
   PLUGIN_ID,
 } from '../../maidsh/api';
 import { hasUpdate, installed } from '../../plugins/frontend';
-import { confirm, currentId, errText, getTranscript, openPage, pages, showToast } from '../../state/store';
+import { confirm, currentId, errText, getTranscript, isMobile, openPage, pages, showToast } from '../../state/store';
 import { Switch } from '../common';
 import { MIc } from '../mobile/MIc';
 
@@ -317,6 +317,9 @@ function OverviewTab() {
         </button>
       </div>
       {!mood && !bond && <p class="plg-note">装上「MaiDSH 心情」「MaiDSH 羁绊」，这里会显示 TA 的心情和你们的关系。</p>}
+      <p class="plg-note">
+        小贴士：不想在某段对话里有陪伴（比如写代码、写文），在对话列表里{isMobile.value ? '长按那段对话' : '点那段对话右边的「⋯」'}，选「在这段对话里关掉陪伴」。关掉后 TA 不会在那里记事、带心情，也不会在那里主动找你；DS Bot 的对话本来就不算。
+      </p>
     </>
   );
 }
