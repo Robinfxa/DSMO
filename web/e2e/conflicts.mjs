@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -67,6 +68,7 @@ const back = async (n = 1) => {
 const drawer = async (entry) => {
   await page.click('[aria-label="打开边栏"]');
   await page.waitForTimeout(400);
+  await openFeats(page);
   await page.click(`.m-frow:has-text("${entry}")`);
   await page.waitForTimeout(700);
 };
@@ -204,6 +206,7 @@ check(sent.length > 0 && !sent.includes('r-weekly') && !sent.includes(''), 'only
   const go = async (entry) => {
     await p2.click('[aria-label="打开边栏"]');
     await p2.waitForTimeout(400);
+    await openFeats(p2);
     await p2.click(`.m-frow:has-text("${entry}")`);
     await p2.waitForTimeout(700);
   };

@@ -59,6 +59,10 @@
 
 `composer.think`、`composer.search`、`composer.voice`、`composer.attach`、`sider.host`、`sider.features.plugins|skills|schedules|phone`、`caveat`。别的都不行。
 
+### 边栏里的入口放在哪
+
+本机、插件、技能、DS Bot 和插件的 `sider.features` 入口（高级模式才有）都收在边栏里一行「功能」后面，手机抽屉和电脑边栏一样：打开边栏时只看到搜索、对话和底部的你，跟 DeepSeek 原版一样朴素；点「功能」才展开成一行一行的入口。每次打开 App 都是收着的（`ui/featFold.ts`，只记在内存里）。入口再多也不会把对话和设置挤出去。e2e：`e2e/drawer.mjs`；别的测试从边栏点入口前用 `e2e/feats.mjs` 的 `openFeats` 先展开。
+
 ### 入口的动作
 
 | 动作 | 效果 |

@@ -303,3 +303,10 @@ body.is-m .overlay[data-kind="sheet"] { align-items: flex-end; }
 .overlay.open .m-bsheet { transform: none; }
 .m-bsheet::before { content: ""; display: block; width: 36px; height: 4px; margin: 0 auto 10px; border-radius: 2px; background: var(--m-line); }
 .m-bsheet-t { padding: 0 20px 8px; color: var(--m-sub); font-size: 13px; }
+
+/* The drawer's features behind one 「功能」 row (featFold.ts) */
+.m-feat-fold .m-frow-e { display: flex; align-items: center; gap: 6px; }
+.m-feat-fold .m-frow-e svg { width: 18px; height: 18px; color: var(--m-sub); transition: transform .2s; }
+.m-feat-fold[aria-expanded="true"] .m-frow-e svg { transform: rotate(180deg); }
+.m-feat-rows { animation: m-feat-in .2s ease-out; }
+@keyframes m-feat-in { from { opacity: 0; transform: translateY(-4px); } }

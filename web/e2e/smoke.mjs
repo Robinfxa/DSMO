@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,7 @@ await run('desktop', { width: 1280, height: 800 }, async (page) => {
   await page.waitForTimeout(300);
   await shot(page, '08-tools-done');
   // features page (no conversation items any more) and the chat menu (top right)
+  await openFeats(page);
   await page.click('.row:has-text("全部功能")');
   await page.waitForTimeout(400);
   await shot(page, '09-features');
@@ -88,6 +90,7 @@ await run('desktop', { width: 1280, height: 800 }, async (page) => {
   await shot(page, '13-permission');
   await page.click('[aria-label="返回"]');
   // plugins: 发现 → detail → install (skin, prompts, notes, 今日用量 engine plugin)
+  await openFeats(page);
   await page.click('.row:has-text("插件")');
   await page.waitForTimeout(300);
   await shot(page, '14-market');
@@ -102,6 +105,7 @@ await run('desktop', { width: 1280, height: 800 }, async (page) => {
   await page.click('[aria-label="返回"]');
   await page.waitForTimeout(300);
   await shot(page, '15-after-plugins');
+  await openFeats(page);
   await page.click('.row:has-text("随手记")');
   await page.waitForTimeout(900);
   await shot(page, '16-notes-panel');
@@ -151,6 +155,7 @@ await run('guard', { width: 1280, height: 800 }, async (page) => {
   await page.click('[aria-label="设置"]');
   await page.click('[role="switch"][aria-label="高级模式"]');
   await page.click('.p-close');
+  await openFeats(page);
   await page.click('.row:has-text("插件")');
   await page.click('.plg-row:has-text("纸张")');
   await page.click('.plg-btn.pri:has-text("安装")');

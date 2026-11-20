@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { featOpen } from './featFold';
 import { hasLore } from '../lore/api';
 import { conversationItem, loreReady } from './lore/pick';
 import { conn, errText, forkConversation, sessionsLive, showToast } from '../state/store';
@@ -38,6 +39,60 @@ const FEATURES: [IconName, string, string][] = [
   ['FxPointer', '手机操控', 'phone'],
   ['FxGrid', '全部功能', 'features'],
 ];
+
+/** 本机, the tools and plugins' own entries, behind one plain 「功能」 row (featFold.ts), unfolded on a click. */
+function FeatureList({ extra, hidden, host }: { extra: ReturnType<typeof slotItems>; hidden: Set<string>; host?: { label: string; status: string } }) {
+  const items = [
+    ...FEATURES.filter(([, , id]) => id !== 'features' && !hidden.has(`sider.features.${id}`)).map(([icon, label, id]) => ({ key: id, icon, label, on: pages.value[0] === id, more: false, run: () => openFeature(id, true) })),
+    ...extra.map((x) => ({ key: x.key, icon: x.icon, label: x.title, on: false, more: false, run: x.run })),
+    ...FEATURES.filter(([, , id]) => id === 'features' && !hidden.has(`sider.features.${id}`)).map(([icon, label, id]) => ({ key: id, icon, label, on: pages.value[0] === id, more: true, run: () => openFeature(id, true) })),
+  ];
+  if (!items.length && !(host && !hidden.has('sider.host'))) return null;
+  const open = featOpen.value;
+  return (
+    <>
+      <button class="row feat-fold" type="button" aria-expanded={open} onClick={() => (featOpen.value = !open)}>
+        <span class="row-ico">
+          <Ic n="FxGrid" />
+        </span>
+        <span class="row-label">功能</span>
+        <span class="row-right">
+          <Ic n="IconChevronDownOutline14" />
+        </span>
+      </button>
+      {open && (
+        <div class="feat-rows">
+            {host && !hidden.has('sider.host') && (
+              <button class="row" type="button" aria-haspopup="dialog" onClick={() => ((drawerOpen.value = false), openOverlay({ kind: 'host' }))}>
+                <span class="row-ico">
+                  <Ic n="FxPhone" />
+                </span>
+                <span class="row-label">{host.label}</span>
+                <span class="row-right">
+                  <span class="dot-ok" aria-hidden="true" />
+                  {host.status}
+                  <Ic n="IconChevronDownOutline14" />
+                </span>
+              </button>
+            )}
+          {items.map((x) => (
+            <button class={`row ${x.on ? 'active' : ''}`} type="button" key={x.key} onClick={x.run}>
+              <span class="row-ico">
+                <Ic n={x.icon} />
+              </span>
+              <span class="row-label">{x.label}</span>
+              {x.more && (
+                <span class="row-right">
+                  <Ic n="IconChevronRightOutline14" />
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
 
 function groupOf(ms: number) {
   const day = 86400000;
@@ -97,40 +152,7 @@ export function Sider() {
       <div class="s-list">
         {adv && (
           <div class={`feat ${enter ? 'enter' : ''}`}>
-            {host && !hidden.has('sider.host') && (
-              <button class="row" type="button" aria-haspopup="dialog" onClick={() => ((drawerOpen.value = false), openOverlay({ kind: 'host' }))}>
-                <span class="row-ico">
-                  <Ic n="FxPhone" />
-                </span>
-                <span class="row-label">{host.label}</span>
-                <span class="row-right">
-                  <span class="dot-ok" aria-hidden="true" />
-                  {host.status}
-                  <Ic n="IconChevronDownOutline14" />
-                </span>
-              </button>
-            )}
-            {FEATURES.filter(([, , id]) => !hidden.has(`sider.features.${id}`)).map(([ico, label, id]) => (
-              <button class={`row ${pages.value[0] === id ? 'active' : ''}`} type="button" key={id} onClick={() => openFeature(id, true)}>
-                <span class="row-ico">
-                  <Ic n={ico} />
-                </span>
-                <span class="row-label">{label}</span>
-                {id === 'features' && (
-                  <span class="row-right">
-                    <Ic n="IconChevronRightOutline14" />
-                  </span>
-                )}
-              </button>
-            ))}
-            {extra.map((x) => (
-              <button class="row" type="button" key={x.key} onClick={x.run}>
-                <span class="row-ico">
-                  <Ic n={x.icon} />
-                </span>
-                <span class="row-label">{x.title}</span>
-              </button>
-            ))}
+            <FeatureList extra={extra} hidden={hidden} host={host} />
           </div>
         )}
         {groups.map(([g, items]) => (

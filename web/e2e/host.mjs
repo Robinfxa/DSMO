@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +99,7 @@ await back();
 // 自动化任务
 await page.click('[aria-label="打开边栏"]');
 await page.waitForTimeout(400);
+await openFeats(page);
 await page.click('.m-frow:has-text("自动化任务")');
 await page.waitForTimeout(500);
 await page.click('.plg-link:has-text("新建自动化任务")');

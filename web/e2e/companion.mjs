@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { startMaidshHost } from './maidsh-host.mjs';
+import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -257,6 +258,7 @@ check(!(await body()).includes('TA 等你先开口'), '主动: no longer stopped
   p3.on('pageerror', (e) => errors.push(e.message));
   await p3.goto(`${host.url}#plain`);
   await p3.waitForTimeout(1200);
+  await openFeats(p3);
   const slot = await p3.$('.sider .row:has-text("陪伴")');
   check(!!slot, 'desktop: 陪伴 in the sider (from the core listing)');
   await slot?.click();

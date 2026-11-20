@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -70,6 +71,7 @@ await wait(400);
 // Agent 预设
 await page.click('[aria-label="打开边栏"]');
 await wait(400);
+await openFeats(page);
 await page.click('.m-frow:has-text("全部功能")');
 await wait(400);
 await page.click('.lrow:has-text("Agent 预设")');

@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -44,6 +45,7 @@ async function phone() {
   await page.waitForTimeout(400);
   await page.click('[aria-label="打开边栏"]');
   await page.waitForTimeout(400);
+  await openFeats(page);
   await page.click('.m-frow:has-text("插件")');
   await page.waitForTimeout(500);
   await scrollShot('01-discover');
@@ -145,6 +147,7 @@ async function phone() {
   // 常用提示词: the panel, then its editor
   await page.click('[aria-label="打开边栏"]');
   await page.waitForTimeout(400);
+  await openFeats(page);
   await page.click('.m-frow:has-text("常用提示词")');
   await page.waitForTimeout(900);
   await shot('13-prompts');
@@ -213,6 +216,7 @@ async function desktop() {
   await page.click('[role="switch"][aria-label="高级模式"]');
   await page.click('.overlay.open .p-close');
   await page.waitForTimeout(300);
+  await openFeats(page);
   await page.click('.feat .row:has-text("插件")');
   await page.waitForTimeout(500);
   await shot('01-discover');

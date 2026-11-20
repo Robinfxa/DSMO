@@ -2,6 +2,8 @@
 // conversation title, a push-aside drawer, full-screen settings pages and
 // long-press menus. Desktop keeps the chat-demo (web) layout.
 
+import type { JSX } from 'preact';
+import { featOpen } from '../featFold';
 import { canSpeak } from '../../bridge/native';
 import { anyWorking, dsBot, totalUnread } from '../../bots/store';
 import { EngineGate } from '../../setup/gate';
@@ -175,27 +177,77 @@ const FEATURES: [MIconName, string, string][] = [
   ['grid', '全部功能', 'features'],
 ];
 
-const featureRow = ([ico, label, id]: [MIconName, string, string]) => (
-  <button class={`m-frow ${pages.value[0] === id ? 'on' : ''}`} type="button" key={id} onClick={() => openFeature(id, true)}>
-    <MIc n={ico} />
-    <span class="m-frow-t">{label}</span>
-  </button>
-);
+interface Feat {
+  key: string;
+  icon: MIconName;
+  label: string;
+  on?: boolean;
+  badge?: JSX.Element | null;
+  run: () => void;
+}
 
 /**
- * DS Bot's one row, in advanced mode only (it is a host plugin, like 插件 and 技能):
- * the team's own chats stay out of the list below (bots/store.ts).
+ * 本机, the tools, DS Bot and plugins' own entries (全部功能, the catch-all, last), behind one plain
+ * 「功能」 row (featFold.ts): the drawer opens looking like DeepSeek's, the rows unfold on a tap.
  */
-function DsBotRow() {
+function FeatureList({ extra, hidden, host }: { extra: ReturnType<typeof slotItems>; hidden: Set<string>; host?: { label: string; status: string } }) {
   const st = dsBot.value;
-  if (!st.team) return null;
   const unread = totalUnread.value;
+  const feat = ([icon, label, id]: [MIconName, string, string]): Feat => ({ key: id, icon, label, on: pages.value[0] === id, run: () => openFeature(id, true) });
+  const items: Feat[] = [
+    ...FEATURES.filter(([, , id]) => id !== 'features' && !hidden.has(`sider.features.${id}`)).map(feat),
+    ...(st.team
+      ? [
+          {
+            key: 'bots',
+            icon: 'bot' as const,
+            label: 'DS Bot',
+            on: pages.value[0] === 'bots',
+            badge: unread > 0 ? <span class="bt-badge">{unread > 99 ? '99+' : unread}</span> : anyWorking.value ? <span class="dot-busy" /> : null,
+            run: () => openFeature('bots', true),
+          },
+        ]
+      : []),
+    ...extra.map((x) => ({ key: x.key, icon: 'sparkle' as const, label: x.title, run: () => ((drawerOpen.value = false), x.run()) })),
+    ...FEATURES.filter(([, , id]) => id === 'features' && !hidden.has(`sider.features.${id}`)).map(feat),
+  ];
+  const showHost = !!host && !hidden.has('sider.host');
+  if (!items.length && !showHost) return null;
+  const open = featOpen.value;
+  // what's waiting behind the fold: DS Bot's unread count
+  const waiting = !open && unread > 0 ? <span class="bt-badge">{unread > 99 ? '99+' : unread}</span> : null;
   return (
-    <button class={`m-frow ${pages.value[0] === 'bots' ? 'on' : ''}`} type="button" onClick={() => openFeature('bots', true)}>
-      <MIc n="bot" />
-      <span class="m-frow-t">DS Bot</span>
-      <span class="m-frow-e">{unread > 0 ? <span class="bt-badge">{unread > 99 ? '99+' : unread}</span> : anyWorking.value ? <span class="dot-busy" /> : null}</span>
-    </button>
+    <>
+      <button class="m-frow m-feat-fold" type="button" aria-expanded={open} onClick={() => (featOpen.value = !open)}>
+        <MIc n="grid" />
+        <span class="m-frow-t">功能</span>
+        <span class="m-frow-e">
+          {waiting}
+          <MIc n="chevronDown" />
+        </span>
+      </button>
+      {open && (
+        <div class="m-feat-rows">
+            {host && !hidden.has('sider.host') && (
+              <button class="m-frow" type="button" onClick={() => ((drawerOpen.value = false), openOverlay({ kind: 'host' }))}>
+                <MIc n="phone" />
+                <span class="m-frow-t">{host.label}</span>
+                <span class="m-frow-e">
+                  <span class="dot-ok" />
+                  {host.status}
+                </span>
+              </button>
+            )}
+          {items.map((x) => (
+            <button class={`m-frow ${x.on ? 'on' : ''}`} type="button" key={x.key} onClick={x.run}>
+              <MIc n={x.icon} />
+              <span class="m-frow-t">{x.label}</span>
+              {x.badge && <span class="m-frow-e">{x.badge}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -270,26 +322,7 @@ function Drawer({ onTouchStart, onTouchMove }: { onTouchStart: (e: TouchEvent) =
       <div class="m-list">
         {adv && (
           <div class={`m-feat ${picking ? 'dim' : ''}`} inert={picking ? true : undefined}>
-            {host && !hidden.has('sider.host') && (
-              <button class="m-frow" type="button" onClick={() => ((drawerOpen.value = false), openOverlay({ kind: 'host' }))}>
-                <MIc n="phone" />
-                <span class="m-frow-t">{host.label}</span>
-                <span class="m-frow-e">
-                  <span class="dot-ok" />
-                  {host.status}
-                </span>
-              </button>
-            )}
-            {/* DS Bot and plugins' rows sit with the tools; 全部功能, the catch-all, stays last. */}
-            {FEATURES.filter(([, , id]) => id !== 'features' && !hidden.has(`sider.features.${id}`)).map(featureRow)}
-            <DsBotRow />
-            {extra.map((x) => (
-              <button class="m-frow" type="button" key={x.key} onClick={() => ((drawerOpen.value = false), x.run())}>
-                <MIc n="sparkle" />
-                <span class="m-frow-t">{x.title}</span>
-              </button>
-            ))}
-            {FEATURES.filter(([, , id]) => id === 'features' && !hidden.has(`sider.features.${id}`)).map(featureRow)}
+            <FeatureList extra={extra} hidden={hidden} host={host} />
           </div>
         )}
         {pinnedList.length > 0 && (

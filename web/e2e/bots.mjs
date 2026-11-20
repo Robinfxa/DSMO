@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { deflateRawSync } from 'node:zlib';
+import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,7 @@ const drawer = async () => (await page.click('[aria-label="打开边栏"]'), awa
 
 // DS Bot row in the drawer: advanced mode only, above 全部功能
 await drawer();
+await openFeats(page);
 if (await page.$('.m-frow:has-text("DS Bot")')) errors.push('DS Bot shows without advanced mode');
 await page.evaluate(() => {
   localStorage.setItem('api-demo:prefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('api-demo:prefs') || '{}'), advanced: true }));
@@ -61,9 +63,11 @@ await page.evaluate(() => {
 await page.goto(url);
 await page.waitForTimeout(900);
 await drawer();
+await openFeats(page);
 const order = await page.$$eval('.m-feat .m-frow-t', (els) => els.map((e) => e.textContent));
 if (order.at(-1) !== '全部功能' || order.at(-2) !== 'DS Bot') errors.push('drawer order: ' + order.join(' / '));
 await shot('00-drawer');
+await openFeats(page);
 await page.click('.m-frow:has-text("DS Bot")');
 await page.waitForTimeout(500);
 await shot('01-home');
@@ -156,6 +160,7 @@ await page.evaluate(() => {
 await page.goto(url);
 await page.waitForTimeout(900);
 await drawer();
+await openFeats(page);
 await page.click('.m-frow:has-text("全部功能")');
 await page.waitForTimeout(400);
 await page.click('.lrow:has-text("打开分享码")');

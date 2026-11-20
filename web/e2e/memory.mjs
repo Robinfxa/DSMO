@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -62,6 +63,7 @@ await page.click('[aria-label="返回"] >> nth=-1');
 await page.waitForTimeout(400);
 await page.click('[aria-label="打开边栏"]');
 await page.waitForTimeout(400);
+await openFeats(page);
 await page.click('.m-frow:has-text("插件")');
 await page.waitForTimeout(600);
 await page.click('.plg-row:has-text("长期记忆")');
@@ -78,7 +80,9 @@ for (let i = 0; i < 2; i++) {
 }
 await page.click('[aria-label="打开边栏"]');
 await page.waitForTimeout(400);
+await openFeats(page);
 check(await page.isVisible('.m-frow:has-text("长期记忆")'), 'sidebar entry (advanced mode)');
+await openFeats(page);
 await page.click('.m-frow:has-text("长期记忆")');
 await page.waitForTimeout(700);
 check(JSON.stringify(await texts('关于你')) === JSON.stringify(['回答用中文，代码和注释用英文。', '用户叫小林，喜欢别人叫他林子。', '不吃香菜，喜欢辣。']), 'about you: 常驻 first, then the newest');
