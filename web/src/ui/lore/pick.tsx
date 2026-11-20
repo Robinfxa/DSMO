@@ -12,6 +12,7 @@ import {
   chapterName,
   forgetBindings,
   hasLore,
+  loreView,
   mutate,
   readBinding,
   readBindings,
@@ -56,6 +57,7 @@ export async function startWithLore(sessionId: string, title?: string) {
           await bindConversation(sessionId, w.id);
           await Promise.all([refreshWorks(), refreshBinding(sessionId)]);
           showToast(`这段对话开始用《${w.title}》了，先加几个人物吧`);
+          loreView.value = null;
           openPage(`lore:${w.id}`);
         } catch (e) {
           showToast(errText(e));
@@ -285,7 +287,7 @@ function ChapterSheet({ workId, sessionId }: { workId: string; sessionId: string
         <Stepper shown={shown} step={step} onTapNumber={() => askChapter(shown, to)} />
       </div>
       <p class="lo-pick-note">AI 记下变化时会自己把章节往前推；回头改旧章节时在这里调回去。</p>
-      <button class="lo-opt" type="button" onClick={() => (closeOverlay(), openPage(`lore:${w.id}`))}>
+      <button class="lo-opt" type="button" onClick={() => (closeOverlay(), ((loreView.value = null), openPage(`lore:${w.id}`)))}>
         <MIc n="book" />
         <span class="lo-opt-t">打开《{w.title}》：人物和设定</span>
       </button>

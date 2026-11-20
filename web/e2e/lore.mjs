@@ -223,56 +223,68 @@ await shot('01-empty');
 await page.click('.lo-empty .plg-btn.pri');
 await ask('长夜');
 check(await page.isVisible('.lo-title:has-text("《长夜》")'), 'new work opens');
-check((await page.textContent('.lo-cursor')).includes('开写前'), 'chapter 0 reads 开写前');
+check((await page.textContent('.lo-tl-ch')).includes('开写前') && (await page.textContent('.lo-tl-sub')).includes('现在写到这里'), 'timeline: 开写前, 现在写到这里');
 check(await page.isVisible('.lo-guide:has-text("三步开始")') && !(await page.isVisible('.lo-guide-s.done')), 'new work: the 三步开始 guide, nothing ticked');
 await shot('01b-guide');
-await page.click('.plg-link:has-text("新建人物")');
+await page.click('.lo-card.add');
 await page.waitForTimeout(500);
-await page.fill('.lo-field:has-text("名字") input', '沈砚');
+const nameIn = '.lo-who.edit input';
+await page.fill(nameIn, 'x'.repeat(30));
+check((await page.inputValue(nameIn)).length === 20 && (await page.textContent('.lo-who.edit .lo-count')).includes('20 / 20'), 'limits: 名字 stops at 20, counted');
+await page.fill(nameIn, '沈砚');
+check((await page.textContent('.lo-who.edit .lo-av')).trim() === '沈', 'the avatar follows the name');
 await page.fill('.lo-tag-in', '阿砚');
 await page.keyboard.press('Enter');
 await page.fill('.lo-field:has-text("一句话简介") input', '落魄琴师，嘴冷心热。');
 await page.click('.lo-sw:has-text("主要人物") [role="switch"]');
-const longName = 'x'.repeat(30);
-await page.fill('.lo-field:has-text("名字") input', longName);
-check((await page.inputValue('.lo-field:has-text("名字") input')).length === 20 && (await page.textContent('.lo-field:has-text("名字") .lo-count')).includes('20 / 20'), 'limits: 名字 stops at 20, counted');
-await page.fill('.lo-field:has-text("名字") input', '沈砚');
 await shot('02-character-new');
-await page.click('.plg-btn.pri:has-text("添加人物")');
-check(await toastHas('已添加沈砚'), 'character added');
+await page.click('.lo-savebar .plg-btn.pri');
+check(await toastHas('已添加沈砚'), 'character added, on to their page');
+await page.waitForSelector('.lo-who:not(.edit)');
 let w = await full();
 check(w.characters[0]?.name === '沈砚' && w.characters[0].aliases.includes('阿砚') && w.characters[0].tier === 'main', 'in the work: name, alias, 主要');
-// a state from chapter 11: the cursor moves forward
-await page.click('.plg-link:has-text("记一条变化")');
-await page.click('.lo-form .lo-chips button:text-is("伤势")');
-await page.fill('.lo-form .lo-field:has-text("值") input', '左臂刀伤');
-await page.fill('.lo-form [aria-label="从第几章"]', '11');
-check(!(await page.isVisible('.lo-form .lo-field:has-text("原文")')) && !(await page.isVisible('.lo-form .lo-field:has-text("方式")')), 'record form: 原文 and 方式 tucked under 高级');
-await page.click('.lo-form .plg-text-btn:has-text("高级")');
-await page.fill('.lo-form .lo-field:has-text("原文") input', '刀锋擦过他的左臂');
-await page.click('.lo-form .plg-btn.pri');
-check(await toastHas('光标已前进到第 11 章'), 'state from a later chapter: 光标已前进到第 11 章');
-await page.waitForTimeout(400);
-check((await page.textContent('.plg-sec:has-text("状态")')).includes('左臂刀伤'), 'state shows at the cursor');
-await page.click('.plg-text-btn:has-text("查看变化线")');
-check((await page.textContent('.lo-lines')).includes('原文：刀锋擦过他的左臂'), '变化线 with the evidence');
-await shot('03-character-states');
+// a change from chapter 11: the written-up-to chapter follows
+await page.click('.lo-add:has-text("记一条变化")');
+await page.waitForSelector('.m-bsheet .lo-sheetform');
+await page.fill('.m-bsheet [aria-label="从第几章"]', '11');
+await page.click('.m-bsheet .lo-chips button:text-is("持有")');
+check(await page.isVisible('.m-bsheet .lo-ops.two button[aria-checked="true"]:has-text("多了这个")'), 'record: 持有 is a list, asks 多了这个 / 没了这个');
+await page.click('.m-bsheet .lo-chips button:text-is("伤势")');
+check(!(await page.isVisible('.m-bsheet .lo-ops')) && (await page.textContent('.m-bsheet')).includes('现在是什么'), 'record: 伤势 is one value, no choice of ways (those are under 高级)');
+await page.fill('.m-bsheet input[placeholder="青州城外"]', '左臂刀伤');
+await page.click('.m-bsheet .lo-more:has-text("原文")');
+await page.fill('.m-bsheet input[placeholder^="正文里"]', '刀锋擦过他的左臂');
+await page.screenshot({ path: join(shots, `${scheme}-02b-record.png`) });
+await page.click('.m-bsheet .plg-btn.pri');
+check(await toastHas('现在写到第 11 章'), 'a change from a later chapter: 现在写到第 11 章');
+await page.waitForTimeout(500);
+check((await page.textContent('.lo-panel')).includes('左臂刀伤') && (await page.textContent('.lo-panel .lo-tl-ch')).includes('第 11 章'), 'the panel: 第 11 章时 伤势 左臂刀伤');
+check((await page.textContent('.lo-story')).includes('刀锋擦过他的左臂'), '经历 with the original line');
+// looking back on their timeline: the injury isn't there yet, the step goes faint
+await page.click('.lo-panel [aria-label="往前一章"]');
+await page.waitForTimeout(300);
+check(!(await page.textContent('.lo-panel .lo-chiprow, .lo-panel .lo-chip-empty')).includes('左臂刀伤') && (await page.isVisible('.lo-step-ch.future')), 'at chapter 10: no injury yet, chapter 11 faint in 经历');
+await page.click('.lo-step-node:has-text("第 11 章")');
+await page.waitForTimeout(300);
+check((await page.textContent('.lo-panel')).includes('左臂刀伤'), 'tapping 第 11 章 in 经历 goes there');
+await shot('03-character');
 await back();
 await page.waitForTimeout(400);
 check(await page.isVisible('.lo-guide-s.done:has-text("加一个人物")') && !(await page.isVisible('.lo-guide-s.done:has-text("加一条设定")')), 'guide: 加一个人物 ticked, 加一条设定 not yet');
-await page.click('.plg-link:has-text("新建人物")');
+await page.click('.lo-card.add');
 await page.waitForTimeout(400);
-await page.fill('.lo-field:has-text("名字") input', '顾长风');
-await page.fill('.lo-field:has-text("第几章登场") input', '15');
-await page.click('.plg-btn.pri:has-text("添加人物")');
+await page.fill(nameIn, '顾长风');
+await page.fill('[aria-label="第几章登场"]', '15');
+await page.click('.lo-savebar .plg-btn.pri');
 await toastHas('已添加顾长风');
+await page.waitForSelector('.lo-who:not(.edit)');
 await back();
-let t = await page.textContent('.lo-list');
-check(t.includes('沈砚') && t.includes('主要') && t.includes('伤势：左臂刀伤'), 'people: 沈砚 主要, with his state at chapter 11');
-check(t.includes('顾长风') && t.includes('第 15 章登场') && t.includes('（缺简介）'), 'people: 顾长风 第 15 章登场, 缺简介');
+let t = await page.textContent('.lo-grid');
+check(t.includes('沈砚') && t.includes('主要') && t.includes('左臂刀伤'), 'people: 沈砚 主要, with his state at chapter 11');
+check(t.includes('顾长风') && t.includes('第 15 章登场') && t.includes('还没写简介') && (await page.isVisible('.lo-card.later:has-text("顾长风")')), 'people: 顾长风 faint, 第 15 章登场, 还没写简介');
 // an entry
 await page.click('.lo-tabs button:text-is("设定")');
-await page.click('.plg-link:has-text("新建设定")');
+await page.click('.lo-entry.add');
 await page.waitForTimeout(400);
 await page.fill('.lo-field:has-text("标题") input', '北境');
 await page.fill('.lo-field:has-text("关键词") .lo-tag-in', '北境、边关');
@@ -282,17 +294,18 @@ await page.click('.lo-sw:has-text("常驻") [role="switch"]');
 await page.click('.plg-btn.pri:has-text("添加设定")');
 check(await toastHas('已添加'), 'entry added');
 await back();
-t = await page.textContent('.lo-list');
-check(t.includes('北境') && t.includes('常驻') && t.includes('太长，只能查') && t.includes('关键词：北境、边关'), 'entries list: 常驻, 太长，只能查, keys');
+t = await page.textContent('.lo-entries');
+check(t.includes('北境') && t.includes('每轮都带') && t.includes('太长，只能查'), 'entries: 每轮都带, 太长，只能查');
 // a relation
 await page.click('.lo-tabs button:text-is("关系")');
 await page.click('.plg-link:has-text("记一条关系")');
-await page.fill('.lo-form .lo-field:has-text("是什么关系") input', '生死之交');
-await page.fill('.lo-form [aria-label="从第几章"]', '15');
-await page.click('.lo-form .plg-btn.pri');
-check(await toastHas('光标已前进到第 15 章'), 'relation recorded (cursor to 15)');
-await page.waitForTimeout(400);
-check((await page.textContent('.lo-list')).includes('生死之交'), 'relations list');
+await page.waitForSelector('.m-bsheet .lo-sheetform');
+await page.fill('.m-bsheet input[placeholder="互相试探，未表明身份"]', '生死之交');
+await page.fill('.m-bsheet [aria-label="从第几章"]', '15');
+await page.click('.m-bsheet .plg-btn.pri');
+check(await toastHas('现在写到第 15 章'), 'relation recorded (written up to 15)');
+await page.waitForTimeout(500);
+check((await page.textContent('.lo-pair')).includes('生死之交'), 'relations at the chapter');
 await shot('04-relations');
 await noHScroll('work page');
 
@@ -366,40 +379,51 @@ await sheetPick('跟随工作区');
 await page.waitForTimeout(500);
 check(await page.isVisible('.lo-bar:has-text("《长夜》")'), 'following the workspace again: bar back');
 
-// the work page follows the chapter; the people list shows state at it
+// the work page follows the chapter; dragging back only looks; 「改成写到」 moves it
 if (await page.$('.m-root.drawer')) await page.click('.m-stage-scrim');
 await page.waitForTimeout(400);
 await page.click('.lo-bar-t');
 await sheetPick('打开《长夜》');
 await page.waitForTimeout(600);
-check((await page.textContent('.lo-cursor')).includes('第 16 章'), 'work page: 现在写到 第 16 章');
+check((await page.textContent('.lo-hero .lo-tl-ch')).includes('第 16 章'), 'work page: the timeline is at 第 16 章');
 await page.click('.lo-tabs button:text-is("人物")');
-await page.click('.lo-cursor [aria-label="章节减一"]');
-for (let i = 0; i < 5; i++) await page.click('.lo-cursor [aria-label="章节减一"]');
-await page.waitForTimeout(900);
-check(!(await page.textContent('.lo-list')).includes('伤势：左臂刀伤'), 'at chapter 10 the injury isn’t there yet');
-await page.click('.lo-cursor [aria-label="章节加一"]');
-await page.waitForTimeout(900);
-check((await page.textContent('.lo-list')).includes('伤势：左臂刀伤') && (await work()).chapter === 11, 'at chapter 11 it is');
+// drag the timeline back to near the start
+const box = await page.locator('.lo-hero .lo-tl-track').boundingBox();
+await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+await page.mouse.down();
+await page.mouse.move(box.x + 2, box.y + box.height / 2, { steps: 5 });
+await page.mouse.up();
+await page.waitForTimeout(300);
+check((await page.textContent('.lo-hero .lo-tl-ch')).includes('开写前') && !(await page.textContent('.lo-grid')).includes('左臂刀伤'), 'dragged to the start: 开写前, no injury on the card');
+check((await page.textContent('.lo-hero .lo-tl-sub')).includes('往回看') && (await work()).chapter === 16, 'dragging only looks: still written up to 16');
+for (let i = 0; i < 11; i++) await page.click('.lo-hero [aria-label="往后一章"]');
+await page.waitForTimeout(300);
+check((await page.textContent('.lo-grid')).includes('左臂刀伤'), 'at chapter 11 the injury is on the card');
+await shot('04b-scrub');
+await page.click('.lo-tl-act.pri:has-text("改成写到第 11 章")');
+await page.waitForTimeout(600);
+check((await work()).chapter === 11 && (await page.textContent('.lo-hero .lo-tl-sub')).includes('现在写到这里'), '改成写到第 11 章: saved');
 
 // ---- importing
 // the PNG card with a world book: report first, then in, then undone
 await page.click('[aria-label="作品的更多操作"]');
 await sheetPick('导入到这部作品');
+check(await page.isVisible('.lo-steps li.on:has-text("选文件")') && (await page.textContent('.lo-drop')).includes('导入到《长夜》'), 'import step 1: 选文件, into 《长夜》');
 let chooser = page.waitForEvent('filechooser');
-await page.click('.plg-link:has-text("选一个")');
+await page.click('.lo-drop');
 await (await chooser).setFiles(files.png);
 await page.waitForSelector('.lo-report');
 await page.waitForTimeout(400);
 t = await page.textContent('.lo-report');
 check(t.includes('林晚') && t.includes('跳过了') && /first_mes|开场白/.test(t), `PNG card report, with what's skipped (${t.split('\n')[0]})`);
 await shot('06-import-report');
-await page.click('.plg-btn.pri:text-is("导入")');
-await page.waitForSelector('.plg-sec:has-text("导入好了")');
+check((await page.textContent('.lo-counts')).replace(/\s/g, '').includes('1个人物1条设定'), 'step 2: the counts');
+await page.click('.lo-savebar .plg-btn.pri');
+await page.waitForSelector('.lo-done');
 w = await full();
 check(w.characters.some((c) => c.name === '林晚') && w.lore.some((e) => e.keys.includes('青州')), 'imported: 林晚 and 青州 are in');
 check((await page.textContent('.lo-report')).length > 0, 'the result report shows');
-await page.click('.plg-btn.danger:has-text("撤销这次导入")');
+await page.click('.plg-btn:has-text("撤销这次导入")');
 await page.click('.m-alert-btns button.danger');
 check(await toastHas('删掉 1 个人物'), 'undo: says what went');
 w = await full();
@@ -408,16 +432,16 @@ check(!w.characters.some((c) => c.name === '林晚') && !w.lore.some((e) => e.ke
 // a card with the same name as 沈砚: merge
 const importJson = async (file, choice) => {
   chooser = page.waitForEvent('filechooser');
-  await page.click('.plg-link:has-text("选一个"), .plg-link:has-text(".json"), .plg-link:has-text(".png")');
+  await page.click('.lo-drop, .lo-file .plg-text-btn');
   await (await chooser).setFiles(file);
   await page.waitForSelector('.lo-report');
   await page.waitForTimeout(500);
   if (choice) {
-    check(await page.isVisible('.lo-choice:has-text("「沈砚」")'), `same name: asks (${choice})`);
-    await page.click(`.lo-choice .lo-opt:has-text(${JSON.stringify(choice)})`);
+    check(await page.isVisible('.plg-sec:has-text("「沈砚」") .lo-choice'), `same name: asks (${choice})`);
+    await page.click(`.lo-choice .lo-optcard:has-text(${JSON.stringify(choice)})`);
   }
-  await page.click('.plg-btn.pri:text-is("导入")');
-  await page.waitForSelector('.plg-sec:has-text("导入好了")');
+  await page.click('.lo-savebar .plg-btn.pri');
+  await page.waitForSelector('.lo-done');
 };
 const openImport = async () => {
   await settings();
@@ -436,21 +460,21 @@ check(shen.length === 1 && shen[0].card.summary === '落魄琴师，嘴冷心热
 // the same file again: already imported
 await openImport();
 chooser = page.waitForEvent('filechooser');
-await page.click('.plg-link:has-text("选一个")');
+await page.click('.lo-drop');
 await (await chooser).setFiles(files.same);
 await page.waitForSelector('.lo-warn');
-check((await page.textContent('.lo-warn')).includes('已经导入过这部作品') && (await page.isDisabled('.plg-btn.pri:text-is("导入")')), 'the same file again: 已经导入过, 导入 waits for 仍然导入');
+check((await page.textContent('.lo-warn')).includes('已经导入过这部作品') && (await page.isDisabled('.lo-savebar .plg-btn.pri')), 'the same file again: 已经导入过, 导入 waits for 仍然导入');
 await page.click('.lo-warn [role="switch"]');
-check(!(await page.isDisabled('.plg-btn.pri:text-is("导入")')), '仍然导入 lets it through');
+check(!(await page.isDisabled('.lo-savebar .plg-btn.pri')), '仍然导入 lets it through');
 // another version: new
 chooser = page.waitForEvent('filechooser');
-await page.click('.plg-link:has-text(".json")');
+await page.click('.lo-file .plg-text-btn');
 await (await chooser).setFiles(files.same2);
 await page.waitForSelector('.lo-choice');
 await page.waitForTimeout(300);
-await page.click('.lo-choice .lo-opt:has-text("另建")');
-await page.click('.plg-btn.pri:text-is("导入")');
-await page.waitForSelector('.plg-sec:has-text("导入好了")');
+await page.click('.lo-choice .lo-optcard:has-text("另建")');
+await page.click('.lo-savebar .plg-btn.pri');
+await page.waitForSelector('.lo-done');
 w = await full();
 check(w.characters.some((c) => c.name === '沈砚（导入）'), 'new: 沈砚（导入）');
 // and a third: skip → only its entries
@@ -462,7 +486,7 @@ check(w.characters.length === before && w.lore.some((e) => e.keys.includes('琴�
 await back();
 
 // 更多: the import records, undo one
-await page.click('.lo-tabs button:text-is("更多")');
+await page.click('.lo-tabs button:text-is("导入与设置")');
 check((await page.textContent('.plg-sec:has-text("导入记录")')).includes('已撤销'), '更多: records, the undone one says 已撤销');
 await shot('07-more');
 

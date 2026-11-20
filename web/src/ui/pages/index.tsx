@@ -26,7 +26,7 @@ import { A11yRestorePage, AndroidShellPage, PhoneDndPage, PhoneLogPage } from '.
 import { PresetsPage, TeamPage } from './agents';
 import { CompanionPage } from './companion';
 import { LongMemoryEditPage, LongMemoryPage } from './memory';
-import { LoreCharacterPage, LoreEntryPage, LoreImportPage, LoreWorkActions, LoreWorkPage, LoreWorksActions, LoreWorksPage, loreWorkTitle } from './lore';
+import { LoreCardPage, LoreCharacterPage, LoreEntryPage, LoreImportPage, LoreWorkActions, LoreWorkPage, LoreWorksActions, LoreWorksPage, loreWorkTitle } from './lore';
 import { PersonaDetailPage, PersonaEditPage, PersonaPage } from './persona';
 import { SkillEditPage, SkillInfoPage, SkillsPage } from './skills';
 import { imported } from '../../history/imported';
@@ -139,11 +139,12 @@ function pageDef(id: string | undefined): PageDef | undefined {
     const w = id.slice('lore-import:'.length) || undefined;
     return { title: w ? `导入到${loreWorkTitle(w)}` : '导入角色卡或世界书', body: () => <LoreImportPage work={id === 'lore-import' ? undefined : w} /> };
   }
-  const lo = /^lore(-char|-entry)?:([^:]+)(?::(.+))?$/.exec(id);
+  const lo = /^lore(-char|-entry|-card)?:([^:]+)(?::(.+))?$/.exec(id);
   if (lo) {
     const [, kind, w, x] = lo;
     if (!kind) return { title: '设定集', actions: () => <LoreWorkActions id={w} />, body: () => <LoreWorkPage id={w} /> };
-    if (kind === '-char') return { title: x === 'new' ? '新建人物' : '人物', body: () => <LoreCharacterPage work={w} id={x ?? 'new'} /> };
+    if (kind === '-char') return { title: '人物', body: () => <LoreCharacterPage work={w} id={x ?? ''} /> };
+    if (kind === '-card') return { title: x === 'new' ? '新人物' : '编辑人物', body: () => <LoreCardPage work={w} id={x ?? 'new'} /> };
     return { title: x === 'new' ? '新建设定' : '设定', body: () => <LoreEntryPage work={w} id={x ?? 'new'} /> };
   }
   if (id === 'imported') return { title: '保存在这台设备上的对话', body: ImportedListPage };

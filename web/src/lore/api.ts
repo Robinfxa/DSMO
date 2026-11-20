@@ -215,4 +215,7 @@ export function forgetBindings() {
   bindings.value = {};
 }
 
+/** The chapter being looked at on a work's pages (dragging the timeline); null: where it's written up to. */
+export const loreView = signal<{ work: string; ch: number } | null>(null);
+
 export const chapterName = (n: number) => (n > 0 ? `第 ${n} 章` : '开写前');
