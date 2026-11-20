@@ -416,7 +416,7 @@ MaiDSH 默认在**所有对话**里生效，但排除两类：
 
 范围设置在总控里：没装总控时，各面单独运行，在所有对话里生效。
 
-## 13. 档案和生效范围（设计稿，待确认）
+## 13. 档案和生效范围（总控 0.5 起）
 
 一句话：**每段对话归到一个「档案」或者「关」**。档案是一个陪伴对象：自己的心情、好感度、记忆、表达和主动安排。生效范围（§12）就是这件事的特例：归到「关」。
 
@@ -476,3 +476,12 @@ MaiDSH 默认在**所有对话**里生效，但排除两类：
 
 - 装新版总控时：现有数据 = 默认档案；§12 里「关掉的对话」转成「对话 = 关」；默认 = 默认档案。用户看不到变化。
 - 面的新版本先发：没有总控 0.5 时它们按默认档案工作，和现在一样。
+
+### 13.8 实现说明
+
+- 归属：`core/lib/scope.mjs`（存档 `scope.json` v2：`default`、`profiles`、`conversations`、`workspaces`、`bots`）。DSH 的对话只有在工作区里新建（`session/create` 带 `workspaceId`）才算进那个工作区；只给 `cwd` 的对话不属于任何工作区，走默认那一层。
+- 面的写法：`shared/profiles.mjs` 的 `perProfile` 按档案懒加载实例，`profiledAspect` 把「只有一份数据」的面包成 v2（按 `turn.profile`、`chunk.profile`、`state(profile)` 分派），`dropProfile(id)` 删档案时清数据。
+- 批量学习：任务带 `profile`；`batch.apply(result, chunk)` 的 `chunk.profile`、`batch.finish(job)` 的 `job.profile`、`batch.undo(jobId, profile)`。同一份材料学进不同档案不算重复。删档案会取消它没跑完的任务。
+- 主动：每个档案一份 `initiative.json`，每天的次数记在 `daily.json`（所有档案共用；第一次从默认档案原来的计数接过来）。TA 主动后 `pending.sessionId` 记下是哪段对话，那段对话的回音只算给等它的档案。
+- 接口上的档案（`?profile=` 或 body.profile）要是总控里存在的档案，否则 404；没装总控时只有默认档案。
+- 老总控（约定 v1）不收 v2 的面：面看 `companion.version`，低于 2 就按 v1 登记（只有默认档案）。总控 0.5 照样收 v1 的面（第三方面不用改）。

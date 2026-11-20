@@ -89,7 +89,7 @@
     },
     {
       "tier": 3,
-      "integrity": "sha256-vbbrr8OSPV5XziUbkKN1NDZVKFqJP4hy0klAvBoqQJA=",
+      "integrity": "sha256-y7wBMHEQuWcVQoTmJHdJ36QpZn4rdzebxxYGMlJNYlI=",
       "manifest": {
         "v": 1,
         "title": "MaiDSH 羁绊",
@@ -100,23 +100,23 @@
         "permissions": [],
         "engine": {
           "package": "maidsh-bond",
-          "version": "0.1.2"
+          "version": "0.2.0"
         },
-        "description": "TA 对你的好感是一个会变的数，分六档：厌恶、冷淡、一般、亲近、喜欢、暧昧。变化有人味：越亲近越难再往上涨，也越容易被伤到；关系差的时候修复得慢；连着几次被温柔对待，好感会涨得更快。装了「MaiDSH 心情」时，心情好的时候好事加分更多。\n\nTA 不会每句话都提关系：「一般」档不说，到了两端才会明显表现出来，中间几档隔几轮自然流露一次。\n\n引擎部分是 npm 包 maidsh-bond 0.1.2（MIT 许可），装在当前主机上；好感度存在主机的 ~/.dsh/storages/maidsh-bond/ 里。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
+        "description": "TA 对你的好感是一个会变的数，分六档：厌恶、冷淡、一般、亲近、喜欢、暧昧。变化有人味：越亲近越难再往上涨，也越容易被伤到；关系差的时候修复得慢；连着几次被温柔对待，好感会涨得更快。装了「MaiDSH 心情」时，心情好的时候好事加分更多。\n\nTA 不会每句话都提关系：「一般」档不说，到了两端才会明显表现出来，中间几档隔几轮自然流露一次。\n\n引擎部分是 npm 包 maidsh-bond 0.2.0（MIT 许可），装在当前主机上；好感度存在主机的 ~/.dsh/storages/maidsh-bond/ 里。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
         "highlights": [
           "六个档位，慢慢变化",
           "越亲近越在意",
           "不会句句提关系"
         ],
         "id": "@api-demo/maidsh-bond",
-        "version": "1.0.3",
+        "version": "1.1.0",
         "license": "MIT",
         "official": true
       }
     },
     {
       "tier": 3,
-      "integrity": "sha256-0BQsuqF40GKjrEXap29uab35IX0kDWV6Nx5BXVCXo1I=",
+      "integrity": "sha256-zQdNfciTIwtdHTJmFrLyA4POR3EEAQ4l1mYt3Timc4A=",
       "manifest": {
         "v": 1,
         "title": "MaiDSH 总控",
@@ -139,23 +139,23 @@
         ],
         "engine": {
           "package": "maidsh-core",
-          "version": "0.4.0"
+          "version": "0.5.0"
         },
-        "description": "单独装没有效果，要和「MaiDSH 心情」「MaiDSH 羁绊」「MaiDSH 记忆」等插件一起用。装上之后，几个插件每轮要分析的东西合成一次模型调用，注入的提示也按顺序合成一段、控制总长度，省钱也更稳定。卸掉总控，各插件自动回到各自工作，不用重启。\n\n装了总控还能「深度学习」：指定一段过去的对话让 TA 细读，或者导入关于你的介绍、你们的关系设定和过往、一起写的故事、别处的聊天记录。开跑前会先告诉你大约要调用几次模型，App 关了下次接着跑，学错了可以整个撤销。\n\n在「设置 › 陪伴 › TA 的状态」（电脑上是边栏的「陪伴」）里看 TA 的心情、你们的关系、TA 记得什么、学会了你哪些说法、什么时候会主动来找你，也在那里导入材料、看学习进度。\n\n默认在所有对话里生效，DS Bot 的工作对话自动排除；不想要的对话（比如写代码、写文）可以在对话的「更多」菜单里「在这段对话里关掉陪伴」。\n\n别的插件也可以按 MaiDSH 的约定接进来，由总控统一调度。\n\n引擎部分是 npm 包 maidsh-core 0.4.0（MIT 许可），装在当前主机上。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
+        "description": "单独装没有效果，要和「MaiDSH 心情」「MaiDSH 羁绊」「MaiDSH 记忆」等插件一起用。装上之后，几个插件每轮要分析的东西合成一次模型调用，注入的提示也按顺序合成一段、控制总长度，省钱也更稳定。卸掉总控，各插件自动回到各自工作，不用重启。\n\n装了总控还能「深度学习」：指定一段过去的对话让 TA 细读，或者导入关于你的介绍、你们的关系设定和过往、一起写的故事、别处的聊天记录。开跑前会先告诉你大约要调用几次模型，App 关了下次接着跑，学错了可以整个撤销。\n\n在「设置 › 陪伴 › TA 的状态」（电脑上是边栏的「陪伴」）里看 TA 的心情、你们的关系、TA 记得什么、学会了你哪些说法、什么时候会主动来找你，也在那里导入材料、看学习进度。\n\n默认在所有对话里生效，DS Bot 的工作对话自动排除；不想要的对话（比如写代码、写文）可以在对话的「更多」菜单里「在这段对话里关掉陪伴」。\n\n别的插件也可以按 MaiDSH 的约定接进来，由总控统一调度。\n\n引擎部分是 npm 包 maidsh-core 0.5.0（MIT 许可），装在当前主机上。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
         "highlights": [
           "每轮只多调一次模型",
           "提示合成一段",
           "装卸都不用重启"
         ],
         "id": "@api-demo/maidsh-core",
-        "version": "1.0.5",
+        "version": "1.1.0",
         "license": "MIT",
         "official": true
       }
     },
     {
       "tier": 3,
-      "integrity": "sha256-AYrow10ZG9aq3hxhWSZlajgohWbcxuUnH1dgihUwFIw=",
+      "integrity": "sha256-C0f7bp+UcSlLuJy64Nc3imm3cgKLRtenbgVWXr2N/EA=",
       "manifest": {
         "v": 1,
         "title": "MaiDSH 表达",
@@ -166,23 +166,23 @@
         "summary": "TA 会慢慢学会你的口头禅和你们之间的黑话，越熟说话越有你们俩的味道。",
         "engine": {
           "package": "maidsh-expression",
-          "version": "0.1.1"
+          "version": "0.2.0"
         },
-        "description": "TA 会从你说的话里学：你的口头禅、句式（比如被夸的时候会说「哼，那还用说」），还有只在你们之间才懂的词（比如「小狗勾」是你撒娇时的自称）。AI 自己说的不学，普通的话不学。\n\n用起来跟着关系走：还不熟的时候，TA 只是听得懂你的黑话，不会模仿你；熟了会偶尔借用你的一两句；很亲密的时候用得更多，也更俏皮。TA 心情低落时不用俏皮的说法，和人设冲突时以人设为准。一种说法很久不出现，就会慢慢淡掉。\n\n引擎部分是 npm 包 maidsh-expression 0.1.1（MIT 许可），装在当前主机上；学到的说法存在主机的 ~/.dsh/storages/maidsh-expression/ 里。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
+        "description": "TA 会从你说的话里学：你的口头禅、句式（比如被夸的时候会说「哼，那还用说」），还有只在你们之间才懂的词（比如「小狗勾」是你撒娇时的自称）。AI 自己说的不学，普通的话不学。\n\n用起来跟着关系走：还不熟的时候，TA 只是听得懂你的黑话，不会模仿你；熟了会偶尔借用你的一两句；很亲密的时候用得更多，也更俏皮。TA 心情低落时不用俏皮的说法，和人设冲突时以人设为准。一种说法很久不出现，就会慢慢淡掉。\n\n引擎部分是 npm 包 maidsh-expression 0.2.0（MIT 许可），装在当前主机上；学到的说法存在主机的 ~/.dsh/storages/maidsh-expression/ 里。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
         "highlights": [
           "学你的口头禅和黑话",
           "越熟越像你们俩",
           "跟着关系和心情走"
         ],
         "id": "@api-demo/maidsh-expression",
-        "version": "1.0.1",
+        "version": "1.1.0",
         "license": "MIT",
         "official": true
       }
     },
     {
       "tier": 3,
-      "integrity": "sha256-1B+euYS8euCwqkRzl6t4j7vMjLgyr3K9j+s52nR1bBY=",
+      "integrity": "sha256-etSReCVYcmNr2mF5SkwnWA0ZIxcQeIJFCjg9ZHQw6LQ=",
       "manifest": {
         "v": 1,
         "title": "MaiDSH 主动",
@@ -193,23 +193,23 @@
         "summary": "TA 会主动找你：随机的时刻想起你，约好的时间回来问问，不打扰。",
         "engine": {
           "package": "maidsh-initiative",
-          "version": "0.1.2"
+          "version": "0.2.0"
         },
-        "description": "TA 不再只是等你开口：聊完之后的几个小时里，TA 会在某个随机的时刻想起你，主动说一两句；你说「我去洗澡了」「开完会找你」，到时间 TA 会回来问问（这个需要装「MaiDSH 总控」）。\n\n不打扰：每天最多 3 次，两次至少隔 4 小时；深夜 23:30 到早上 8:00 不打扰；你没回，下次就隔得更久，连着两次没回就停下，等你先开口；关系冷淡时不主动。TA 主动的那条在对话里标着「TA 先开口」。\n\n手机上只有打开 DSMO 时 TA 才能主动；错过的时刻，下次打开时会补上。\n\n引擎部分是 npm 包 maidsh-initiative 0.1.2（MIT 许可），装在当前主机上。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
+        "description": "TA 不再只是等你开口：聊完之后的几个小时里，TA 会在某个随机的时刻想起你，主动说一两句；你说「我去洗澡了」「开完会找你」，到时间 TA 会回来问问（这个需要装「MaiDSH 总控」）。\n\n不打扰：每天最多 3 次，两次至少隔 4 小时；深夜 23:30 到早上 8:00 不打扰；你没回，下次就隔得更久，连着两次没回就停下，等你先开口；关系冷淡时不主动。TA 主动的那条在对话里标着「TA 先开口」。\n\n手机上只有打开 DSMO 时 TA 才能主动；错过的时刻，下次打开时会补上。\n\n引擎部分是 npm 包 maidsh-initiative 0.2.0（MIT 许可），装在当前主机上。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
         "highlights": [
           "随机的时刻想起你",
           "约好的时间回来问问",
           "不打扰，没回就退"
         ],
         "id": "@api-demo/maidsh-initiative",
-        "version": "1.0.2",
+        "version": "1.1.0",
         "license": "MIT",
         "official": true
       }
     },
     {
       "tier": 3,
-      "integrity": "sha256-5UbfFz+EPRgJnOS/iVU6qCBYvMEW3122vFRYMNldevg=",
+      "integrity": "sha256-wD/gfrCLAQw6bCLzD/e0/nXa0e9hu/DCc6/O+NV5so8=",
       "manifest": {
         "v": 1,
         "title": "MaiDSH 记忆",
@@ -223,23 +223,23 @@
         "summary": "像人一样记得你：聊过的事会自己记下，久了会淡忘，聊到相关的事又会自然想起来。",
         "engine": {
           "package": "maidsh-memory",
-          "version": "0.2.1"
+          "version": "0.3.0"
         },
-        "description": "TA 会在聊天里顺手记下关于你的事：你的身份、喜欢和讨厌的东西、最近在忙什么，还有你们之间发生过的事。关于你本人的事，只有你亲口说过才记，宁可不记也不记错；你们在故事里一起经历的也会记住。\n\n记忆会像人一样慢慢淡忘：不重要、很久没提的渐渐想不起来，常被想起的越记越牢；你一提到某件事，淡忘的回忆又会被唤醒。聊到相关的话题，TA 会自然地想起一两件，而不是把记得的事一条条念出来。零碎的旧事攒多了，会压成一段「我对你的了解」。\n\n装了「MaiDSH 总控」还能导入：关于你的介绍、你们的关系设定和过往会被牢牢记住；一起写的故事会单独记成「故事设定」，不会和你本人的事混在一起。\n\n想让 TA 忘掉什么，直接说「忘掉……」。密码、证件号、银行卡、门牌号永远不记。和「长期记忆」插件二选一，可以一次性导入它的记忆。\n\n引擎部分是 npm 包 maidsh-memory 0.2.1（MIT 许可），装在当前主机上；记忆存在主机的 ~/.dsh/storages/maidsh-memory/memory.json 里。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
+        "description": "TA 会在聊天里顺手记下关于你的事：你的身份、喜欢和讨厌的东西、最近在忙什么，还有你们之间发生过的事。关于你本人的事，只有你亲口说过才记，宁可不记也不记错；你们在故事里一起经历的也会记住。\n\n记忆会像人一样慢慢淡忘：不重要、很久没提的渐渐想不起来，常被想起的越记越牢；你一提到某件事，淡忘的回忆又会被唤醒。聊到相关的话题，TA 会自然地想起一两件，而不是把记得的事一条条念出来。零碎的旧事攒多了，会压成一段「我对你的了解」。\n\n装了「MaiDSH 总控」还能导入：关于你的介绍、你们的关系设定和过往会被牢牢记住；一起写的故事会单独记成「故事设定」，不会和你本人的事混在一起。\n\n想让 TA 忘掉什么，直接说「忘掉……」。密码、证件号、银行卡、门牌号永远不记。和「长期记忆」插件二选一，可以一次性导入它的记忆。\n\n引擎部分是 npm 包 maidsh-memory 0.3.0（MIT 许可），装在当前主机上；记忆存在主机的 ~/.dsh/storages/maidsh-memory/memory.json 里。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
         "highlights": [
           "自己记，不用你说「记住」",
           "会淡忘，也会被唤醒",
           "自然想起，不念清单"
         ],
         "id": "@api-demo/maidsh-memory",
-        "version": "1.0.3",
+        "version": "1.1.0",
         "license": "MIT",
         "official": true
       }
     },
     {
       "tier": 3,
-      "integrity": "sha256-SXENet7zZtVEZ21orBP8xUlcpncZwm7t+c9uXXbvzEI=",
+      "integrity": "sha256-7MaJ0h0b248ihbzJIHF/d1fNG875e7EhvZtOT4d7O54=",
       "manifest": {
         "v": 1,
         "title": "MaiDSH 心情",
@@ -253,16 +253,16 @@
         ],
         "engine": {
           "package": "maidsh-mood",
-          "version": "0.1.2"
+          "version": "0.2.0"
         },
-        "description": "每轮聊完，AI 会判断这一轮让 TA 有什么感受（开心、害羞、感动、想念、委屈、吃醋、难过、生气……），心情随之变化，又会随时间慢慢平复（大约两小时回落一半）。下一轮说话时会自然带出当时的状态，但不会直接说「我现在很开心」。\n\n性格可以调：情绪化程度高的起伏更大、来得快去得也快；宜人性高的好心情留得久、坏心情散得快。\n\n引擎部分是 npm 包 maidsh-mood 0.1.2（MIT 许可），装在当前主机上；心情存在主机的 ~/.dsh/storages/maidsh-mood/ 里。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
+        "description": "每轮聊完，AI 会判断这一轮让 TA 有什么感受（开心、害羞、感动、想念、委屈、吃醋、难过、生气……），心情随之变化，又会随时间慢慢平复（大约两小时回落一半）。下一轮说话时会自然带出当时的状态，但不会直接说「我现在很开心」。\n\n性格可以调：情绪化程度高的起伏更大、来得快去得也快；宜人性高的好心情留得久、坏心情散得快。\n\n引擎部分是 npm 包 maidsh-mood 0.2.0（MIT 许可），装在当前主机上；心情存在主机的 ~/.dsh/storages/maidsh-mood/ 里。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
         "highlights": [
           "会起伏，也会慢慢平复",
           "带出状态，不直接说破",
           "性格可以调"
         ],
         "id": "@api-demo/maidsh-mood",
-        "version": "1.0.4",
+        "version": "1.1.0",
         "license": "MIT",
         "official": true
       }

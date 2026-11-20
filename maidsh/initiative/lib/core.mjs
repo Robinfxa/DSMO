@@ -36,7 +36,7 @@ const minutesOf = (t) => {
   const d = new Date(t);
   return d.getHours() * 60 + d.getMinutes();
 };
-const dayOf = (t) => {
+export const dayOf = (t) => {
   const d = new Date(t);
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 };
@@ -67,13 +67,13 @@ export const gapHours = (st, o = DEFAULTS) => o.minGapHours * Math.pow(2, st.ign
  * 最早时刻 = max(聊完 + 2h, 上次主动 + 退避间隔)，之后 spreadHours 内随机，越晚越可能（pdf ∝ 时长）；
  * 落在安静时段顺延到早上；对方平时几乎不在线的钟点尽量避开；今天次数满了排到明天。
  */
-export function planNext(st, now, { random = Math.random, o = DEFAULTS } = {}) {
+export function planNext(st, now, { random = Math.random, o = DEFAULTS, daily = st } = {}) {
   if (st.ignored >= o.stopAfterIgnored || !st.sessionId) {
     st.nextAt = 0;
     return 0;
   }
   let earliest = Math.max(now, st.lastUserAt + o.afterChatHours * HOUR, st.lastInitiativeAt + gapHours(st, o) * HOUR);
-  if (dayOf(earliest) === st.day && st.count >= o.perDay) {
+  if (dayOf(earliest) === daily.day && daily.count >= o.perDay) {
     const d = new Date(earliest);
     d.setHours(0, 0, 0, 0);
     earliest = quietEnd(d.getTime() + DAY - MIN, o) + MIN;
@@ -90,7 +90,7 @@ export function planNext(st, now, { random = Math.random, o = DEFAULTS } = {}) {
 }
 
 /** 对方说了一轮（真的回话）：记活跃时段、清零退避、按需要记回访、重新排。 */
-export function onUserTurn(st, { now, sessionId, followup, topic, random = Math.random, o = DEFAULTS }) {
+export function onUserTurn(st, { now, sessionId, followup, topic, random = Math.random, o = DEFAULTS, daily = st }) {
   st.hours[new Date(now).getHours()] += 1;
   if (st.hours.reduce((a, b) => a + b, 0) > 2000) st.hours = st.hours.map((h) => Math.floor(h / 2));
   st.lastUserAt = now;
@@ -99,7 +99,7 @@ export function onUserTurn(st, { now, sessionId, followup, topic, random = Math.
   if (sessionId) st.sessionId = sessionId;
   if (topic) st.lastTopic = String(topic).slice(0, 40);
   if (followup) addFollowup(st, followup, now);
-  planNext(st, now, { random, o });
+  planNext(st, now, { random, o, daily });
 }
 
 /**
@@ -123,25 +123,26 @@ export function addFollowup(st, followup, now) {
 }
 
 /** 启动时：错过不久的补上（一两分钟后），错过太久的重排；过期的回访并进下一次主动的由头。 */
-export function onStartup(st, now, { random = Math.random, o = DEFAULTS } = {}) {
+export function onStartup(st, now, { random = Math.random, o = DEFAULTS, daily = st } = {}) {
   const late = st.followups.filter((f) => f.at <= now);
   st.followups = st.followups.filter((f) => f.at > now || now - f.at <= o.graceHours * HOUR);
   const missed = late.filter((f) => now - f.at > o.graceHours * HOUR);
   if (missed.length) st.lastTopic = missed.map((f) => f.reason).filter(Boolean).join('、') || st.lastTopic;
   if (st.nextAt && st.nextAt <= now) {
     if (now - st.nextAt <= o.graceHours * HOUR && !quiet(now, o)) st.nextAt = now + (1 + random() * 2) * MIN;
-    else planNext(st, now, { random, o });
-  } else if (!st.nextAt) planNext(st, now, { random, o });
+    else planNext(st, now, { random, o, daily });
+  } else if (!st.nextAt) planNext(st, now, { random, o, daily });
 }
 
 /**
  * 现在该不该主动；返回 { kind: 'followup' | 'random', reason } 或 null。
  * [bondLevel]：好感度档位，「冷淡」「厌恶」（≤1）不主动。
+ * [daily]：{ day, count } 每天的次数记在哪；有多个档案时所有档案共用一份（§13），不给就记在 st 自己身上。
  */
-export function due(st, now, { bondLevel = 2, o = DEFAULTS } = {}) {
+export function due(st, now, { bondLevel = 2, o = DEFAULTS, daily = st } = {}) {
   pruneFollowups(st, now, { o });
   if (st.pending || bondLevel <= 1 || st.ignored >= o.stopAfterIgnored || quiet(now, o) || !st.sessionId) return null;
-  if (dayOf(now) === st.day && st.count >= o.perDay) return null;
+  if (dayOf(now) === daily.day && daily.count >= o.perDay) return null;
   const f = st.followups.find((x) => x.at <= now);
   if (f) return { kind: 'followup', reason: f.reason, sessionId: f.sessionId || st.sessionId };
   if (st.nextAt && st.nextAt <= now && now - st.lastInitiativeAt >= gapHours(st, o) * HOUR) return { kind: 'random', reason: st.lastTopic, sessionId: st.sessionId };
@@ -149,16 +150,16 @@ export function due(st, now, { bondLevel = 2, o = DEFAULTS } = {}) {
 }
 
 /** 主动发出去了：计数、记下等对方回话、重排。 */
-export function onInitiated(st, now, plan, { random = Math.random, o = DEFAULTS } = {}) {
-  if (dayOf(now) !== st.day) {
-    st.day = dayOf(now);
-    st.count = 0;
+export function onInitiated(st, now, plan, { random = Math.random, o = DEFAULTS, daily = st } = {}) {
+  if (dayOf(now) !== daily.day) {
+    daily.day = dayOf(now);
+    daily.count = 0;
   }
-  st.count += 1;
+  daily.count += 1;
   st.lastInitiativeAt = now;
   if (plan.kind === 'followup') st.followups = st.followups.filter((f) => f.at > now);
-  st.pending = { at: now, kind: plan.kind };
-  planNext(st, now, { random, o });
+  st.pending = { at: now, kind: plan.kind, sessionId: plan.sessionId };
+  planNext(st, now, { random, o, daily });
 }
 
 /** TA 主动的那一轮结束了：对方没回之前不算数；对方一直没回（到下次该主动时），记一次「没回」。 */

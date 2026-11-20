@@ -9,8 +9,9 @@ const ACTIVE = new Set(['queued', 'running']);
 /**
  * [complete]：async ({ system, user }) => 文字。[readSession]：async (sessionId) => [{ role, text, at }]。
  * [aspects]：() => 登记的面（完整对象）。[safely]：同 Registry.safely。
+ * [profileFor]：({ profile, sessionId }) => 学进哪个档案（§13：给了就用给的，否则这段对话的档案；null = 这段对话关着陪伴）。
  */
-export function createJobs({ store, now = Date.now, log = () => {}, aspects, safely, complete, readSession, keep = 20 }) {
+export function createJobs({ store, now = Date.now, log = () => {}, aspects, safely, complete, readSession, keep = 20, profileFor = () => 'default' }) {
   let state = store.load();
   if (!state || state.v !== 1) state = { v: 1, jobs: [], seq: 0 };
   const save = () => {
@@ -41,8 +42,11 @@ export function createJobs({ store, now = Date.now, log = () => {}, aspects, saf
     const size = text?.length ?? messages.reduce((a, m) => a + m.text.length, 0);
     if (size > LIMITS.maxChars) return { ok: false, error: `一次最多 ${LIMITS.maxChars / 10_000} 万字，这份有 ${Math.round(size / 1000) / 10} 千字，请分几次导入` };
     if (!batchAspects(aspects(), textType).length) return { ok: false, error: '没有装能学这类材料的插件（记忆或表达）' };
-    const job = newJob({ id: `job${now().toString(36)}${(++state.seq).toString(36)}`, textType, title: body.title, text, messages, now: now() });
-    const dup = state.jobs.find((j) => j.hash === job.hash && j.status === 'done');
+    const profile = profileFor({ profile: body.profile, sessionId: body.sessionId });
+    if (profile === undefined) return { ok: false, error: '找不到这个档案' };
+    if (profile === null) return { ok: false, error: '这段对话关着陪伴：请先选一个档案再学' };
+    const job = newJob({ id: `job${now().toString(36)}${(++state.seq).toString(36)}`, textType, title: body.title, text, messages, now: now(), profile });
+    const dup = state.jobs.find((j) => j.hash === job.hash && j.status === 'done' && (j.profile ?? 'default') === profile);
     if (body.dryRun) return { ok: true, value: { ...jobView(job), duplicateOf: dup?.id } };
     if (dup && !body.force) return { ok: false, error: '这份内容已经学过了', duplicateOf: dup.id };
     state.jobs.push(job);
@@ -80,7 +84,7 @@ export function createJobs({ store, now = Date.now, log = () => {}, aspects, saf
     save();
     while (job.cursor < job.chunks.length) {
       if (stopped || job.status !== 'running') return;
-      const chunk = { ...job.chunks[job.cursor], jobId: job.id, textType: job.textType };
+      const chunk = { ...job.chunks[job.cursor], jobId: job.id, textType: job.textType, profile: job.profile ?? 'default' };
       const list = aspects();
       const req = batchRequest(list, job.textType, chunk, now());
       if (!req) {
@@ -136,7 +140,7 @@ export function createJobs({ store, now = Date.now, log = () => {}, aspects, saf
     else if (action === 'cancel' && (ACTIVE.has(job.status) || job.status === 'paused')) job.status = 'cancelled';
     else if (action === 'undo') {
       if (ACTIVE.has(job.status)) job.status = 'cancelled';
-      for (const a of aspects()) if (a.batch?.undo) safely(a, 'batch.undo', () => a.batch.undo(job.id), undefined);
+      for (const a of aspects()) if (a.batch?.undo) safely(a, 'batch.undo', () => a.batch.undo(job.id, job.profile ?? 'default'), undefined);
       job.status = 'undone';
     } else return { ok: false, error: `现在不能${action}` };
     job.updatedAt = now();
@@ -150,6 +154,21 @@ export function createJobs({ store, now = Date.now, log = () => {}, aspects, saf
     learn,
     act,
     list: () => state.jobs.map(jobView),
+    /** 删档案：它没跑完的任务取消。 */
+    dropProfile(profile) {
+      let n = 0;
+      for (const j of state.jobs)
+        if ((j.profile ?? 'default') === profile && (ACTIVE.has(j.status) || j.status === 'paused')) {
+          j.status = 'cancelled';
+          j.updatedAt = now();
+          n++;
+        }
+      if (n) {
+        trim();
+        save();
+      }
+      return n;
+    },
     /** 启动时接着跑没跑完的。 */
     resume: () => kick(),
     /** 插件卸载：不再开始新的块。 */

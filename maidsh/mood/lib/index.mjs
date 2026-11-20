@@ -4,6 +4,7 @@
 
 import { createMood } from './aspect.mjs';
 import { completeText, configSchema, jsonStore, loggerOf, promptContext, storageDir, turnOf } from './shared/dsh.mjs';
+import { DEFAULT_PROFILE, perProfile, profileDir, profiledAspect, removeProfileDir, registerAspect } from './shared/profiles.mjs';
 import { feelingRequest, parseFeeling } from './shared/feeling.mjs';
 
 export const name = 'maidsh-mood';
@@ -28,16 +29,34 @@ export const Config = configSchema(name, DEFAULTS, { neuroticism: [0, 1], agreea
 export function apply(ctx, config = {}) {
   const c = { ...DEFAULTS, ...config };
   const log = loggerOf(ctx, name);
-  const store = jsonStore(storageDir(name, c.dataDir), 'mood.json', log);
-  const mood = createMood({ store, log, opts: { neuroticism: c.neuroticism, agreeableness: c.agreeableness, halfLifeHours: c.halfLifeHours } });
+  const base = storageDir(name, c.dataDir);
+  const opts = { neuroticism: c.neuroticism, agreeableness: c.agreeableness, halfLifeHours: c.halfLifeHours };
+  // 每个档案一份心情（§13）；默认档案就是原来的 mood.json
+  const moods = perProfile((id) => createMood({ store: jsonStore(profileDir(base, id), 'mood.json', log), log, opts }));
+  const mood = moods.of(DEFAULT_PROFILE);
 
-  ctx.provide('companionMood', mood.service);
+  /** companionMood 服务（约定 v2）：各方法多一个可选的档案参数，不给就是默认档案。 */
+  ctx.provide('companionMood', {
+    version: 2,
+    get: (profile) => moods.of(profile).service.get(),
+    feel: (label, intensity, source, profile) => moods.of(profile).service.feel(label, intensity, source),
+    describe: (profile) => moods.of(profile).service.describe(),
+    /** 订阅默认档案的心情变化（只有没装总控时用，那时只有默认档案）。 */
+    subscribe: (fn) => mood.service.subscribe(fn),
+  });
+  const aspect = profiledAspect(
+    (id) => moods.of(id).aspect,
+    (id) => {
+      moods.forget(id);
+      removeProfileDir(base, id);
+    },
+  );
 
   // 总控在时交出控制
   let underCore = false;
   ctx.inject(['companion'], (sub) => {
     sub.effect(() => {
-      const off = sub.companion.register(mood.aspect);
+      const off = registerAspect(sub.companion, aspect);
       underCore = true;
       return () => {
         underCore = false;

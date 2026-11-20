@@ -5,6 +5,7 @@
 
 import { createBond } from './aspect.mjs';
 import { completeText, configSchema, jsonStore, loggerOf, promptContext, storageDir, turnOf } from './shared/dsh.mjs';
+import { DEFAULT_PROFILE, perProfile, profileDir, profiledAspect, removeProfileDir, registerAspect } from './shared/profiles.mjs';
 import { feelingRequest, parseFeeling } from './shared/feeling.mjs';
 
 export const name = 'maidsh-bond';
@@ -25,22 +26,39 @@ export const Config = configSchema(name, DEFAULTS, { gain: [0.5, 30], hintChance
 export function apply(ctx, config = {}) {
   const c = { ...DEFAULTS, ...config };
   const log = loggerOf(ctx, name);
-  const store = jsonStore(storageDir(name, c.dataDir), 'bond.json', log);
+  const base = storageDir(name, c.dataDir);
   let roll = Math.random();
-  const bond = createBond({
-    store,
-    log,
-    opts: { gain: c.gain, hintChance: c.hintChance },
-    moodValence: () => ctx.get('companionMood')?.get?.().valence ?? 0,
-    roll: () => roll,
-  });
+  // 每个档案一份羁绊（§13）；读心情时读同一个档案的（老版心情不认档案，给的就是它唯一那份）
+  const bonds = perProfile((id) =>
+    createBond({
+      store: jsonStore(profileDir(base, id), 'bond.json', log),
+      log,
+      opts: { gain: c.gain, hintChance: c.hintChance },
+      moodValence: () => ctx.get('companionMood')?.get?.(id).valence ?? 0,
+      roll: () => roll,
+    }),
+  );
+  const bond = bonds.of(DEFAULT_PROFILE);
 
-  ctx.provide('companionBond', bond.service);
+  /** companionBond 服务（约定 v2）：各方法多一个可选的档案参数，不给就是默认档案。 */
+  ctx.provide('companionBond', {
+    version: 2,
+    get: (profile) => bonds.of(profile).service.get(),
+    interact: (label, intensity, source, profile) => bonds.of(profile).service.interact(label, intensity, source),
+    describe: (profile) => bonds.of(profile).service.describe(),
+  });
+  const aspect = profiledAspect(
+    (id) => bonds.of(id).aspect,
+    (id) => {
+      bonds.forget(id);
+      removeProfileDir(base, id);
+    },
+  );
 
   let underCore = false;
   ctx.inject(['companion'], (sub) => {
     sub.effect(() => {
-      const off = sub.companion.register(bond.aspect);
+      const off = registerAspect(sub.companion, aspect);
       underCore = true;
       return () => {
         underCore = false;

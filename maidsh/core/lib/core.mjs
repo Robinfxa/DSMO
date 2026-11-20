@@ -4,7 +4,7 @@
 import { FEELING_INSTRUCTIONS, FEELING_KEY, FEELING_SCHEMA, normalizeFeeling, todayLine } from './shared/feeling.mjs';
 import { parseLenient } from './shared/json.mjs';
 
-export const CONTRACT_VERSION = 1;
+export const CONTRACT_VERSION = 2;
 /** 接受的约定版本：当前版本和上一个。 */
 export const ACCEPTED_VERSIONS = new Set([CONTRACT_VERSION, CONTRACT_VERSION - 1].filter((v) => v > 0));
 
@@ -74,7 +74,7 @@ export function normalizeAspect(raw) {
     errors,
     aspect: errors.length
       ? null
-      : { id: a.id, title: String(a.title ?? a.id).slice(0, 24), version, analysis, onAnalysis: fn(a.onAnalysis), prompt, state: fn(a.state), batch },
+      : { id: a.id, title: String(a.title ?? a.id).slice(0, 24), version, analysis, onAnalysis: fn(a.onAnalysis), prompt, state: fn(a.state), batch, dropProfile: fn(a.dropProfile) },
   };
 }
 

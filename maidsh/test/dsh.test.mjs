@@ -382,7 +382,8 @@ test('scope: switched-off and Bot conversations get no analysis, no injection, a
   // 你关掉一个工作对话；DSMO 同步过来一个 Bot 对话
   svc.setScope('work', false);
   svc.setBotSessions(['bot-1']);
-  assert.deepEqual(svc.scopeOf('bot-1'), { sessionId: 'bot-1', enabled: false, bot: true, off: false });
+  const so = svc.scopeOf('bot-1');
+  assert.deepEqual({ sessionId: so.sessionId, enabled: so.enabled, bot: so.bot, off: so.off, profile: so.profile, from: so.from }, { sessionId: 'bot-1', enabled: false, bot: true, off: false, profile: null, from: 'bot' });
   for (const id of ['work', 'bot-1']) {
     assert.equal(h.prompts.get('maidsh').text(ac(id)), '', `no injection in ${id}`);
     h.root.emit('session/event', session({ id }), turnEnd());

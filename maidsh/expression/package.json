@@ -1,6 +1,6 @@
 {
   "name": "maidsh-expression",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "MaiDSH·表达：学你的口头禅和你们之间的黑话，越熟越有你们俩的说话味道，单独可用",
   "license": "MIT",
   "type": "module",

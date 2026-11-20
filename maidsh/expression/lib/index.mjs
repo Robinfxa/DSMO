@@ -4,6 +4,7 @@
 
 import { createExpression } from './aspect.mjs';
 import { completeText, configSchema, jsonStore, loggerOf, promptContext, readJsonBody, rejectRead, rejectWrite, sendJson, storageDir, trackLatest, turnOf } from './shared/dsh.mjs';
+import { DEFAULT_PROFILE, perProfile, profileDir, profiledAspect, removeProfileDir, requestedProfile, registerAspect } from './shared/profiles.mjs';
 
 export const name = 'maidsh-expression';
 export const inject = ['systemPrompt', 'llm'];
@@ -21,19 +22,40 @@ export function apply(ctx, config = {}) {
   ctx.effect(() => () => {
     alive = false;
   });
-  const expression = createExpression({
-    store: jsonStore(storageDir(name, c.dataDir), 'expression.json', log),
-    log,
-    moodValence: () => ctx.get('companionMood')?.get?.().valence ?? 0,
-    bondLevel: () => ctx.get('companionBond')?.get?.().level ?? 2,
-  });
+  const base = storageDir(name, c.dataDir);
+  // 每个档案一份表达（§13）；默认档案就是原来的 expression.json。读心情、羁绊时读同一个档案的
+  const expressions = perProfile((id) =>
+    createExpression({
+      store: jsonStore(profileDir(base, id), 'expression.json', log),
+      log,
+      moodValence: () => ctx.get('companionMood')?.get?.(id).valence ?? 0,
+      bondLevel: () => ctx.get('companionBond')?.get?.(id).level ?? 2,
+    }),
+  );
+  const expression = expressions.of(DEFAULT_PROFILE);
+  const aspect = profiledAspect(
+    (id) => expressions.of(id).aspect,
+    (id) => {
+      expressions.forget(id);
+      removeProfileDir(base, id);
+    },
+  );
 
-  ctx.provide('companionExpression', { ...expression.service, batchApply: expression.batchApply, undoJob: expression.undoJob });
+  /** companionExpression 服务（约定 v2）：各方法多一个可选的档案参数（最后一个），不给就是默认档案。 */
+  const of = (p) => expressions.of(p);
+  ctx.provide('companionExpression', {
+    version: 2,
+    list: (profile) => of(profile).service.list(),
+    forget: (id, profile) => of(profile).service.forget(id),
+    teach: (when, say, opts = {}) => of(opts?.profile).service.teach(when, say, opts),
+    batchApply: (result, opts = {}) => of(opts?.profile).batchApply(result, opts),
+    undoJob: (jobId, profile) => of(profile).undoJob(jobId),
+  });
 
   let underCore = false;
   ctx.inject(['companion'], (sub) => {
     sub.effect(() => {
-      const off = sub.companion.register(expression.aspect);
+      const off = registerAspect(sub.companion, aspect);
       underCore = true;
       return () => {
         underCore = false;
@@ -69,7 +91,9 @@ export function apply(ctx, config = {}) {
         handler: (req, res) => {
           const no = rejectRead(ctx, req);
           if (no) return sendJson(res, no[0], { ok: false, error: no[1] });
-          sendJson(res, 200, { ok: true, value: expression.snapshot() });
+          const profile = requestedProfile(ctx, req);
+          if (!profile) return sendJson(res, 404, { ok: false, error: '找不到这个档案' });
+          sendJson(res, 200, { ok: true, value: expressions.of(profile).snapshot() });
         },
       }),
     );
@@ -82,7 +106,9 @@ export function apply(ctx, config = {}) {
           if (no) return sendJson(res, no[0], { ok: false, error: no[1] });
           const body = await readJsonBody(req);
           if (!body || typeof body !== 'object') return sendJson(res, 400, { ok: false, error: 'bad json' });
-          const out = expression.mutate(body);
+          const profile = requestedProfile(ctx, req, body);
+          if (!profile) return sendJson(res, 404, { ok: false, error: '找不到这个档案' });
+          const out = expressions.of(profile).mutate(body);
           sendJson(res, out.ok ? 200 : 400, out);
         },
       }),

@@ -1,5 +1,5 @@
 {
   "package": "@api-demo/maidsh-expression",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "source": "plugins/maidsh-expression"
 }

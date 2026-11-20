@@ -110,10 +110,10 @@ export function batchRequest(aspects, textType, chunk, now = Date.now()) {
 }
 
 /** 新任务。kind 'text'：text 是原文；'session'：messages 是消息列表。 */
-export function newJob({ id, textType, title, text, messages, now }) {
+export function newJob({ id, textType, title, text, messages, now, profile = 'default' }) {
   const chunks = textType === 'chatlog' || textType === 'session' ? chunkMessages(messages ?? parseChatlog(text)) : chunkText(text);
   const source = messages ? JSON.stringify(messages) : String(text ?? '');
-  return { id, textType, title: String(title ?? '').slice(0, 40) || TYPE_NAMES[textType], hash: hashOf(`${textType}\n${source}`), status: 'queued', cursor: 0, total: chunks.length, chunks, est: estimate(chunks), added: 0, errors: 0, createdAt: now, updatedAt: now };
+  return { id, textType, profile, title: String(title ?? '').slice(0, 40) || TYPE_NAMES[textType], hash: hashOf(`${textType}\n${source}`), status: 'queued', cursor: 0, total: chunks.length, chunks, est: estimate(chunks), added: 0, errors: 0, createdAt: now, updatedAt: now };
 }
 
 /**
@@ -136,4 +136,4 @@ export function parseChatlog(text) {
 }
 
 /** 给前端看的任务概况（不带原文）。 */
-export const jobView = (j) => ({ id: j.id, textType: j.textType, title: j.title, status: j.status, done: j.cursor, total: j.total ?? j.chunks.length, est: j.est, added: j.added, errors: j.errors, createdAt: j.createdAt, updatedAt: j.updatedAt, error: j.error });
+export const jobView = (j) => ({ id: j.id, textType: j.textType, profile: j.profile ?? 'default', title: j.title, status: j.status, done: j.cursor, total: j.total ?? j.chunks.length, est: j.est, added: j.added, errors: j.errors, createdAt: j.createdAt, updatedAt: j.updatedAt, error: j.error });
