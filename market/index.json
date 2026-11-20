@@ -518,11 +518,11 @@
     },
     {
       "tier": 3,
-      "integrity": "sha256-bAhKNsvRvkUI3/7lho8k4wm4/vCSo/51kvzVSPTowX8=",
+      "integrity": "sha256-GVvFcIu1sKk0UhfO2kP+lNnXea3z20cSp+jmUX6SDrk=",
       "manifest": {
         "v": 1,
         "title": "今日用量",
-        "summary": "输入框上方显示今天花了多少钱，点开看本周、本月的用量和各模型明细。",
+        "summary": "输入框里右侧显示今天花了多少钱，点开看本周、本月的用量和各模型明细。",
         "kinds": [
           "engine"
         ],
@@ -531,19 +531,19 @@
           "package": "dsh-go-example-usage",
           "version": "0.1.0",
           "shows": {
-            "pills": [
+            "strip": [
               "今日用量 ¥3.10"
             ]
           }
         },
-        "description": "装在当前主机的引擎里：输入框上方多一个「今日用量」，显示今天的模型花费。点开是用量面板，可以切换本周 / 本月，看各模型的输入输出和花费，也能把用量放进输入框。\n\n不需要时卸载即可，界面上的按钮和面板会一起消失。",
+        "description": "装在当前主机的引擎里：输入框里右侧多一行小字「今日用量」，显示今天的模型花费。点开是用量面板，可以切换本周 / 本月，看各模型的输入输出和花费，也能把用量放进输入框。\n\n不需要时卸载即可，界面上的按钮和面板会一起消失。",
         "highlights": [
-          "输入框上方显示今日花费",
+          "输入框里显示今日花费",
           "本周 / 本月用量图表",
           "各模型的明细"
         ],
         "id": "@api-demo/usage-today",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "license": "MIT",
         "official": true
       }

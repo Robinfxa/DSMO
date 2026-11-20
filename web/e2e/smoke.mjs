@@ -107,8 +107,9 @@ await run('desktop', { width: 1280, height: 800 }, async (page) => {
   await shot(page, '16-notes-panel');
   await page.click('.p-close');
   await page.waitForTimeout(300);
-  // the engine plugin's strip pill → its dsh-Go panel
-  await page.click('.pill:has-text("今日用量")');
+  // the engine plugin's status line, inside the composer at the right → its dsh-Go panel
+  if (await page.isVisible('.pill:has-text("今日用量")')) throw new Error('今日用量 is still a pill above the composer');
+  await page.click('.fn-right .c-strip:has-text("今日用量")');
   await page.waitForTimeout(700);
   await shot(page, '17-dshgo-panel');
   await page.click('.p-close');

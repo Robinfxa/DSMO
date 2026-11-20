@@ -49,7 +49,7 @@ export interface ApiDemoManifest {
   engine?: {
     package: string;
     version: string;
-    shows?: { pills?: string[]; sider?: string[] };
+    shows?: { pills?: string[]; sider?: string[]; strip?: string[] };
     /**
      * One request the app sends once the package runs (after install, or after the engine restart it
      * needed): a JSON POST to the package's own routes, `/api/<package>/…`. For defaults DSMO wants

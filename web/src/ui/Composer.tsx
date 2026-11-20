@@ -239,11 +239,6 @@ export function Composer() {
             {t.permissionPreset === 'danger-full-access' ? '完全访问' : t.permissionPreset === 'read-only' ? '只读' : t.permissionPreset}
           </button>
         )}
-        {strip && (
-          <button class="pill" type="button" onClick={strip.run}>
-            {strip.text}
-          </button>
-        )}
         {pills.map((p) => (
           <button class="pill" type="button" key={p.key} onClick={p.run}>
             {p.label}
@@ -259,6 +254,13 @@ export function Composer() {
           </span>
         ))}
           </>
+  );
+  // A dsh-Go plugin's status line (composer.strip, e.g. 今日用量): quiet text at the right of the
+  // composer's own row, not a pill above it; it gives way while a reply generates or you speak.
+  const stripEl = strip && !voice && (
+    <button class="c-strip" type="button" title={strip.text} onClick={strip.run}>
+      {strip.text}
+    </button>
   );
   const pillsEl = (
     <div class="pills" id="pills">
@@ -289,7 +291,7 @@ export function Composer() {
     return (
       <div class="dock m-dock" id="dock">
         {cmenuEl}
-        {(pills.length > 0 || strip || attachments.value.length > 0 || (todos && todos.length > 0) || (adv && t?.permissionPreset && t.permissionPreset !== 'workspace-write')) && <div class="m-pills">{pillsInner}</div>}
+        {(pills.length > 0 || attachments.value.length > 0 || (todos && todos.length > 0) || (adv && t?.permissionPreset && t.permissionPreset !== 'workspace-write')) && <div class="m-pills">{pillsInner}</div>}
         <div class={`m-composer ${edit ? 'editing' : ''}`} id="composer">
           {edit && (
             <div class="m-edit-h">
@@ -323,6 +325,7 @@ export function Composer() {
               </>
             )}
             <span class="m-grow" />
+            {stripEl}
             {voice && <span class="v-timer">{`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`}</span>}
             {extraButtons.map((b) => (
               <button class="m-cbtn" type="button" key={b.key} aria-label={b.title} onClick={b.run}>
@@ -399,6 +402,7 @@ export function Composer() {
             )}
           </div>
           <div class="fn-right">
+            {stripEl}
             {voice && <span class="v-timer" id="vTimer">{`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`}</span>}
             {extraButtons.map((b) => (
               <button class="ib m pri" type="button" key={b.key} aria-label={b.title} title={b.title} onClick={b.run}>

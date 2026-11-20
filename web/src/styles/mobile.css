@@ -115,6 +115,14 @@ body.is-m:not([data-ds-dark-theme]) .m-composer { box-shadow: 0 2px 12px rgba(0,
 .m-send { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 20px; background: var(--m-accent); color: #fff; cursor: pointer; animation: fadeIn .15s; }
 .m-send.off { background: var(--m-line); color: var(--m-sub); }
 .m-send svg { width: 22px; height: 22px; }
+.m-fn .c-strip { margin-left: auto; padding: 0 4px 0 2px; height: 30px; color: var(--m-sub); font-size: 12.5px; }
+.m-fn:has(.c-strip) { gap: 4px; }
+.m-fn:has(.c-strip) .m-grow { display: none; }
+/* a little room for it on a narrow phone: snugger chip and buttons */
+.m-fn:has(.c-strip) .m-chip { padding: 0 11px; }
+.m-fn:has(.c-strip) .m-cbtn { width: 36px; }
+.m-fn .c-strip:hover { background: none; }
+.m-fn .c-strip:active { color: var(--m-fg); }
 .m-dock .v-timer { font-size: 13px; color: var(--m-accent); font-variant-numeric: tabular-nums; }
 .m-pills { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 4px 0; }
 .m-dock .cmenu { bottom: calc(100% + 4px); left: 12px; right: 12px; }

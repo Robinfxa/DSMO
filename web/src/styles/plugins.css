@@ -122,6 +122,9 @@ body:not(.is-m) .mk-pair { box-shadow: inset 0 0 0 1px var(--c-line); }
 .mk-ph { color: var(--m-sub); margin-bottom: 12px; }
 .mk-row { display: flex; align-items: center; gap: 8px; }
 .mk-chip { padding: 5px 12px; border-radius: 16px; box-shadow: inset 0 0 0 1px var(--m-chip); font-size: 14px; }
+.mk-grow { flex: 1; }
+.mk-strip { overflow: hidden; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.mk-strip.hl { color: var(--m-accent); }
 .mk-chip.on { color: var(--m-accent); box-shadow: inset 0 0 0 1px var(--m-accent); }
 .mk-send { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--m-accent); color: #fff; }
 .mk-sec-t { padding: 26px 22px 8px; color: var(--m-sub); font-size: 14px; }

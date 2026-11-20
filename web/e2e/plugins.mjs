@@ -11,6 +11,10 @@ const shots = join(here, 'shots', 'p');
 mkdirSync(shots, { recursive: true });
 const errors = [];
 const scheme = process.argv[2] || 'dark';
+const check = (ok, what) => {
+  console.log((ok ? 'ok   ' : 'FAIL ') + what);
+  if (!ok) errors.push(what);
+};
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 
 async function phone() {
@@ -160,6 +164,12 @@ async function phone() {
   await shot('15-prompts-edited');
   await page.click('.p-close');
   await page.waitForTimeout(400);
+  // 今日用量 (a dsh-Go composer.strip): quiet text at the right of the composer's row, not a pill above it
+  check(await page.isVisible('.m-fn .c-strip:has-text("今日用量")'), '今日用量 inside the composer, right side');
+  check(!(await page.isVisible('.m-pills .pill:has-text("今日用量")')), '今日用量 no longer a pill above the composer');
+  const [strip, send] = await Promise.all([page.locator('.m-fn .c-strip').boundingBox(), page.locator('.m-fn #sendBtn, .m-fn #voiceBtn').first().boundingBox()]);
+  check(strip && send && strip.x < send.x && Math.abs(strip.y + strip.height / 2 - (send.y + send.height / 2)) < 4, 'same row as the send button, to its left');
+  await shot('15b-usage-strip');
   // 导入历史对话 on a host whose bridge has no session import: kept on this device
   await page.evaluate(() => history.replaceState(null, '', location.href.split('#')[0] + '#oldbridge'));
   await page.click('[aria-label="打开边栏"]');

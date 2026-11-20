@@ -375,6 +375,9 @@ button.h-host:hover { color: var(--dsw-alias-label-primary); }
 .tr-btn { flex-shrink: 0; height: 26px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 13px; background: transparent; font-size: 12px; color: var(--dsw-alias-label-secondary); animation: fadeIn .25s ease-in; transition: background-color .2s var(--ease); }
 .tr-btn:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
+.c-strip { flex: 0 1 auto; min-width: 0; max-width: 240px; overflow: hidden; height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; animation: fadeIn .25s ease-in; }
+.c-strip:hover { background: var(--dsw-specific-selector); color: var(--dsw-alias-label-secondary); }
+.fn-right:has(.c-strip) { flex-shrink: 1; min-width: 0; }
 .v-timer { flex-shrink: 0; font-size: 12px; line-height: 17px; color: var(--dsw-alias-label-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
 #voiceBtn.recording, #voiceBtn.recording:hover { background: transparent; }
 .v-active { position: relative; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; }

@@ -126,8 +126,8 @@ export function checkManifest(m, { panelHtml = {} } = {}) {
     if (!/^(@[a-z0-9-]+\/)?[a-z0-9.-]+$/.test(m.engine.package || '')) e('engine.package 不合规');
     if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(m.engine.version || '')) e('engine.version 必须是固定版本');
     const shows = m.engine.shows || {};
-    for (const k of Object.keys(shows)) if (!['pills', 'sider'].includes(k)) e(`engine.shows 不认识 ${k}`);
-    for (const t of [...(shows.pills || []), ...(shows.sider || [])]) if (typeof t !== 'string' || t.length > 16) e('engine.shows 每项 16 字以内');
+    for (const k of Object.keys(shows)) if (!['pills', 'sider', 'strip'].includes(k)) e(`engine.shows 不认识 ${k}`);
+    for (const t of [...(shows.pills || []), ...(shows.sider || []), ...(shows.strip || [])]) if (typeof t !== 'string' || t.length > 16) e('engine.shows 每项 16 字以内');
     // One JSON POST the app sends once the package runs: only to the package's own routes.
     if (m.engine.setup !== undefined) {
       const st = m.engine.setup || {};

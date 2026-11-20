@@ -137,7 +137,7 @@ const COMPOSER = [
   ['composer.voice', '语音'],
 ] as const;
 
-function Schematic({ hide, mark, siderAdd = [], pillAdd = [] }: { hide: Set<string>; mark?: Set<string>; siderAdd?: string[]; pillAdd?: string[] }) {
+function Schematic({ hide, mark, siderAdd = [], pillAdd = [], stripAdd = [] }: { hide: Set<string>; mark?: Set<string>; siderAdd?: string[]; pillAdd?: string[]; stripAdd?: string[] }) {
   return (
     <>
       <div class="mk-sec-t">边栏</div>
@@ -167,13 +167,27 @@ function Schematic({ hide, mark, siderAdd = [], pillAdd = [] }: { hide: Set<stri
       )}
       <div class="mk-comp">
         <div class="mk-ph">发消息或按住说话</div>
-        <div class="mk-row">
-          {COMPOSER.filter(([k]) => !hide.has(k)).map(([k, t]) => (
-            <span class={`mk-chip ${mark?.has(k) ? 'gone' : ''}`} key={k}>
-              {t}
-            </span>
-          ))}
-        </div>
+        {stripAdd.length > 0 ? (
+          // a status line shows in the advanced composer: model on the left, the line, then ＋ and 语音
+          <div class="mk-row">
+            <span class="mk-chip">模型</span>
+            <span class="mk-grow" />
+            {stripAdd.map((t) => (
+              <span class="mk-strip hl" key={t}>
+                {t}
+              </span>
+            ))}
+            <span class="mk-chip">＋</span>
+          </div>
+        ) : (
+          <div class="mk-row">
+            {COMPOSER.filter(([k]) => !hide.has(k)).map(([k, t]) => (
+              <span class={`mk-chip ${mark?.has(k) ? 'gone' : ''}`} key={k}>
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );
@@ -242,11 +256,11 @@ export function ToolsPreview({ p }: { p: ApiDemoManifest }) {
 export function EnginePreview({ p }: { p: ApiDemoManifest }) {
   const mode = themeNow();
   const shows = p.engine?.shows;
-  if (!shows?.pills?.length && !shows?.sider?.length) return null;
+  if (!shows?.pills?.length && !shows?.sider?.length && !shows?.strip?.length) return null;
   return (
     <div class="mk-pair one">
       <Phone mode={mode} style={vars(mode)} label="新增的入口" cls="schem">
-        <Schematic hide={new Set()} siderAdd={shows.sider ?? []} pillAdd={shows.pills ?? []} />
+        <Schematic hide={new Set()} siderAdd={shows.sider ?? []} pillAdd={shows.pills ?? []} stripAdd={shows.strip ?? []} />
       </Phone>
     </div>
   );
