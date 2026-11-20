@@ -1,0 +1,38 @@
+{
+  "name": "maidsh-mood",
+  "version": "0.1.0",
+  "description": "MaiDSH·心情：AI 角色有会起伏、会慢慢平复的心情，单独可用",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "dsh-plugin",
+    "companion",
+    "deepseek-harness"
+  ],
+  "main": "lib/index.mjs",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Robinfxa/DSMO.git",
+    "directory": "maidsh/mood"
+  }
+}

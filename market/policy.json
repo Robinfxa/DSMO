@@ -10,11 +10,17 @@
     "@api-demo/auto-daily-plan",
     "@api-demo/auto-weekly-review",
     "@api-demo/persona-library",
-    "@api-demo/memory-share"
+    "@api-demo/memory-share",
+    "@api-demo/maidsh-mood",
+    "@api-demo/maidsh-bond",
+    "@api-demo/maidsh-core"
   ],
   "featured": [
     "@api-demo/persona-library",
     "@api-demo/memory-share",
+    "@api-demo/maidsh-mood",
+    "@api-demo/maidsh-bond",
+    "@api-demo/maidsh-core",
     "@api-demo/quick-prompts",
     "@api-demo/usage-today",
     "@api-demo/skin-midnight",

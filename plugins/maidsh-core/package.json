@@ -1,0 +1,28 @@
+{
+  "name": "@api-demo/maidsh-core",
+  "version": "1.0.0",
+  "description": "把 MaiDSH 的心情、羁绊（和其他接进来的插件）合在一起",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "MaiDSH 总控",
+    "summary": "把 MaiDSH 的心情、羁绊（和其他接进来的插件）合在一起：每轮只调一次模型，提示合成一段。",
+    "kinds": [
+      "engine"
+    ],
+    "permissions": [],
+    "engine": {
+      "package": "maidsh-core",
+      "version": "0.1.0"
+    },
+    "description": "单独装没有效果，要和「MaiDSH 心情」「MaiDSH 羁绊」一起用。装上之后，几个插件每轮要分析的东西合成一次模型调用，注入的提示也按顺序合成一段、控制总长度，省钱也更稳定。卸掉总控，各插件自动回到各自工作，不用重启。\n\n别的插件也可以按 MaiDSH 的约定接进来，由总控统一调度。\n\n引擎部分是 npm 包 maidsh-core 0.1.0（MIT 许可），装在当前主机上。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
+    "highlights": [
+      "每轮只多调一次模型",
+      "提示合成一段",
+      "装卸都不用重启"
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+# maidsh-mood：插进 profile 的插件树。配置都可选，见 lib/index.mjs 里的 DEFAULTS。
+- insert:
+    - id: companion-mood
+      name: maidsh-mood

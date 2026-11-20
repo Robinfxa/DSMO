@@ -1,0 +1,38 @@
+{
+  "name": "maidsh-core",
+  "version": "0.1.0",
+  "description": "MaiDSH·总控：把心情、羁绊等「面」（含第三方）组织起来，每轮只调一次模型、统一注入",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "dsh-plugin",
+    "companion",
+    "deepseek-harness"
+  ],
+  "main": "lib/index.mjs",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Robinfxa/DSMO.git",
+    "directory": "maidsh/core"
+  }
+}

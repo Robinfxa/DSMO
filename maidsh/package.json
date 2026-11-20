@@ -1,0 +1,12 @@
+{
+  "name": "maidsh-dev",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-shared.mjs",
+    "test": "node scripts/sync-shared.mjs --check && node --test test/*.test.mjs core/test/*.test.mjs mood/test/*.test.mjs bond/test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0"
+  }
+}
