@@ -1,0 +1,477 @@
+From d7e5e20de6449a7634d386b7aa52ba64e14b5195 Mon Sep 17 00:00:00 2001
+From: DSMO <dsmo@users.noreply.github.com>
+Date: Fri, 20 Nov 2026 05:22:47 -0500
+Subject: [PATCH] DSMO: no hidden features' art, skills, widget or links before
+ release
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+dsh-Go's brand and mascot art is not AGPL (ASSETS.md), and DSMO hides the
+features that use it. Text changes only; native/apply.sh deletes the
+binary files (so this patch doesn't carry them):
+
+- page_links: hiddenPageLinks (tavern, companion, forum, community, pets,
+  shared-links) are neither link targets nor pages, from a reply, from
+  outside the app or from the page;
+- the 伙伴小屋 and pet skills are no longer installed on each engine start;
+- pubspec no longer declares assets/whale, assets/pets/*, assets/star and
+  those two skills; the Star dialog draws no whale sticker;
+- the 伙伴小屋 home-screen widget is gone (receiver, plugin, layout,
+  strings, background).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ app/android/app/src/main/AndroidManifest.xml  |  13 --
+ .../ccch1mneyyy/dsh_app/MainActivity.kt       |   1 -
+ .../dsh_app/companion/CompanionWidget.kt      | 131 ------------------
+ .../main/res/drawable/companion_widget_bg.xml |   9 --
+ .../src/main/res/layout/companion_widget.xml  |  77 ----------
+ .../values-zh/companion_widget_strings.xml    |  10 --
+ .../res/values/companion_widget_strings.xml   |  10 --
+ .../main/res/xml/companion_widget_info.xml    |  16 ---
+ app/lib/links/page_links.dart                 |   7 +-
+ app/lib/ui/star/star_prompt_dialog.dart       |   3 +-
+ app/lib/ui/star/star_prompt_host.dart         |   1 -
+ app/lib/ui_config/ui_skill.dart               |   3 +-
+ app/pubspec.yaml                              |   6 -
+ 13 files changed, 9 insertions(+), 278 deletions(-)
+ delete mode 100644 app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/companion/CompanionWidget.kt
+ delete mode 100644 app/android/app/src/main/res/drawable/companion_widget_bg.xml
+ delete mode 100644 app/android/app/src/main/res/layout/companion_widget.xml
+ delete mode 100644 app/android/app/src/main/res/values-zh/companion_widget_strings.xml
+ delete mode 100644 app/android/app/src/main/res/values/companion_widget_strings.xml
+ delete mode 100644 app/android/app/src/main/res/xml/companion_widget_info.xml
+
+diff --git a/app/android/app/src/main/AndroidManifest.xml b/app/android/app/src/main/AndroidManifest.xml
+index 72d9d448..cabd7ac3 100644
+--- a/app/android/app/src/main/AndroidManifest.xml
++++ b/app/android/app/src/main/AndroidManifest.xml
+@@ -298,19 +298,6 @@
+             </intent-filter>
+         </receiver>
+ 
+-        <!-- 伙伴小屋 on the home screen (companion/CompanionWidget.kt). -->
+-        <receiver
+-            android:name=".companion.CompanionWidgetProvider"
+-            android:exported="false"
+-            android:label="@string/companion_widget_label">
+-            <intent-filter>
+-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+-            </intent-filter>
+-            <meta-data
+-                android:name="android.appwidget.provider"
+-                android:resource="@xml/companion_widget_info" />
+-        </receiver>
+-
+         <receiver android:name=".notify.NotifyActionReceiver" android:exported="false" />
+         <receiver android:name=".phone.a11y.A11yKeeper$Receiver" android:exported="false">
+             <intent-filter>
+diff --git a/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt b/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt
+index f7f94904..688577cf 100644
+--- a/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt
++++ b/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt
+@@ -66,7 +66,6 @@ class MainActivity : FlutterActivity() {
+             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.usage.UsagePlugin())
+             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.companion.CompanionVoicePlugin())
+             engine.plugins.add(io.github.ccch1mneyyy.dsh_app.speech.SpeechPlugin())
+-            engine.plugins.add(io.github.ccch1mneyyy.dsh_app.companion.CompanionWidgetPlugin())
+             engine.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
+             cache.put(ENGINE_ID, engine)
+         }
+diff --git a/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/companion/CompanionWidget.kt b/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/companion/CompanionWidget.kt
+deleted file mode 100644
+index 63ddf943..00000000
+--- a/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/companion/CompanionWidget.kt
++++ /dev/null
+@@ -1,131 +0,0 @@
+-package io.github.ccch1mneyyy.dsh_app.companion
+-
+-import android.app.PendingIntent
+-import android.appwidget.AppWidgetManager
+-import android.appwidget.AppWidgetProvider
+-import android.content.ComponentName
+-import android.content.Context
+-import android.content.Intent
+-import android.net.Uri
+-import android.view.View
+-import android.widget.RemoteViews
+-import io.flutter.embedding.engine.plugins.FlutterPlugin
+-import io.flutter.plugin.common.MethodCall
+-import io.flutter.plugin.common.MethodChannel
+-import io.github.ccch1mneyyy.dsh_app.R
+-import io.github.ccch1mneyyy.dsh_app.i18n.AppStrings
+-import java.util.Calendar
+-
+-/**
+- * 伙伴小屋 on the home screen: the little pixel whale, her name, what she's doing, the last thing
+- * she said, and how well she knows you (lib/companion/companion_widget.dart).
+- *
+- * The app sends what the room looks like through MethodChannel `dsh/companion_widget` (`update`);
+- * it is kept in this module's own preferences and drawn on every widget. Between visits the
+- * provider only moves her between awake and asleep with the hour and lets an activity run out.
+- * Tapping opens the room through the app's own page link, `dshgo://open/companion`.
+- */
+-class CompanionWidgetProvider : AppWidgetProvider() {
+-    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+-        draw(context, manager, ids)
+-    }
+-
+-    companion object {
+-        private const val STORE = "companion_widget"
+-
+-        /** What she said stays on the widget this long. */
+-        private const val LINE_MS = 12 * 3600_000L
+-
+-        fun store(context: Context, values: Map<*, *>) {
+-            val edit = context.getSharedPreferences(STORE, Context.MODE_PRIVATE).edit()
+-            for ((key, value) in values) {
+-                if (key !is String) continue
+-                when (value) {
+-                    is String -> edit.putString(key, value)
+-                    is Number -> edit.putLong(key, value.toLong())
+-                    null -> edit.remove(key)
+-                }
+-            }
+-            edit.apply()
+-        }
+-
+-        fun refresh(context: Context) {
+-            val manager = AppWidgetManager.getInstance(context)
+-            val ids = manager.getAppWidgetIds(ComponentName(context, CompanionWidgetProvider::class.java))
+-            if (ids.isNotEmpty()) draw(context, manager, ids)
+-        }
+-
+-        private fun draw(context: Context, manager: AppWidgetManager, ids: IntArray) {
+-            val prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+-            val now = System.currentTimeMillis()
+-            val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+-            val night = hour >= 23 || hour < 6
+-            val activity = prefs.getString("activity", "idle")
+-            val busy = activity != null && activity != "idle" && prefs.getLong("untilMs", 0) > now
+-            val status = when {
+-                busy -> prefs.getString("status", null)
+-                night -> prefs.getString("statusAsleep", null) ?: AppStrings.get(context, R.string.companion_widget_asleep)
+-                else -> prefs.getString("statusWaiting", null) ?: AppStrings.get(context, R.string.companion_widget_waiting)
+-            } ?: ""
+-            val line = prefs.getString("line", null)?.takeIf { now - prefs.getLong("saidAt", 0) < LINE_MS } ?: ""
+-            val bond = prefs.getLong("bond", -1).coerceIn(-1, 3)
+-            val pearls = if (bond >= 0) "●".repeat((bond + 1).toInt()) + "○".repeat((3 - bond).toInt()) else ""
+-            val image = when {
+-                night && !busy -> R.drawable.companion_widget_sleeping
+-                bond >= 2 -> R.drawable.companion_widget_happy
+-                else -> R.drawable.companion_widget_idle
+-            }
+-            val open = PendingIntent.getActivity(
+-                context,
+-                0,
+-                Intent(Intent.ACTION_VIEW, Uri.parse("dshgo://open/companion"))
+-                    .setPackage(context.packageName)
+-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+-            )
+-            for (id in ids) {
+-                val views = RemoteViews(context.packageName, R.layout.companion_widget)
+-                views.setTextViewText(
+-                    R.id.companion_widget_name,
+-                    prefs.getString("name", null) ?: AppStrings.get(context, R.string.companion_widget_name),
+-                )
+-                views.setTextViewText(R.id.companion_widget_bond, pearls)
+-                views.setTextViewText(R.id.companion_widget_status, status)
+-                views.setTextViewText(R.id.companion_widget_line, line)
+-                views.setViewVisibility(R.id.companion_widget_line, if (line.isEmpty()) View.GONE else View.VISIBLE)
+-                views.setImageViewResource(R.id.companion_widget_whale, image)
+-                views.setOnClickPendingIntent(R.id.companion_widget_root, open)
+-                manager.updateAppWidget(id, views)
+-            }
+-        }
+-    }
+-}
+-
+-/** MethodChannel `dsh/companion_widget`: `update` keeps what the app sends and redraws. */
+-class CompanionWidgetPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
+-    private lateinit var methods: MethodChannel
+-    private lateinit var context: Context
+-
+-    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+-        context = binding.applicationContext
+-        methods = MethodChannel(binding.binaryMessenger, "dsh/companion_widget").also { it.setMethodCallHandler(this) }
+-    }
+-
+-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+-        methods.setMethodCallHandler(null)
+-    }
+-
+-    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+-        when (call.method) {
+-            "update" -> {
+-                val values = call.arguments as? Map<*, *>
+-                if (values != null) {
+-                    CompanionWidgetProvider.store(context, values)
+-                    CompanionWidgetProvider.refresh(context)
+-                }
+-                result.success(null)
+-            }
+-            else -> result.notImplemented()
+-        }
+-    }
+-}
+diff --git a/app/android/app/src/main/res/drawable/companion_widget_bg.xml b/app/android/app/src/main/res/drawable/companion_widget_bg.xml
+deleted file mode 100644
+index 00bda645..00000000
+--- a/app/android/app/src/main/res/drawable/companion_widget_bg.xml
++++ /dev/null
+@@ -1,9 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- 伙伴小屋 widget: the room's deep water, as on the stage at night. -->
+-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+-    <gradient
+-        android:angle="270"
+-        android:startColor="#FF1C5A8C"
+-        android:endColor="#FF0D2F55" />
+-    <corners android:radius="24dp" />
+-</shape>
+diff --git a/app/android/app/src/main/res/layout/companion_widget.xml b/app/android/app/src/main/res/layout/companion_widget.xml
+deleted file mode 100644
+index 4542e8be..00000000
+--- a/app/android/app/src/main/res/layout/companion_widget.xml
++++ /dev/null
+@@ -1,77 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- 伙伴小屋 on the home screen (CompanionWidget.kt): the little pixel whale, her name, what
+-     she's doing, the last thing she said, and how well she knows you. Tapping opens the room. -->
+-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:id="@+id/companion_widget_root"
+-    android:layout_width="match_parent"
+-    android:layout_height="match_parent"
+-    android:background="@drawable/companion_widget_bg"
+-    android:gravity="center_vertical"
+-    android:orientation="horizontal"
+-    android:paddingStart="10dp"
+-    android:paddingTop="8dp"
+-    android:paddingEnd="16dp"
+-    android:paddingBottom="8dp">
+-
+-    <ImageView
+-        android:id="@+id/companion_widget_whale"
+-        android:layout_width="64dp"
+-        android:layout_height="64dp"
+-        android:contentDescription="@null"
+-        android:scaleType="fitCenter"
+-        android:src="@drawable/companion_widget_idle" />
+-
+-    <LinearLayout
+-        android:layout_width="0dp"
+-        android:layout_height="wrap_content"
+-        android:layout_marginStart="8dp"
+-        android:layout_weight="1"
+-        android:orientation="vertical">
+-
+-        <LinearLayout
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:gravity="center_vertical"
+-            android:orientation="horizontal">
+-
+-            <TextView
+-                android:id="@+id/companion_widget_name"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:ellipsize="end"
+-                android:maxLines="1"
+-                android:textColor="#FFF2FBFF"
+-                android:textSize="15sp"
+-                android:textStyle="bold" />
+-
+-            <TextView
+-                android:id="@+id/companion_widget_bond"
+-                android:layout_width="wrap_content"
+-                android:layout_height="wrap_content"
+-                android:layout_marginStart="6dp"
+-                android:maxLines="1"
+-                android:textColor="#FFFF9DB5"
+-                android:textSize="10sp" />
+-        </LinearLayout>
+-
+-        <TextView
+-            android:id="@+id/companion_widget_status"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="1dp"
+-            android:ellipsize="end"
+-            android:maxLines="1"
+-            android:textColor="#FF9FD8F2"
+-            android:textSize="12sp" />
+-
+-        <TextView
+-            android:id="@+id/companion_widget_line"
+-            android:layout_width="match_parent"
+-            android:layout_height="wrap_content"
+-            android:layout_marginTop="3dp"
+-            android:ellipsize="end"
+-            android:maxLines="2"
+-            android:textColor="#E6F2FBFF"
+-            android:textSize="13sp" />
+-    </LinearLayout>
+-</LinearLayout>
+diff --git a/app/android/app/src/main/res/values-zh/companion_widget_strings.xml b/app/android/app/src/main/res/values-zh/companion_widget_strings.xml
+deleted file mode 100644
+index a9663416..00000000
+--- a/app/android/app/src/main/res/values-zh/companion_widget_strings.xml
++++ /dev/null
+@@ -1,10 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- 伙伴小屋的桌面小组件（companion/CompanionWidget.kt）。她在做什么、说了什么由 App 按自己的语言发过来；
+-     这些用于还没发过的时候，以及小组件列表里。 -->
+-<resources>
+-    <string name="companion_widget_label">伙伴小屋</string>
+-    <string name="companion_widget_description">她在你的桌面上，点一下去看她</string>
+-    <string name="companion_widget_name">鲸鱼娘</string>
+-    <string name="companion_widget_waiting">在小屋里等你</string>
+-    <string name="companion_widget_asleep">睡着了</string>
+-</resources>
+diff --git a/app/android/app/src/main/res/values/companion_widget_strings.xml b/app/android/app/src/main/res/values/companion_widget_strings.xml
+deleted file mode 100644
+index 3a6cd69b..00000000
+--- a/app/android/app/src/main/res/values/companion_widget_strings.xml
++++ /dev/null
+@@ -1,10 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- 伙伴小屋's home-screen widget (companion/CompanionWidget.kt). The app sends what she is
+-     doing and saying in its own language; these are for before it has, and for the picker. -->
+-<resources>
+-    <string name="companion_widget_label">Companion room</string>
+-    <string name="companion_widget_description">She\'s on your home screen. Tap to visit.</string>
+-    <string name="companion_widget_name">Whale girl</string>
+-    <string name="companion_widget_waiting">Waiting for you in the room</string>
+-    <string name="companion_widget_asleep">Asleep</string>
+-</resources>
+diff --git a/app/android/app/src/main/res/xml/companion_widget_info.xml b/app/android/app/src/main/res/xml/companion_widget_info.xml
+deleted file mode 100644
+index 9eda2a4b..00000000
+--- a/app/android/app/src/main/res/xml/companion_widget_info.xml
++++ /dev/null
+@@ -1,16 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<!-- 伙伴小屋 widget (CompanionWidget.kt). Half-hourly refreshes only move her between awake and
+-     asleep with the hour; what she says comes from the app when the room changes. -->
+-<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+-    android:description="@string/companion_widget_description"
+-    android:initialLayout="@layout/companion_widget"
+-    android:minWidth="180dp"
+-    android:minHeight="72dp"
+-    android:minResizeWidth="140dp"
+-    android:minResizeHeight="64dp"
+-    android:previewImage="@drawable/companion_widget_happy"
+-    android:resizeMode="horizontal|vertical"
+-    android:targetCellWidth="3"
+-    android:targetCellHeight="1"
+-    android:updatePeriodMillis="1800000"
+-    android:widgetCategory="home_screen" />
+diff --git a/app/lib/links/page_links.dart b/app/lib/links/page_links.dart
+index 49e128b9..1927e483 100644
+--- a/app/lib/links/page_links.dart
++++ b/app/lib/links/page_links.dart
+@@ -38,6 +38,10 @@ const companionPageLink = 'companion';
+ /// 酒馆 (role play): main.dart registers its page ([registerPageLink]).
+ const tavernPageLink = 'tavern';
+ 
++/// DSMO hides these (docs/native-pages.md in the DSMO repo): no link opens them, whether it
++/// comes from a reply, from outside the app, or from the page.
++const hiddenPageLinks = <String>{'tavern', 'companion', 'forum', 'community', 'pets', 'shared-links'};
++
+ /// Pages the entry point adds, by id: pages under ui/ that this file may not
+ /// import itself (docs/architecture.md, 目录).
+ final _registeredPages = <String, Widget Function()>{};
+@@ -52,7 +56,7 @@ Set<String> get pageLinkIds => {
+   ...catalogPageLinks,
+   companionPageLink,
+   ..._registeredPages.keys,
+-};
++}..removeAll(hiddenPageLinks);
+ 
+ /// The page id [uri] names: exactly `dshgo://open/<id>` (a trailing slash is
+ /// fine) with an id from [pageLinkIds]; null otherwise.
+@@ -68,6 +72,7 @@ String? pageLinkId(Uri uri) {
+ /// The page for [id] ([pageLinkIds]); [sessionId] is the conversation open in
+ /// the chat, as 全部功能 passes it.
+ Widget? pageForId(String id, String? sessionId) {
++  if (hiddenPageLinks.contains(id)) return null;
+   if (settingsPageForLink(id, sessionId: sessionId) case final page?) return page;
+   if (id == companionPageLink) return const CompanionPage();
+   if (_registeredPages[id] case final page?) return page();
+diff --git a/app/lib/ui/star/star_prompt_dialog.dart b/app/lib/ui/star/star_prompt_dialog.dart
+index 9c7607ca..5275c9fb 100644
+--- a/app/lib/ui/star/star_prompt_dialog.dart
++++ b/app/lib/ui/star/star_prompt_dialog.dart
+@@ -253,7 +253,8 @@ class StarPicture extends StatelessWidget {
+               gradient: RadialGradient(colors: [glow, glow.withValues(alpha: 0)], stops: const [0.3, 1]),
+             ),
+           ),
+-          Image.asset(StarPromptDialog.asset, fit: BoxFit.contain, excludeFromSemantics: true),
++          // DSMO: the whale sticker is dsh-Go's art (ASSETS.md), not shipped.
++          const SizedBox.shrink(),
+         ],
+       ),
+     );
+diff --git a/app/lib/ui/star/star_prompt_host.dart b/app/lib/ui/star/star_prompt_host.dart
+index 810ea092..ef9f9b40 100644
+--- a/app/lib/ui/star/star_prompt_host.dart
++++ b/app/lib/ui/star/star_prompt_host.dart
+@@ -72,7 +72,6 @@ class _StarPromptHostState extends ConsumerState<StarPromptHost> {
+     }
+     if (_settle != null) return;
+     // Decoded by the time it comes up.
+-    unawaited(precacheImage(const AssetImage(StarPromptDialog.asset), context));
+     _settle = Timer(StarPromptRules.settle, _maybeShow);
+   }
+ 
+diff --git a/app/lib/ui_config/ui_skill.dart b/app/lib/ui_config/ui_skill.dart
+index 671223fc..504e2b5a 100644
+--- a/app/lib/ui_config/ui_skill.dart
++++ b/app/lib/ui_config/ui_skill.dart
+@@ -178,8 +178,7 @@ final extraSkillLoadersProvider = Provider<List<UiSkillBundleLoader>>((ref) {
+     () => loadUiSkillBundle(null, pluginSkillName),
+     () => loadUiSkillBundle(null, guideSkillName, os),
+     () => loadUiSkillBundle(null, supportSkillName),
+-    () => loadUiSkillBundle(null, companionAdaptSkillName),
+-    () => loadUiSkillBundle(null, petThemeSkillName),
++    // DSMO: no 伙伴小屋 or pets, so not their skills (companionAdaptSkillName, petThemeSkillName).
+   ];
+ });
+ 
+diff --git a/app/pubspec.yaml b/app/pubspec.yaml
+index cf7ce3c1..7d4ba79d 100644
+--- a/app/pubspec.yaml
++++ b/app/pubspec.yaml
+@@ -168,7 +168,6 @@ flutter:
+     - assets/api_demo/assets/
+     # Whale-tail activity sprites (lib/ui/chat/widgets/whale_tail.dart),
+     # generated by tool/make_whale_sprites.py.
+-    - assets/whale/
+     # The tavern's own sample card (林晚), offered on its empty home.
+     - assets/tavern/
+     # Engine-side auth bridge (ChatGPT / Claude sign-in), copied into the guest at
+@@ -180,10 +179,7 @@ flutter:
+     # Glass-gradient feature tiles (lib/ui/common/feature_tile.dart), 288px WebP.
+     # The vector styles' SVG masters in assets/tiles/ are not bundled.
+     - assets/tiles/glassy/
+-    - assets/pets/deepy-whale/
+-    - assets/pets/whale-girl/
+     # The star prompt's whale girl (lib/ui/star/star_prompt_dialog.dart), 576px WebP.
+-    - assets/star/
+     - assets/islands/
+     # 伙伴小屋's page (lib/ui/companion). Its Live2D runtime and models are a
+     # separate download, see docs/design/companion.md.
+@@ -192,8 +188,6 @@ flutter:
+     - assets/skills/dsh-go-plugin/
+     - assets/skills/dsh-go-guide/
+     - assets/skills/dsh-go-support/
+-    - assets/skills/companion-adapt/
+-    - assets/skills/pet-theme/
+ 
+ 
+   # To add assets to your application, add an assets section, like this:
+-- 
+2.50.1 (Apple Git-155)
+

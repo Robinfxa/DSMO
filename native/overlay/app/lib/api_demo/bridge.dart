@@ -20,7 +20,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import '../links/page_links.dart' show pageForId, pageLinkIds;
+import '../links/page_links.dart' show pageForId;
 import '../share_code/guest_fs.dart';
 import '../share_code/share_models.dart' show SharedSkill;
 import '../state/attachments.dart';
@@ -37,6 +37,11 @@ import 'web_update.dart' show apiDemoBridgeVersion;
 /// Session pages the bridge may open natively (Q6: chat-bound pages are web,
 /// these stay native for now and need the conversation).
 const apiDemoSessionPages = {'terminal', 'session-detail', 'files', 'artifacts', 'jobs', 'plan-goal', 'skills', 'subagents'};
+
+/// The only native pages the page may open: the DeepSeek account (sign-in is hidden, but a phone
+/// that signed in earlier can still see it and sign out) and the pages of the open conversation.
+/// Everything else dsh-Go has is either rebuilt in the page or hidden (docs/native-pages.md).
+const apiDemoNativePages = {'account', ...apiDemoSessionPages};
 
 class ApiDemoBridge {
   ApiDemoBridge({
@@ -199,7 +204,7 @@ class ApiDemoBridge {
             'current': active.kind == HostKind.ssh && active.id == h.id,
           },
       ],
-      'nativePages': [...pageLinkIds, ...apiDemoSessionPages],
+      'nativePages': [...apiDemoNativePages],
       'voice': true,
       'notifications': true,
       'webVersion': webVersion?.call() ?? 'apk',
@@ -274,6 +279,7 @@ class ApiDemoBridge {
   }
 
   Future<void> _openNativePage(String id, String? sessionId) async {
+    if (!apiDemoNativePages.contains(id)) throw ArgumentError('no native page $id');
     Widget? page = pageForId(id, sessionId);
     if (page == null && sessionId != null && apiDemoSessionPages.contains(id)) {
       // dshgo:// links refuse pages that need a conversation; the bridge has one.

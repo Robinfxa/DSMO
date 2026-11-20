@@ -76,8 +76,9 @@ native/build-apk.sh [工作目录]      # 一步到位：取 dsh-Go@BASE → app
 dsh-Go 的品牌和美术素材**不在** AGPL-3.0 范围内（见它的 `ASSETS.md`），以修改版发布必须换成自己的：
 
 - [x] 启动图标：`apply.sh` 用 `native/brand/res/` 覆盖（原创的对话气泡图标）
-- [ ] 应用内的品牌图形：`app/assets/brand/` 换成自己的 SVG，再跑 `python3 tool/make_brand_mark.py`（路径格式要求见该脚本说明）
-- [ ] 鲸鱼尾巴、Deepy 小鲸鱼、鲸娘：`app/assets/whale/`、`app/assets/pets/`、`app/assets/star/` 换掉或移除（移除时注意引用它们的代码）
+- [x] 应用内的品牌图形：`apply.sh` 把 `native/brand/masters/` 的 SVG 拷进 `app/assets/brand/`，再跑 `tool/make_brand_mark.py`
+- [x] 通知栏小图标 `drawable/ic_stat_dsh.xml`（原来是 dsh-Go 的鱼尾）：`native/brand/res/` 里放了我们自己的（`make_brand.py` 生成）
+- [x] 鲸鱼尾巴、Deepy 小鲸鱼、鲸娘、伙伴小屋桌面小组件的像素鲸鱼：`apply.sh` 删掉这些文件，补丁 0012 去掉它们在 pubspec 里的声明、Star 弹窗的贴纸和桌面小组件
 - [ ] 鸿蒙图标（如果要出鸿蒙版）
 
 ## 跟进上游
@@ -99,3 +100,10 @@ native/apply.sh <dsh-Go>      # git am --3way：小冲突会自动合并
 4. **改了原生部分**（`native/` 里的补丁或 Dart 文件）仍然要重新打 APK。如果页面开始用老 APK 没有的桥方法，把 `native/BRIDGE` 加 1：老 APK 会停在它现有的页面，直到装上新 APK。
 
 关掉：打包时加 `--dart-define=API_DEMO_WEB_UPDATE=false`。安全上，下载的页面和自带页面一样能用整个原生桥，能往这个仓库发 Release 的人就能改所有装了它的手机上的界面；这是早期方案，正式发布前应该加签名校验或关掉。
+
+## 不随 DSMO 发布的 dsh-Go 部分（补丁 0012 + `apply.sh`）
+
+- **链接打不开**：`tavern`、`companion`、`forum`、`community`、`pets`、`shared-links`（`page_links.dart` 的 `hiddenPageLinks`），不论来自回复、App 外还是页面；页面能打开的原生页只有 `account` 和当前对话的几个页面（`bridge.dart` 的 `apiDemoNativePages`）；首页不再挂论坛的链接处理。
+- **不再自动安装**伙伴小屋和宠物的技能（`companion-adapt`、`pet-theme`）；网页的 Agent 预设里不显示「伙伴」「伙伴·完整」。
+- **删掉的文件**（`apply.sh`，补丁里不带二进制）：`app/assets/pets`、`star`、`whale`、那两个技能、桌面小组件的图片、语音通话的判停模型（`assets/speech`，约 9.5 MB；DSMO 没有语音通话，听写不用，通话代码缺模型时退回能量判停）。
+- **代码还在**（宠物、伙伴小屋、酒馆、论坛、创意工坊、原生聊天界面）：没有入口、没有素材，但仍编进 APK。要不要整块删，等用 `flutter build apk --analyze-size` 量过再定（牵涉 15 个以上文件，跟进上游会经常冲突）。

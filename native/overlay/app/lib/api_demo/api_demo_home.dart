@@ -27,7 +27,6 @@ import '../runtime/runtime_state.dart';
 import '../state/sessions_state.dart';
 import '../state/ui_mode_state.dart' show webOpenProvider;
 import '../ui/remote/remote_screen.dart';
-import '../ui/forum/forum_link_host.dart';
 import '../ui/notify/chat_alert_host.dart';
 import '../ui/web/dsh_web_launcher.dart';
 import '../ui/web/web_home.dart' show WebEntryHost;
@@ -381,7 +380,7 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
           if (!await _onBack()) await SystemNavigator.pop();
         },
         // BotAlertsHost keeps DS Bot's notifications coming (and its team's Sessions out of the chat alerts).
-        child: Stack(fit: StackFit.expand, children: [body, const LinkHost(), const WebEntryHost(), const ForumLinkHost(), const BotAlertsHost()]),
+        child: Stack(fit: StackFit.expand, children: [body, const LinkHost(), const WebEntryHost(), const BotAlertsHost()]),
       ),
     );
   }

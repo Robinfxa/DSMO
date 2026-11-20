@@ -291,6 +291,9 @@ async function startCreator(request: string) {
 
 const presetName = (p: R) => s(p.name) || s(p.id);
 
+/** dsh-Go's 伙伴小屋 presets (「伙伴」「伙伴·完整」): the cabin is hidden in DSMO (docs/native-pages.md). */
+const HIDDEN_PRESET = /^dsh-go-companion/;
+
 export function PresetsPage() {
   const [presets, setPresets] = useState<R[] | null>(null);
   const [bundles, setBundles] = useState<R[]>([]);
@@ -300,7 +303,7 @@ export function PresetsPage() {
   const load = async () => {
     try {
       const [p, b] = await Promise.all([getClient().listAgentPresets(), getClient().listBundles()]);
-      setPresets(p);
+      setPresets(p.filter((x) => !HIDDEN_PRESET.test(s(x.id))));
       setBundles(b);
       setFailed(null);
     } catch (e) {

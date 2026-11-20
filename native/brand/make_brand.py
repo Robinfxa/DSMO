@@ -9,6 +9,8 @@ Writes, next to this script:
     res/mipmap-*/ic_launcher*.png        legacy and adaptive-foreground launcher icons (and
                                          dsh-Go's frost / ink / night variants)
     res/drawable/ic_launcher_monochrome.xml   themed-icon silhouette (the D cut out)
+    res/drawable/ic_stat_dsh.xml         status-bar icon for every notification (same silhouette;
+                                         replaces dsh-Go's, which is its brand glyph, not AGPL)
     masters/glyph-light.svg, glyph-dark.svg, glyph-mono.svg, tile.svg
                                          replacements for dsh-Go's app/assets/brand/ (not AGPL);
                                          native/apply.sh copies them and runs dsh-Go's
@@ -241,6 +243,19 @@ def main():
         '    android:viewportWidth="108"\n    android:viewportHeight="108">\n'
         '    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"\n'
         f'        android:pathData="{d_attr(BODY)}" />\n'
+        '</vector>\n')
+    # Status-bar icon: the same silhouette cropped to the 24dp slot (glyph box 30..78 x 32..80
+    # in a 52-unit viewport, so it fills ~22dp). Small icons are drawn from alpha only.
+    open(os.path.join(res, 'drawable', 'ic_stat_dsh.xml'), 'w', encoding='utf-8').write(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<!-- DSMO status-bar icon for all notifications: the launcher silhouette (native/brand/make_brand.py). -->\n'
+        '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        '    android:width="24dp"\n    android:height="24dp"\n'
+        '    android:viewportWidth="52"\n    android:viewportHeight="52">\n'
+        '    <group android:translateX="-28" android:translateY="-30">\n'
+        '        <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"\n'
+        f'            android:pathData="{d_attr(BODY)}" />\n'
+        '    </group>\n'
         '</vector>\n')
     bgx = os.path.join(res, 'drawable', 'ic_launcher_background.xml')
     s = open(bgx, encoding='utf-8').read().replace('API Demo launcher background', 'DSMO launcher background')
