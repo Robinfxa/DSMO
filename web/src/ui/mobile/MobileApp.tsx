@@ -9,6 +9,7 @@ import { SafeBanner } from '../../setup/recovery';
 import { errText, forkConversation, sessionsLive } from '../../state/store';
 import { hasModule } from '../../maidsh/api';
 import { learnConversation } from '../pages/companion';
+import { isScopeOff, toggleScope } from '../../maidsh/scope';
 import { openImportedPage } from '../../history/ui';
 import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
@@ -357,7 +358,16 @@ function SessionRow({ s, picking, onPick, onMulti }: { s: SessionSummary; pickin
       { icon: 'edit', label: '重命名', run: () => (renaming.value = s.sessionId) },
       { icon: isPinned ? 'unpin' : 'pin', label: isPinned ? '取消置顶' : '置顶', run: () => void togglePin(s.sessionId) },
       { icon: 'fork', label: '分叉', run: () => ((drawerOpen.value = false), void forkConversation(s.sessionId)) },
-      ...(hasModule('core') ? [{ icon: 'sparkle' as const, label: '让 TA 深度学习这段对话', run: () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))) }] : []),
+      ...(hasModule('core')
+        ? [
+            { icon: 'sparkle' as const, label: '让 TA 深度学习这段对话', run: () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))) },
+            {
+              icon: 'heart' as const,
+              label: isScopeOff(s.sessionId) ? '在这段对话里打开陪伴' : '在这段对话里关掉陪伴',
+              run: () => void toggleScope(s.sessionId),
+            },
+          ]
+        : []),
       { icon: 'multi', label: '多选', run: onMulti },
       {
         icon: 'trash',

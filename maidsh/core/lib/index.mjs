@@ -5,6 +5,7 @@
 
 import { createJobs } from './jobs.mjs';
 import { createCompanion } from './runtime.mjs';
+import { createScope } from './scope.mjs';
 import { completeText, configSchema, jsonStore, loggerOf, promptContext, readJsonBody, rejectRead, rejectWrite, sendJson, storageDir, textOf, trackLatest, turnOf } from './shared/dsh.mjs';
 
 export const name = 'maidsh-core';
@@ -25,6 +26,7 @@ export const Config = configSchema(name, DEFAULTS, { maxOutputTokens: [200, 8000
 export const STATE_PATH = '/api/maidsh/state';
 export const LEARN_PATH = '/api/maidsh/learn';
 export const JOBS_PATH = '/api/maidsh/jobs';
+export const SCOPE_PATH = '/api/maidsh/scope';
 
 export function apply(ctx, config = {}) {
   const c = { ...DEFAULTS, ...config };
@@ -43,8 +45,17 @@ export function apply(ctx, config = {}) {
     },
   });
 
+  const scope = createScope({ store: jsonStore(storageDir(name, c.dataDir), 'scope.json', log), log });
+  /** 组装提示时是哪个对话（agent 的 id 就是会话 id）。 */
+  const sessionOf = (ac) => ac?.agent?.session?.id ?? ac?.agent?.id ?? '';
+
   ctx.provide('companion', {
     version: companion.version,
+    /** 这个对话里 MaiDSH 生效吗（§12）。主动面据此挑对话。 */
+    inScope: (sessionId) => scope.inScope(sessionId),
+    scopeOf: (sessionId) => scope.of(sessionId),
+    setScope: (sessionId, enabled) => scope.set(sessionId, enabled),
+    setBotSessions: (ids) => scope.setBots(ids),
     register: companion.register,
     aspects: companion.aspects,
     state: companion.state,
@@ -54,13 +65,15 @@ export function apply(ctx, config = {}) {
   });
 
   const latestOf = trackLatest(ctx);
-  ctx.effect(() => promptContext(ctx, { name: 'maidsh', order: 300, text: (ac) => companion.promptText(latestOf(ac)) }));
+  ctx.effect(() => promptContext(ctx, { name: 'maidsh', order: 300, text: (ac) => (scope.inScope(sessionOf(ac)) ? companion.promptText(latestOf(ac)) : '') }));
 
   let lastSession = null;
   ctx.on('session/event', (a, b) => {
     const turn = turnOf(a, b);
     if (!turn) return;
     lastSession = turn.session;
+    // 不在生效范围的对话（你关掉的、DS Bot 的）：不分析、不学
+    if (!scope.inScope(turn.sessionId)) return;
     companion.afterTurn(turn).catch((e) => log(`陪伴分析出错：${e?.message ?? e}`));
   });
 
@@ -155,6 +168,29 @@ export function apply(ctx, config = {}) {
           const body = await readJsonBody(req);
           const out = jobs.act(body?.action, body?.id);
           sendJson(res, out.ok ? 200 : 400, out);
+        },
+      }),
+    );
+    sub.effect(() =>
+      sub.webServer.register({
+        kind: 'exact',
+        path: SCOPE_PATH,
+        handler: async (req, res) => {
+          if ((req.method ?? 'GET') === 'GET') {
+            const no = rejectRead(ctx, req);
+            if (no) return sendJson(res, no[0], { ok: false, error: no[1] });
+            const id = new URL(req.url ?? '/', 'http://x').searchParams.get('sessionId');
+            return sendJson(res, 200, { ok: true, value: id ? scope.of(id) : scope.view() });
+          }
+          const no = rejectWrite(ctx, req);
+          if (no) return sendJson(res, no[0], { ok: false, error: no[1] });
+          const body = await readJsonBody(req, 1024 * 1024);
+          if (body?.action === 'set' && scope.set(body.sessionId, body.enabled !== false)) return sendJson(res, 200, { ok: true, value: scope.of(body.sessionId) });
+          if (body?.action === 'set-bots') {
+            scope.setBots(body.sessionIds);
+            return sendJson(res, 200, { ok: true, value: scope.view() });
+          }
+          sendJson(res, 400, { ok: false, error: '要 { action: "set", sessionId, enabled } 或 { action: "set-bots", sessionIds }' });
         },
       }),
     );

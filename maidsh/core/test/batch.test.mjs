@@ -146,3 +146,19 @@ test('jobs: a job added after an empty start still runs (the queue must not get 
   await jobs.idle();
   assert.equal(jobs.list()[0].status, 'done');
 });
+
+test('scope: survives a restart; Bot list is replaced whole; bad ids are ignored', async () => {
+  const { createScope } = await import('../lib/scope.mjs');
+  const store = memStore();
+  const a = createScope({ store });
+  a.set('work', false);
+  a.setBots(['b1', 'b2', '', 5]);
+  const b = createScope({ store });
+  assert.deepEqual([b.inScope('work'), b.inScope('b1'), b.inScope('chat'), b.inScope('')], [false, false, true, true]);
+  assert.equal(b.setBots(['b2', 'b1']), false, 'same set: nothing to save');
+  b.setBots(['b3']);
+  assert.deepEqual([b.inScope('b1'), b.inScope('b3')], [true, false]);
+  assert.equal(b.set('', false), false);
+  b.set('work', true);
+  assert.equal(b.inScope('work'), true);
+});

@@ -403,3 +403,15 @@ MaiBot 0.11 用后台随机掷骰决定主动发言（空闲越久概率越高�
 - 读一段过去的对话：优先由引擎按 `sessionId` 直接读；读不到时由 DSMO 把消息传进来（DSMO 已经有导出对话的功能）。实现时核对 DSH 的接口。
 
 面的登记新增可选的 `batch: { schema, instructions, apply(result, chunk), finish(job) }`，第三方面也可以参加批量学习。
+
+## 12. 生效范围（总控 0.4.0）
+
+MaiDSH 默认在**所有对话**里生效，但排除两类：
+- **你关掉的对话**：每段对话的「更多」菜单里有开关（`POST /api/maidsh/scope` `{ action: "set", sessionId, enabled }`）；
+- **DS Bot 的对话**：DSMO 知道哪些对话属于 Bot，启动时和 Bot 变化时把整份列表同步过来（`{ action: "set-bots", sessionIds }`），它们总是排除。
+
+不在范围里的对话：总控不分析、不学（心情、羁绊、记忆、表达都不动），不注入陪伴段落；主动面不记它、也不会在那里主动找你。深度学习是你手动指定的，不受范围限制。
+`GET /api/maidsh/scope?sessionId=…` → `{ sessionId, enabled, bot, off }`；不带 `sessionId` → `{ mode, off: [关掉的对话 id], bots: Bot 对话个数 }`。
+服务 `companion` 多了 `inScope(id)`、`scopeOf(id)`、`setScope(id, enabled)`、`setBotSessions(ids)`。
+
+范围设置在总控里：没装总控时，各面单独运行，在所有对话里生效。

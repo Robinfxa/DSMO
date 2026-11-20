@@ -137,7 +137,7 @@ async function personaMode(): Promise<string> {
 }
 
 /** The Bots' conversations (not the Bot and room ids, which aren't conversations). */
-function botSessions(): string[] {
+export function botSessions(): string[] {
   const team = dsBot.value.team;
   if (!team) return [];
   return [...new Set([...team.bots.flatMap((b) => [b.sessionId, ...b.parts]), ...team.rooms.flatMap((r) => r.parts)])].filter(Boolean);

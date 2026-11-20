@@ -52,6 +52,15 @@ export function apply(ctx, config = {}) {
     return Number.isFinite(l) ? l : 2;
   };
 
+  /** 这个对话在 MaiDSH 的生效范围里吗（装了总控才有范围设置；没装按生效算）。 */
+  const inScope = (sessionId) => {
+    try {
+      return ctx.get('companion')?.inScope?.(sessionId) ?? true;
+    } catch {
+      return true;
+    }
+  };
+
   /** 找到这个会话的 TA：活着的直接拿，否则让 DSH 恢复（Web 组合里有 sessionController）。 */
   async function agentFor(sessionId) {
     const live = ctx.get('agents')?.get?.(sessionId);
@@ -74,6 +83,13 @@ export function apply(ctx, config = {}) {
     if (firing) return;
     firing = true;
     try {
+      if (!inScope(plan.sessionId)) {
+        // 这个对话后来被关掉了（或成了 Bot 的对话）：不在这里主动，等下次在生效的对话里聊过再排
+        st.sessionId = '';
+        st.followups = st.followups.filter((f) => f.sessionId !== plan.sessionId);
+        st.nextAt = 0;
+        return;
+      }
       const agent = await agentFor(plan.sessionId);
       if (!agent) {
         st.nextAt = Date.now() + 30 * 60_000;
@@ -138,7 +154,7 @@ export function apply(ctx, config = {}) {
       return;
     }
     const turn = turnOf(a, b);
-    if (!turn) return;
+    if (!turn || !inScope(turn.sessionId)) return;
     onUserTurn(st, { now: Date.now(), sessionId: turn.sessionId, topic: turn.user, o });
     save();
   });

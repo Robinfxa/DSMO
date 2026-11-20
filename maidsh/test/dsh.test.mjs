@@ -361,3 +361,43 @@ test('DSH context messages (skill catalog, time) inside a turn do not hide who s
   await settle();
   assert.equal(h.calls.length, 1);
 });
+
+test('scope: switched-off and Bot conversations get no analysis, no injection, and no initiative', async (t) => {
+  const T = new Date(2026, 10, 20, 10).getTime();
+  t.mock.timers.enable({ apis: ['Date', 'setInterval'], now: T });
+  const h = host();
+  const sent = [];
+  h.root.provide('agents', { get: (id) => ({ id, status: 'idle', followup: (m) => sent.push([id, m]) }) });
+  await h.root.plugin(mood, { dataDir: tmp() });
+  await h.root.plugin(initiative, { dataDir: tmp() });
+  await h.root.plugin(core, { dataDir: tmp() });
+  await settle();
+  const svc = h.root.get('companion');
+  const ac = (id) => ({ agent: { id, session: session({ id }) } });
+  // 先在一个陪伴对话里聊一轮，让心情有内容
+  h.root.emit('session/event', session({ id: 'chat' }), turnEnd());
+  await settle();
+  assert.equal(h.calls.length, 1);
+  assert.match(h.prompts.get('maidsh').text(ac('chat')), /你现在的心情/);
+  // 你关掉一个工作对话；DSMO 同步过来一个 Bot 对话
+  svc.setScope('work', false);
+  svc.setBotSessions(['bot-1']);
+  assert.deepEqual(svc.scopeOf('bot-1'), { sessionId: 'bot-1', enabled: false, bot: true, off: false });
+  for (const id of ['work', 'bot-1']) {
+    assert.equal(h.prompts.get('maidsh').text(ac(id)), '', `no injection in ${id}`);
+    h.root.emit('session/event', session({ id }), turnEnd());
+  }
+  await settle();
+  assert.equal(h.calls.length, 1, 'no analysis in work or bot conversations');
+  // 主动只认生效的对话：最后在工作对话里聊过，TA 还是去陪伴对话找你
+  const ini = h.root.get('companionInitiative');
+  t.mock.timers.setTime(ini.state().nextAt + 60_000);
+  await ini.check();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0][0], 'chat');
+  // 陪伴对话后来被关掉：不在那里主动
+  svc.setScope('work', true);
+  svc.setScope('chat', false);
+  assert.equal(svc.inScope('work'), true);
+  t.mock.timers.reset();
+});
