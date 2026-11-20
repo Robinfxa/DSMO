@@ -29,12 +29,40 @@ import { MIc } from '../mobile/MIc';
 export type Target = { kind: 'conversation'; sessionId: string } | { kind: 'workspace'; workspaceId: string } | { kind: 'default' };
 const quote = (t: string | undefined) => (t ? `《${t}》` : '');
 
-/** 「设定集：《长夜》」 / 「设定集：关」 for a conversation's 更多 menu (as last read). */
-export function conversationLabel(sessionId: string) {
+/**
+ * A conversation's 更多 line (as last read): 「设定集：《长夜》」 while it uses a work, else
+ * 「用设定集写这段对话」 (one tap: a new work named after the conversation, or the picker when
+ * there are works already). DS Bot conversations get no line.
+ */
+export function conversationItem(sessionId: string, title?: string): { label: string; run: () => void } | null {
   const b = bindings.value[sessionId];
-  if (!b) return '设定集';
-  if (b.from === 'bot') return '设定集：DS Bot 不用';
-  return b.work ? `设定集：${quote(workTitle(b.work)) || '已选'}` : '设定集：关';
+  if (b?.from === 'bot') return null;
+  if (b?.work) return { label: `设定集：${quote(workTitle(b.work)) || '已选'}`, run: () => chooseWork({ kind: 'conversation', sessionId }) };
+  return { label: '用设定集写这段对话', run: () => void startWithLore(sessionId, title) };
+}
+
+/** No works yet: name one (the conversation's title by default), use it here, and open it to add people. */
+export async function startWithLore(sessionId: string, title?: string) {
+  const list = works.value ?? (await refreshWorks().catch(() => null));
+  if (list?.length) return chooseWork({ kind: 'conversation', sessionId });
+  const name = (title || '').replace(/[《》]/g, '').trim().slice(0, 40) || '我的小说';
+  askText(
+    '给这本设定集起个名字',
+    name,
+    (t) =>
+      void (async () => {
+        try {
+          const w = await mutate<WorkSummary>('create-work', { title: t.trim() });
+          await bindConversation(sessionId, w.id);
+          await Promise.all([refreshWorks(), refreshBinding(sessionId)]);
+          showToast(`这段对话开始用《${w.title}》了，先加几个人物吧`);
+          openPage(`lore:${w.id}`);
+        } catch (e) {
+          showToast(errText(e));
+        }
+      })(),
+    { placeholder: '书名', ok: '开始' },
+  );
 }
 
 /** Before showing a menu with the conversation's line: its binding (and the titles), if not known yet; waits at most 500 ms. */
@@ -95,7 +123,7 @@ function WorkPicker({ target, onDone }: { target: Target; onDone?: () => void })
       if (target.kind === 'conversation') {
         await bindConversation(target.sessionId, value);
         await refreshBinding(target.sessionId);
-        showToast(value === null ? `这段对话跟随工作区：${name(cur.inherited)}` : value === 'off' ? '这段对话不用设定集了' : `这段对话改用${name(value)}的设定`);
+        showToast(value === 'off' || (value === null && cur.inherited === null) ? '这段对话不用设定集了' : value === null ? `这段对话跟随工作区：${name(cur.inherited)}` : `这段对话改用${name(value)}的设定`);
       } else if (target.kind === 'workspace') {
         await bindWorkspace(target.workspaceId, value);
         forgetBindings();
@@ -123,12 +151,15 @@ function WorkPicker({ target, onDone }: { target: Target; onDone?: () => void })
       </button>
     );
   };
+  // A conversation: 「跟随…」 only when following gives a work; otherwise 「不用设定集」 is just following (nothing)
+  const conv = target.kind === 'conversation';
+  const follows = !conv || cur.inherited !== null;
   return (
     <div class="lo-pick" role="radiogroup">
-      {target.kind === 'conversation' && opt(null, `跟随工作区（现在：${name(cur.inherited)}）`, 'follow')}
+      {conv && follows && opt(null, `跟随工作区（现在：${name(cur.inherited)}）`, 'follow')}
       {target.kind === 'workspace' && opt(null, `跟随默认（现在：${name(cur.inherited)}）`, 'follow')}
       {list.map((w) => opt(w.id, `《${w.title}》`, w.id))}
-      {opt('off', '关', 'off')}
+      {opt(follows ? 'off' : null, conv ? '不用设定集' : '关', 'off')}
       <button
         class="lo-opt add"
         type="button"
@@ -145,7 +176,7 @@ function WorkPicker({ target, onDone }: { target: Target; onDone?: () => void })
         <MIc n="plus" />
         <span class="lo-opt-t">新建作品</span>
       </button>
-      {target.kind !== 'default' && <p class="lo-pick-note">只有在工作区里新建的对话才算这个工作区的。</p>}
+      {target.kind === 'workspace' && <p class="lo-pick-note">只有在工作区里新建的对话才算这个工作区的。</p>}
       {target.kind === 'default' && <p class="lo-pick-note">工作区和单独的对话可以另外选，以它们为准。</p>}
     </div>
   );
@@ -222,41 +253,46 @@ export function Stepper({ shown, step, onTapNumber, label = '章节' }: { shown:
 
 // ---------------------------------------------------------------- the chapter bar over the chat
 
-/** 「《长夜》 · 第 12 章 ‹ ›」 while the open conversation uses a work; nothing at all otherwise. */
+/** 「《长夜》 · 第 12 章」 while the open conversation uses a work; nothing at all otherwise. Tap: the sheet. */
 export function ChapterBar() {
   const sid = currentId.value;
   const b = sid && hasLore() ? bindings.value[sid] : null;
   const w = b?.work ? works.value?.find((x) => x.id === b.work) : undefined;
-  const { shown, step, to } = useCursor(w?.id ?? null, w?.chapter ?? 0);
   if (!sid || !w) return null;
-  const more = () =>
-    openOverlay({
-      kind: 'sheet',
-      title: `《${w.title}》`,
-      body: () => (
-        <div class="lo-pick">
-          <button class="lo-opt" type="button" onClick={() => (closeOverlay(), askChapter(shown, to))}>
-            <MIc n="edit" />
-            <span class="lo-opt-t">改章节（现在{chapterName(shown)}）</span>
-          </button>
-          <button class="lo-opt" type="button" onClick={() => (closeOverlay(), openPage(`lore:${w.id}`))}>
-            <MIc n="book" />
-            <span class="lo-opt-t">打开这部作品</span>
-          </button>
-          <button class="lo-opt" type="button" onClick={() => (closeOverlay(), chooseWork({ kind: 'conversation', sessionId: sid }))}>
-            <MIc n="layout" />
-            <span class="lo-opt-t">换作品 / 关</span>
-          </button>
-        </div>
-      ),
-    });
+  const open = () => openOverlay({ kind: 'sheet', title: `《${w.title}》`, body: () => <ChapterSheet workId={w.id} sessionId={sid} /> });
   return (
     <div class="lo-bar" role="group" aria-label="设定集">
-      <button class="lo-bar-t" type="button" onClick={more}>
+      <button class="lo-bar-t" type="button" onClick={open}>
         <MIc n="book" />
-        <span>《{w.title}》</span>
+        <span>
+          《{w.title}》 · {chapterName(w.chapter)}
+        </span>
+        <MIc n="chevron" />
       </button>
-      <Stepper shown={shown} step={step} onTapNumber={() => askChapter(shown, to)} />
+    </div>
+  );
+}
+
+/** The chapter bar's sheet: the chapter (AI moves it forward as it records; change it here when you go back), the work, another work. */
+function ChapterSheet({ workId, sessionId }: { workId: string; sessionId: string }) {
+  const w = works.value?.find((x) => x.id === workId);
+  const { shown, step, to } = useCursor(workId, w?.chapter ?? 0);
+  if (!w) return null;
+  return (
+    <div class="lo-pick">
+      <div class="lo-opt static">
+        <span class="lo-opt-t">现在写到</span>
+        <Stepper shown={shown} step={step} onTapNumber={() => askChapter(shown, to)} />
+      </div>
+      <p class="lo-pick-note">AI 记下变化时会自己把章节往前推；回头改旧章节时在这里调回去。</p>
+      <button class="lo-opt" type="button" onClick={() => (closeOverlay(), openPage(`lore:${w.id}`))}>
+        <MIc n="book" />
+        <span class="lo-opt-t">打开《{w.title}》：人物和设定</span>
+      </button>
+      <button class="lo-opt" type="button" onClick={() => (closeOverlay(), chooseWork({ kind: 'conversation', sessionId }))}>
+        <MIc n="layout" />
+        <span class="lo-opt-t">换一本 / 不用设定集</span>
+      </button>
     </div>
   );
 }

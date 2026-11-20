@@ -54,7 +54,12 @@ export function keyMode(work: Work, subject: string, key: string): 'single' | 'l
   const first = work.states.filter((s) => s.subject === subject && s.key === key).sort((a, b) => a.createdAt - b.createdAt)[0];
   return first ? (first.op === 'replace' ? 'single' : 'list') : null;
 }
-export const defaultOp = (work: Work, subject: string, key: string): Op => (keyMode(work, subject, key) === 'list' ? 'add' : 'replace');
+/** Items that are naturally a list the first time they're recorded (持有: 断弦琴、玉佩…). */
+const LIST_KEYS = new Set(['持有', '随身', '物品', '技能']);
+export const defaultOp = (work: Work, subject: string, key: string): Op => {
+  const mode = keyMode(work, subject, key);
+  return mode === 'list' || (mode === null && LIST_KEYS.has(key)) ? 'add' : 'replace';
+};
 
 /** The records behind [subject]'s state, in chapter order (rewritten ones left out). */
 export const historyOf = (work: Work, subject: string): State[] => work.states.filter((s) => s.subject === subject && !s.supersededBy).sort(byTime);

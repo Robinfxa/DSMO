@@ -11,7 +11,7 @@ import { hasModule } from '../../maidsh/api';
 import { learnConversation } from '../pages/companion';
 import { isScopeOff, toggleScope } from '../../maidsh/scope';
 import { hasLore } from '../../lore/api';
-import { ChapterBar, chooseWork, conversationLabel, loreReady } from '../lore/pick';
+import { ChapterBar, conversationItem, loreReady } from '../lore/pick';
 import { openImportedPage } from '../../history/ui';
 import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
@@ -363,7 +363,7 @@ function SessionRow({ s, picking, onPick, onMulti }: { s: SessionSummary; pickin
       { icon: 'edit', label: '重命名', run: () => (renaming.value = s.sessionId) },
       { icon: isPinned ? 'unpin' : 'pin', label: isPinned ? '取消置顶' : '置顶', run: () => void togglePin(s.sessionId) },
       { icon: 'fork', label: '分叉', run: () => ((drawerOpen.value = false), void forkConversation(s.sessionId)) },
-      ...(hasLore() ? [{ icon: 'book' as const, label: conversationLabel(s.sessionId), run: () => chooseWork({ kind: 'conversation', sessionId: s.sessionId }) }] : []),
+      ...(hasLore() ? [conversationItem(s.sessionId, s.title)].filter((x) => x !== null).map((x) => ({ icon: 'book' as const, ...x })) : []),
       ...(hasModule('core')
         ? [
             { icon: 'sparkle' as const, label: '让 TA 深度学习这段对话', run: () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))) },

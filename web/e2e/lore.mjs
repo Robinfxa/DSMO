@@ -224,6 +224,8 @@ await page.click('.lo-empty .plg-btn.pri');
 await ask('长夜');
 check(await page.isVisible('.lo-title:has-text("《长夜》")'), 'new work opens');
 check((await page.textContent('.lo-cursor')).includes('开写前'), 'chapter 0 reads 开写前');
+check(await page.isVisible('.lo-guide:has-text("三步开始")') && !(await page.isVisible('.lo-guide-s.done')), 'new work: the 三步开始 guide, nothing ticked');
+await shot('01b-guide');
 await page.click('.plg-link:has-text("新建人物")');
 await page.waitForTimeout(500);
 await page.fill('.lo-field:has-text("名字") input', '沈砚');
@@ -245,6 +247,8 @@ await page.click('.plg-link:has-text("记一条变化")');
 await page.click('.lo-form .lo-chips button:text-is("伤势")');
 await page.fill('.lo-form .lo-field:has-text("值") input', '左臂刀伤');
 await page.fill('.lo-form [aria-label="从第几章"]', '11');
+check(!(await page.isVisible('.lo-form .lo-field:has-text("原文")')) && !(await page.isVisible('.lo-form .lo-field:has-text("方式")')), 'record form: 原文 and 方式 tucked under 高级');
+await page.click('.lo-form .plg-text-btn:has-text("高级")');
 await page.fill('.lo-form .lo-field:has-text("原文") input', '刀锋擦过他的左臂');
 await page.click('.lo-form .plg-btn.pri');
 check(await toastHas('光标已前进到第 11 章'), 'state from a later chapter: 光标已前进到第 11 章');
@@ -254,6 +258,8 @@ await page.click('.plg-text-btn:has-text("查看变化线")');
 check((await page.textContent('.lo-lines')).includes('原文：刀锋擦过他的左臂'), '变化线 with the evidence');
 await shot('03-character-states');
 await back();
+await page.waitForTimeout(400);
+check(await page.isVisible('.lo-guide-s.done:has-text("加一个人物")') && !(await page.isVisible('.lo-guide-s.done:has-text("加一条设定")')), 'guide: 加一个人物 ticked, 加一条设定 not yet');
 await page.click('.plg-link:has-text("新建人物")');
 await page.waitForTimeout(400);
 await page.fill('.lo-field:has-text("名字") input', '顾长风');
@@ -318,36 +324,44 @@ await shot('05-chapter-bar');
 // another conversation: nothing
 const other = await page.evaluate(() => [...window.__mockEngine.sessions.values()].find((s) => s.title === 'SSH 隧道是什么')?.id);
 await menuOf('SSH 隧道是什么');
-check(await page.isVisible('.m-pop-row:has-text("设定集：关")'), 'another conversation’s menu: 设定集：关');
+check(await page.isVisible('.m-pop-row:has-text("用设定集写这段对话")'), 'another conversation’s menu: 用设定集写这段对话');
 check(!(await page.isVisible('.lo-bar')), 'another conversation: no chapter bar');
-await page.click('.m-pop-row:has-text("设定集：关")');
+await page.click('.m-pop-row:has-text("用设定集写这段对话")');
 await page.waitForSelector('.m-bsheet');
 await page.waitForTimeout(500);
-check((await page.textContent('.m-bsheet')).includes('跟随工作区（现在：关）'), 'its sheet: 跟随工作区（现在：关）');
+t = await page.textContent('.m-bsheet');
+check(t.includes('《长夜》') && t.includes('不用设定集') && !t.includes('跟随'), 'with works already: the sheet lists them, 不用设定集, and no 跟随 when following gives nothing');
 await page.screenshot({ path: join(shots, `${scheme}-05b-sheet.png`) });
 await page.mouse.click(200, 80);
 await page.waitForTimeout(400);
 
-// › moves the chapter; the work and its people follow
+// the bar only shows; its sheet moves the chapter
 await openChat('第十五章');
-await page.click('.lo-bar [aria-label="章节加一"]');
-await page.click('.lo-bar [aria-label="章节加一"]');
+check(!(await page.isVisible('.lo-bar [aria-label="章节加一"]')), 'chapter bar: just 《书名》 · 第 N 章, no buttons');
+await page.click('.lo-bar-t');
+await page.waitForSelector('.m-bsheet [aria-label="章节加一"]');
+check((await page.textContent('.m-bsheet')).includes('AI 记下变化时会自己把章节往前推'), 'its sheet says the AI moves the chapter');
+await page.click('.m-bsheet [aria-label="章节加一"]');
+await page.click('.m-bsheet [aria-label="章节加一"]');
 await page.waitForTimeout(900);
-check((await page.textContent('.lo-bar')).includes('第 17 章') && (await work()).chapter === 17, 'chapter bar ›› : 第 17 章, saved once the taps stop');
-await page.click('.lo-bar [aria-label="章节减一"]');
+check((await work()).chapter === 17, 'sheet ›› : 第 17 章, saved once the taps stop');
+await page.click('.m-bsheet [aria-label="章节减一"]');
 await page.waitForTimeout(900);
 check((await work()).chapter === 16, '‹ : back to 16');
+await page.mouse.click(200, 80);
+await page.waitForTimeout(400);
+check((await page.textContent('.lo-bar')).includes('第 16 章'), 'the bar follows: 第 16 章');
 
 // this conversation off → 关, bar gone; back to following → restored
 await menuOf('第十五章');
 await page.click('.m-pop-row:has-text("设定集")');
-await sheetPick('关');
-check(await toastHas('这段对话不用设定集了'), 'conversation → 关');
+await sheetPick('不用设定集');
+check(await toastHas('这段对话不用设定集了'), 'conversation → 不用设定集');
 await page.waitForTimeout(400);
 check(!(await page.isVisible('.lo-bar')), 'off: the chapter bar goes');
 await menuOf('第十五章');
-check(await page.isVisible('.m-pop-row:has-text("设定集：关")'), 'its menu: 设定集：关');
-await page.click('.m-pop-row:has-text("设定集")');
+check(await page.isVisible('.m-pop-row:has-text("用设定集写这段对话")'), 'its menu: 用设定集写这段对话');
+await page.click('.m-pop-row:has-text("用设定集写这段对话")');
 await sheetPick('跟随工作区');
 await page.waitForTimeout(500);
 check(await page.isVisible('.lo-bar:has-text("《长夜》")'), 'following the workspace again: bar back');
@@ -356,7 +370,7 @@ check(await page.isVisible('.lo-bar:has-text("《长夜》")'), 'following the w
 if (await page.$('.m-root.drawer')) await page.click('.m-stage-scrim');
 await page.waitForTimeout(400);
 await page.click('.lo-bar-t');
-await sheetPick('打开这部作品');
+await sheetPick('打开《长夜》');
 await page.waitForTimeout(600);
 check((await page.textContent('.lo-cursor')).includes('第 16 章'), 'work page: 现在写到 第 16 章');
 await page.click('.lo-tabs button:text-is("人物")');
@@ -454,22 +468,19 @@ await shot('07-more');
 
 // ---- new conversations by default; DS Bot conversations
 await back();
-await page.click('.plg-row:has-text("新对话默认")');
+check(!(await page.isVisible('.plg-row:has-text("所有新对话默认用")')), 'works page: the default is tucked under 高级');
+await page.click('.lo-adv > summary');
+await page.click('.plg-row:has-text("所有新对话默认用")');
 await sheetPick('《长夜》');
 check(await toastHas('新对话默认用《长夜》'), 'default → 《长夜》');
 await page.waitForTimeout(400);
-check((await page.textContent('.plg-row:has-text("新对话默认")')).includes('《长夜》'), 'works page shows the default');
+check((await page.textContent('.plg-row:has-text("所有新对话默认用")')).includes('《长夜》'), 'works page shows the default (高级 stays open while one is set)');
 // the frontend syncs DS Bot conversations itself; here one is marked by hand
 await api('/binding', { action: 'set-bots', sessionIds: [other] });
 await home();
 await menuOf('SSH 隧道是什么');
-await page.click('.m-pop-row:has-text("设定集")');
-await page.waitForSelector('.m-bsheet');
-await page.waitForTimeout(500);
-t = await page.textContent('.m-bsheet');
-check(t.includes('DS Bot 的对话不用设定集') && !(await page.isVisible('.m-bsheet .lo-opt')), 'DS Bot conversation: only the grey line');
-await page.mouse.click(200, 80);
-await page.waitForTimeout(300);
+check(!(await page.isVisible('.m-pop-row:has-text("设定集")')), 'DS Bot conversation: no 设定集 line in its menu');
+await closeMenu();
 
 // ---- delete the work: asked twice; the workspace and conversations fall back
 if (await page.$('.m-root.drawer')) await page.click('.m-stage-scrim');
@@ -487,7 +498,28 @@ await page.waitForTimeout(500);
 const binds = (await api('/binding')).value;
 check(binds.default === 'off' && !Object.values(binds.workspaces).length, 'after deleting: the workspace follows the default again, the default is 关');
 check(await page.isVisible('.lo-empty'), 'works: empty again');
+check((await page.textContent('.lo-empty')).includes('用设定集写这段对话'), 'works: the empty state points at the one-tap start');
 await noHScroll('works');
+
+// ---- one tap from a conversation when there are no works yet
+await api('/binding', { action: 'set-bots', sessionIds: [] });
+await home();
+await menuOf('第十五章');
+await page.click('.m-pop-row:has-text("用设定集写这段对话")');
+await page.waitForSelector('.m-alert input.dlg-input');
+check((await page.inputValue('.m-alert input.dlg-input')).includes('第十五章'), 'no works: named after the conversation by default');
+await page.click('.m-alert-btns button.primary');
+check(await toastHas('先加几个人物'), 'one tap: started, says what to do next');
+await page.waitForTimeout(800);
+check(await page.isVisible('.lo-title') && (await page.isVisible('.lo-guide-s.done:has-text("在对话里用它")')), 'the new work opens with 在对话里用它 already ticked');
+check((await page.getAttribute('.lo-tabs button:text-is("人物")', 'aria-selected')) === 'true', 'a newly opened work starts on 人物');
+await shot('08-one-tap-guide');
+const started = (await api('/works')).value[0];
+const sid15 = await page.evaluate(() => [...window.__mockEngine.sessions.values()].find((s) => s.title.includes('第十五章'))?.id);
+check(started && (await api(`/binding?sessionId=${sid15}`)).value.work === started.id, 'the conversation uses it');
+await page.click('.plg-text-btn:has-text("不再显示")');
+check(!(await page.isVisible('.lo-guide')), 'guide: 不再显示 hides it');
+await shot('09-one-tap');
 
 await ctx.close();
 await browser.close();

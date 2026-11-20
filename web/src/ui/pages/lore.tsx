@@ -227,7 +227,10 @@ export function LoreWorksPage() {
       <div class="plg lo">
         <div class="plg-group lo-empty">
           <MIc n="book" />
-          <p>给你的小说建一份设定：人物、地点、规矩，还有每一章写到时谁在哪、受了什么伤。AI 写的时候会按这一章的样子来，不会前后矛盾。</p>
+          <p>
+            给你的小说建一份设定：人物、地点、规矩，还有每一章写到时谁在哪、受了什么伤。AI 写的时候会按这一章的样子来，不会前后矛盾。
+            <span class="lo-tip">最快的开始：在要写小说的那段对话上长按（或点「⋯」），选「用设定集写这段对话」。</span>
+          </p>
           <div class="plg-actions">
             <button class="plg-btn pri" type="button" onClick={newWork}>
               新建作品
@@ -241,16 +244,7 @@ export function LoreWorksPage() {
     );
   return (
     <div class="plg lo">
-      <div class="plg-group">
-        <button class="plg-row" type="button" onClick={() => chooseWork({ kind: 'default' }, () => void reload())}>
-          <div class="plg-row-m">
-            <div class="plg-row-t">新对话默认</div>
-          </div>
-          <span class="plg-row-v">{def && def !== 'off' ? `《${workTitle(def) ?? '?'}》` : '关'}</span>
-          <MIc n="chevron" />
-        </button>
-      </div>
-      <p class="plg-note">工作区和单独的对话可以另外选，以它们为准。</p>
+      <p class="plg-note">在对话上长按（或点「⋯」）选「用设定集写这段对话」，那段对话就会用上它。</p>
       <section class="plg-sec">
         <h2 class="plg-sec-t">作品 · {list.length}</h2>
         <div class="plg-group">
@@ -268,6 +262,19 @@ export function LoreWorksPage() {
           ))}
         </div>
       </section>
+      <details class="lo-adv" open={!!def && def !== 'off'}>
+        <summary>高级</summary>
+        <div class="plg-group">
+          <button class="plg-row" type="button" onClick={() => chooseWork({ kind: 'default' }, () => void reload())}>
+            <div class="plg-row-m">
+              <div class="plg-row-t">所有新对话默认用</div>
+            </div>
+            <span class="plg-row-v">{def && def !== 'off' ? `《${workTitle(def) ?? '?'}》` : '不用'}</span>
+            <MIc n="chevron" />
+          </button>
+        </div>
+        <p class="plg-note">一般不用设。整个工作区都写同一本时，可以在「设置 › 工作区」里给工作区选；单独的对话以它自己的选择为准。</p>
+      </details>
     </div>
   );
 }
@@ -394,7 +401,14 @@ function exportMenu(id: string, title: string) {
   });
 }
 
+/** A work opened afresh starts on 人物; coming back to the same one keeps its tab. */
+let lastWork = '';
+
 export function LoreWorkPage({ id }: { id: string }) {
+  if (lastWork !== id) {
+    lastWork = id;
+    workTab.value = 'people';
+  }
   const { data: w, setData, error, reload } = useWork(id);
   const cur = useCursor(w?.id ?? null, w?.cursor.chapter ?? 0, () => void readWork(id).then(setData));
   if (error) return <Failed error={error} retry={reload} />;
@@ -411,6 +425,7 @@ export function LoreWorkPage({ id }: { id: string }) {
           <Stepper shown={cur.shown} step={cur.step} onTapNumber={() => askChapter(cur.shown, cur.to)} />
         </div>
       </div>
+      <GettingStarted w={w} />
       <div class="plg-seg lo-tabs" role="tablist">
         {(
           [
@@ -429,6 +444,72 @@ export function LoreWorkPage({ id }: { id: string }) {
       {t === 'lore' && <Entries w={w} />}
       {t === 'rel' && <Relations w={w} chapter={cur.shown} reload={() => void reload()} />}
       {t === 'more' && <More w={w} reload={() => void reload()} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- 第一次：三步
+
+const guideKey = (id: string) => `dsmo.lore.guide.${id}`;
+const guideHidden = (id: string) => {
+  try {
+    return localStorage.getItem(guideKey(id)) === '1';
+  } catch {
+    return false;
+  }
+};
+
+/** Until a work has a character, an entry and a conversation using it: three steps, each ticked off as it's done. */
+function GettingStarted({ w }: { w: Work }) {
+  const [used, setUsed] = useState<boolean | null>(null);
+  const [hidden, setHidden] = useState(() => guideHidden(w.id));
+  useEffect(() => {
+    readBindings().then(
+      (b) => setUsed(b.default === w.id || Object.values(b.conversations).includes(w.id) || Object.values(b.workspaces).includes(w.id)),
+      () => setUsed(false),
+    );
+  }, [w.id]);
+  const people = w.characters.length > 0;
+  const lore = w.lore.length > 0;
+  if (hidden || used === null || (people && lore && used)) return null;
+  const hide = () => {
+    try {
+      localStorage.setItem(guideKey(w.id), '1');
+    } catch {
+      /* 只是这次不显示 */
+    }
+    setHidden(true);
+  };
+  const step = (done: boolean, n: number, title: string, body: string, action?: [string, () => void]) => (
+    <li class={`lo-guide-s ${done ? 'done' : ''}`}>
+      <span class="lo-guide-n">{done ? '✓' : n}</span>
+      <div class="lo-guide-m">
+        <div class="lo-guide-t">{title}</div>
+        <div class="lo-guide-b">{body}</div>
+        {!done && action && (
+          <button class="plg-text-btn" type="button" onClick={action[1]}>
+            {action[0]}
+          </button>
+        )}
+      </div>
+    </li>
+  );
+  return (
+    <div class="plg-group lo-guide">
+      <div class="lo-guide-h">三步开始</div>
+      <ol>
+        {step(people, 1, '加一个人物', '名字、别名，再写一句最能认出 TA 的话。', ['加人物', () => openPage(`lore-char:${w.id}:new`)])}
+        {step(lore, 2, '加一条设定', '地点、组织、规矩……写上关键词，对话里提到就会带上。', ['加设定', () => openPage(`lore-entry:${w.id}:new`)])}
+        {step(
+          used,
+          3,
+          '在对话里用它',
+          used ? '已经有对话在用了。' : '在要写小说的对话上长按（或点「⋯」），选「用设定集写这段对话」，再选这一本。之后正常写：提到谁，AI 就会看到谁的设定；人物受伤、换地方，AI 会自己记下。',
+        )}
+      </ol>
+      <button class="plg-text-btn faint" type="button" onClick={hide}>
+        知道了，不再显示
+      </button>
     </div>
   );
 }
@@ -688,6 +769,7 @@ function RecordForm({ w, c, onDone }: { w: Work; c: Character; onDone: (ok: bool
   const [from, setFrom] = useState<number | undefined>(w.cursor.chapter);
   const [until, setUntil] = useState<number | undefined>(undefined);
   const [evidence, setEvidence] = useState('');
+  const [advanced, setAdvanced] = useState(false);
   const pickKey = (k: string) => {
     setKey(k);
     if (!touchedOp) setOp(defaultOp(w, c.id, k.trim()));
@@ -722,30 +804,53 @@ function RecordForm({ w, c, onDone }: { w: Work; c: Character; onDone: (ok: bool
       <Field label="值">
         <Text value={value} onInput={setValue} max={60} placeholder="青州城外" />
       </Field>
-      <div class="sk-field lo-field">
-        <span>方式{mode ? `（「${key.trim()}」以前记成${mode === 'list' ? '列表' : '单值'}）` : ''}</span>
-        <Seg<Op>
-          value={op}
-          label="方式"
-          onChange={(v) => (setOp(v), setTouchedOp(true))}
-          options={[
-            ['replace', '替换'],
-            ['add', '加进列表'],
-            ['remove', '从列表拿掉'],
-          ]}
-        />
-      </div>
-      <div class="lo-two">
-        <Field label="从第几章">
-          <NumberInput value={from} onInput={setFrom} label="从第几章" />
-        </Field>
-        <Field label="到第几章（可空）">
-          <NumberInput value={until} onInput={setUntil} placeholder="一直" label="到第几章" />
-        </Field>
-      </div>
-      <Field label="原文（可空）">
-        <Text value={evidence} onInput={setEvidence} max={60} placeholder="正文里的那一句" />
+      {mode === 'list' && !advanced && (
+        <div class="sk-field lo-field">
+          <span>「{key.trim()}」可以有好几样</span>
+          <Seg<Op>
+            value={op === 'remove' ? 'remove' : 'add'}
+            label="得到还是失去"
+            onChange={(v) => (setOp(v), setTouchedOp(true))}
+            options={[
+              ['add', '多了这个'],
+              ['remove', '没了这个'],
+            ]}
+          />
+        </div>
+      )}
+      {advanced && (
+        <div class="sk-field lo-field">
+          <span>方式{mode ? `（「${key.trim()}」以前记成${mode === 'list' ? '列表' : '单值'}）` : ''}</span>
+          <Seg<Op>
+            value={op}
+            label="方式"
+            onChange={(v) => (setOp(v), setTouchedOp(true))}
+            options={[
+              ['replace', '替换'],
+              ['add', '加进列表'],
+              ['remove', '从列表拿掉'],
+            ]}
+          />
+        </div>
+      )}
+      <Field label="从第几章起">
+        <NumberInput value={from} onInput={setFrom} label="从第几章" />
       </Field>
+      {!advanced && (
+        <button class="plg-text-btn faint" type="button" onClick={() => setAdvanced(true)}>
+          高级：到第几章为止、原文、记录方式
+        </button>
+      )}
+      {advanced && (
+        <>
+          <Field label="到第几章为止（可空）">
+            <NumberInput value={until} onInput={setUntil} placeholder="一直" label="到第几章" />
+          </Field>
+          <Field label="原文（可空）">
+            <Text value={evidence} onInput={setEvidence} max={60} placeholder="正文里的那一句" />
+          </Field>
+        </>
+      )}
       <div class="plg-actions lo-pad">
         <button class="plg-btn pri" type="button" disabled={!key.trim() || !value.trim()} onClick={() => void submit()}>
           记下

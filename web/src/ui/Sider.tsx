@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { hasLore } from '../lore/api';
-import { chooseWork, conversationLabel, loreReady } from './lore/pick';
+import { conversationItem, loreReady } from './lore/pick';
 import { conn, errText, forkConversation, sessionsLive, showToast } from '../state/store';
 import { hasModule } from '../maidsh/api';
 import { learnConversation } from './pages/companion';
@@ -251,7 +251,8 @@ function openMenu(btn: HTMLElement, s: SessionSummary, ready = false) {
   };
   opt('IconEditOutline16', '重命名', false, () => (renaming.value = s.sessionId));
   opt({ svg: M.fork }, '分叉到新对话', false, () => void forkConversation(s.sessionId));
-  if (hasLore()) opt({ svg: M.book }, conversationLabel(s.sessionId), false, () => chooseWork({ kind: 'conversation', sessionId: s.sessionId }));
+  const lore = hasLore() ? conversationItem(s.sessionId, s.title) : null;
+  if (lore) opt({ svg: M.book }, lore.label, false, lore.run);
   if (hasModule('core')) opt({ svg: M.sparkle }, '让 TA 深度学习这段对话', false, () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))));
   if (hasModule('core')) opt({ svg: M.sparkle }, isScopeOff(s.sessionId) ? '在这段对话里打开陪伴' : '在这段对话里关掉陪伴', false, () => void toggleScope(s.sessionId));
   opt('IconTrashOutline16', '删除', true, () =>

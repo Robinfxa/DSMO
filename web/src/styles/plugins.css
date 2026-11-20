@@ -727,3 +727,26 @@ body:not(.is-m) .plg-card { width: calc((100% - 24px) / 3); }
 .lo-choice { padding: 4px 0; }
 .lo-choice-t { padding: 10px 20px 4px; font-size: 14.5px; font-weight: 500; }
 .lo .plg-actions { flex-wrap: wrap; }
+
+/* 设定集 · simpler start (docs/lore-ui.md §12) */
+.lo-tip { display: block; margin-top: 10px; font-size: 13.5px; line-height: 20px; color: var(--c-faint); }
+.lo-opt.static { cursor: default; justify-content: space-between; }
+.lo-opt.static:active, .lo-opt.static:hover { background: none; }
+.lo-adv { margin-top: 20px; }
+.lo-adv > summary { padding: 8px 4px; color: var(--c-sub); font-size: 14px; cursor: pointer; list-style: none; }
+.lo-adv > summary::-webkit-details-marker { display: none; }
+.lo-adv > summary::after { content: ' ›'; }
+.lo-adv[open] > summary::after { content: ' ⌄'; }
+.lo-guide { padding: 14px 16px 10px; margin-bottom: 12px; }
+.lo-guide-h { margin-bottom: 8px; font-size: 15px; font-weight: 600; }
+.lo-guide ol { margin: 0; padding: 0; list-style: none; }
+.lo-guide-s { display: flex; gap: 10px; padding: 8px 0; }
+.lo-guide-n { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border-radius: 12px; background: var(--c-fill); color: var(--c-sub); font-size: 13px; font-variant-numeric: tabular-nums; }
+.lo-guide-s.done .lo-guide-n { background: var(--c-accent); color: #fff; }
+.lo-guide-s.done .lo-guide-t { color: var(--c-sub); text-decoration: line-through; }
+.lo-guide-m { min-width: 0; flex: 1; }
+.lo-guide-t { font-size: 15px; line-height: 22px; }
+.lo-guide-b { color: var(--c-sub); font-size: 13.5px; line-height: 20px; }
+.lo-guide .plg-text-btn { padding: 4px 0; }
+.plg-text-btn.faint { color: var(--c-faint); }
+.lo-empty > * + *, .lo-guide > * + * { box-shadow: none; }
