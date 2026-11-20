@@ -31,6 +31,7 @@ const KNOWN_ENGINE: Record<string, { title: string; affects: Position[] }> = {
   '@7gzgn/dsh-emotion': { title: 'dsh-emotion', affects: ['prompt.persona'] },
   'dsh-plugin-memory-share': { title: '长期记忆', affects: ['prompt.memory'] },
   'dsh-agentmemory': { title: 'dsh-agentmemory', affects: ['prompt.memory'] },
+  'maidsh-memory': { title: 'MaiDSH 记忆', affects: ['prompt.memory'] },
 };
 
 export const affectsOf = (p: Pick<ApiDemoManifest, 'affects' | 'engine'>): Position[] => p.affects ?? (p.engine ? KNOWN_ENGINE[p.engine.package]?.affects : undefined) ?? [];

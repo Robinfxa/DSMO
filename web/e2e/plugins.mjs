@@ -91,7 +91,8 @@ async function phone() {
   await page.waitForTimeout(300);
   await scrollShot('11-installed');
   await page.click('.plg-seg button:has-text("发现")');
-  await page.click('.plg-row:has-text("今日用量")');
+  // featured plugins are cards up top; the rest are rows on their shelves
+  await page.click('.plg-card:has-text("今日用量"), .plg-row:has-text("今日用量")');
   await page.waitForTimeout(400);
   await scrollShot('11b-engine-detail');
   await page.click('.plg-btn:has-text("安装")');

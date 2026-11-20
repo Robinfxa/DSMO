@@ -320,7 +320,9 @@ function Discover() {
         </section>
       )}
       {CATEGORIES.map((ci) => {
-        const list = all.filter((p) => categoryOf(p) === ci.id);
+        // featured first (in the market's order), so a family of plugins doesn't push them off the shelf
+        const rank = (p: ApiDemoManifest) => (FEATURED.includes(p.id) ? FEATURED.indexOf(p.id) : FEATURED.length);
+        const list = all.filter((p) => categoryOf(p) === ci.id).sort((a, b) => rank(a) - rank(b));
         if (!list.length) return null;
         return (
           <section class="plg-sec" key={ci.id}>

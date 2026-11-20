@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { conn, forkConversation, sessionsLive } from '../state/store';
+import { conn, errText, forkConversation, sessionsLive, showToast } from '../state/store';
+import { hasModule } from '../maidsh/api';
+import { learnConversation } from './pages/companion';
 import { M } from './mobile/icons';
 import { openImportedPage } from '../history/ui';
 import { imported } from '../history/imported';
@@ -244,6 +246,7 @@ function openMenu(btn: HTMLElement, s: SessionSummary) {
   };
   opt('IconEditOutline16', '重命名', false, () => (renaming.value = s.sessionId));
   opt({ svg: M.fork }, '分叉到新对话', false, () => void forkConversation(s.sessionId));
+  if (hasModule('core')) opt({ svg: M.sparkle }, '让 TA 深度学习这段对话', false, () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))));
   opt('IconTrashOutline16', '删除', true, () =>
     confirm('删除对话？', `「${s.title || '新对话'}」会被移出列表，可以在提示里撤销。`, '删除', () => deleteSession(s.sessionId)),
   );

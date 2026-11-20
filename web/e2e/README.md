@@ -6,3 +6,7 @@ card, and mobile layout. Screenshots land in `e2e/shots/`.
 
 It loads Playwright from `/opt/npm-tools/node_modules` and Chrome from
 `/usr/bin/google-chrome`; adjust the two paths at the top for your machine.
+
+`companion.mjs` (陪伴) runs the real MaiDSH plugins: `maidsh-host.mjs` loads `maidsh/*/lib` under
+cordis with a scripted model and serves `dist-proto` from the same origin. Run `npm install` in
+`maidsh/` once first (for cordis).

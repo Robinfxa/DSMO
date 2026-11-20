@@ -24,6 +24,7 @@ import { TerminalPage } from './host/terminal';
 import { AccessPage, EnginePage, HostEditPage, HostsPage, NotifySettingsPage, PhonePage, UpdatePage, VoiceSettingsPage } from './host/local';
 import { A11yRestorePage, AndroidShellPage, PhoneDndPage, PhoneLogPage } from './host/phone';
 import { PresetsPage, TeamPage } from './agents';
+import { CompanionPage } from './companion';
 import { LongMemoryEditPage, LongMemoryPage } from './memory';
 import { PersonaDetailPage, PersonaEditPage, PersonaPage } from './persona';
 import { SkillEditPage, SkillInfoPage, SkillsPage } from './skills';
@@ -94,6 +95,8 @@ export const PAGES: Record<string, PageDef> = {
   presets: { title: 'Agent 预设', body: PresetsPage },
   persona: { title: '人设', body: PersonaPage },
   memory: { title: '长期记忆', body: LongMemoryPage },
+  companion: { title: '陪伴', body: () => <CompanionPage /> },
+  'companion:learn': { title: '陪伴', body: () => <CompanionPage tab="learn" /> },
   'phone-a11y-restore': { title: '自动恢复无障碍', body: A11yRestorePage },
   'phone-shell': { title: 'Android Shell', body: AndroidShellPage },
   'phone-log': { title: '操作记录', body: PhoneLogPage },

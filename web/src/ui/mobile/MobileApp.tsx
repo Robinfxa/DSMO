@@ -6,7 +6,9 @@ import { canSpeak } from '../../bridge/native';
 import { anyWorking, dsBot, totalUnread } from '../../bots/store';
 import { EngineGate } from '../../setup/gate';
 import { SafeBanner } from '../../setup/recovery';
-import { forkConversation, sessionsLive } from '../../state/store';
+import { errText, forkConversation, sessionsLive } from '../../state/store';
+import { hasModule } from '../../maidsh/api';
+import { learnConversation } from '../pages/companion';
 import { openImportedPage } from '../../history/ui';
 import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
@@ -355,6 +357,7 @@ function SessionRow({ s, picking, onPick, onMulti }: { s: SessionSummary; pickin
       { icon: 'edit', label: '重命名', run: () => (renaming.value = s.sessionId) },
       { icon: isPinned ? 'unpin' : 'pin', label: isPinned ? '取消置顶' : '置顶', run: () => void togglePin(s.sessionId) },
       { icon: 'fork', label: '分叉', run: () => ((drawerOpen.value = false), void forkConversation(s.sessionId)) },
+      ...(hasModule('core') ? [{ icon: 'sparkle' as const, label: '让 TA 深度学习这段对话', run: () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))) }] : []),
       { icon: 'multi', label: '多选', run: onMulti },
       {
         icon: 'trash',

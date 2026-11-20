@@ -283,8 +283,9 @@ function SettingsHome() {
         <Row icon="bell" label="通知" onClick={() => toPage('notify-settings')} />
         <Row icon="shield" label="系统权限" onClick={() => toPage('access')} />
       </Group>
-      {installed.value.some((x) => (x.id === '@api-demo/persona-library' || x.id === '@api-demo/memory-share') && x.enabled) && (
+      {installed.value.some((x) => (x.id === '@api-demo/persona-library' || x.id === '@api-demo/memory-share' || x.id === '@api-demo/maidsh-core') && x.enabled) && (
         <Group title="陪伴">
+          {installed.value.some((x) => x.id === '@api-demo/maidsh-core' && x.enabled) && <Row icon="heart" label="TA 的状态" onClick={() => toPage('companion')} />}
           {installed.value.some((x) => x.id === '@api-demo/persona-library' && x.enabled) && <Row icon="person" label="人设" onClick={() => toPage('persona')} />}
           {installed.value.some((x) => x.id === '@api-demo/memory-share' && x.enabled) && <Row icon="sparkle" label="长期记忆" onClick={() => toPage('memory')} />}
         </Group>

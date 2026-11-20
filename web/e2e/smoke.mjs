@@ -92,7 +92,7 @@ await run('desktop', { width: 1280, height: 800 }, async (page) => {
   await page.waitForTimeout(300);
   await shot(page, '14-market');
   for (const name of ['夜航', '常用提示词', '随手记', '今日用量']) {
-    await page.click(`.plg-row:has-text("${name}")`);
+    await page.click(`.plg-card:has-text("${name}"), .plg-row:has-text("${name}")`);
     await page.waitForTimeout(400);
     await page.click('.plg-btn.pri:has-text("安装")');
     await page.waitForTimeout(500);

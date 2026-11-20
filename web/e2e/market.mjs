@@ -3,7 +3,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -38,7 +38,8 @@ await page.waitForTimeout(700);
 await shot('01-discover');
 
 const cards = await page.$$eval('.plg-card-t', (e) => e.map((x) => x.textContent));
-check(cards.length === 7 && cards[0] === '人设库' && cards[1] === '长期记忆', `精选 follows the market's list: ${cards.join(' ')}`);
+const featured = JSON.parse(readFileSync(join(here, '..', '..', 'market', 'index.json'), 'utf8')).featured;
+check(cards.length === featured.length && cards[0] === '人设库' && cards[1] === '长期记忆', `精选 follows the market's list: ${cards.join(' ')}`);
 const chips = await page.$$eval('.plg-chips button', (b) => b.map((x) => x.textContent));
 check(chips[0] === '全部' && chips.includes('技能') && chips.includes('引擎'), `chips: ${chips.join(' ')}`);
 
