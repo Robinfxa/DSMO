@@ -34,6 +34,7 @@ import {
   setPref,
   showToast,
   topSessions,
+  archived,
   errText,
 } from '../state/store';
 import { Ic, Select, Switch, useAsync } from './common';
@@ -583,10 +584,11 @@ function Search() {
     if (!query) return setRes(null);
     const t = setTimeout(async () => {
       try {
-        setRes((await getClient().searchSessions(query)).items);
+        // deleted (archived) conversations stay out of the results too
+        setRes((await getClient().searchSessions(query)).items.filter((x) => !archived.value.has(x.sessionId)));
       } catch {
         // Older engines: fall back to titles.
-        setRes(sessions.value.filter((s) => (s.title ?? '').includes(query)).map((s) => ({ sessionId: s.sessionId, snippet: s.title ?? '' })));
+        setRes(topSessions.value.filter((s) => (s.title ?? '').includes(query)).map((s) => ({ sessionId: s.sessionId, snippet: s.title ?? '' })));
       }
     }, 220);
     return () => clearTimeout(t);

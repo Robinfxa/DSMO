@@ -188,7 +188,7 @@ export class MockEngine {
     if (endpoint === 'workspace/follow') {
       this.pinWatchers.add({ sock, streamId });
       this.hostStreams.set(streamId, this.host.watchWorkspaces((value) => sock.deliver({ type: 'item', streamId, value })) as unknown as () => void);
-      sock.deliver({ type: 'item', streamId, value: { type: 'baseline', value: { items: this.host.baselineItems(), archivedSessionIds: [], pinnedSessionIds: this.pinned } } });
+      sock.deliver({ type: 'item', streamId, value: { type: 'baseline', value: { items: this.host.baselineItems(), archivedSessionIds: this.archivedIds(), pinnedSessionIds: this.pinned } } });
       return;
     }
     if (endpoint === 'account/watch') {
@@ -225,6 +225,15 @@ export class MockEngine {
   private pushPins() {
     for (const w of this.pinWatchers) w.sock.deliver({ type: 'item', streamId: w.streamId, value: { type: 'pinned', pinnedSessionIds: this.pinned } });
   }
+  private archivedIds() {
+    return [...this.sessions.values()].filter((x) => x.archived).map((x) => x.id);
+  }
+
+  /** workspace/follow's `archived` frame: the full set, as DSH sends it. */
+  private pushArchived() {
+    for (const w of this.pinWatchers) w.sock.deliver({ type: 'item', streamId: w.streamId, value: { type: 'archived', archivedSessionIds: this.archivedIds() } });
+  }
+
 
   /** Simulates a network blip: every socket closes; clients reconnect and resync. */
   blip() {
@@ -590,7 +599,8 @@ export class MockEngine {
     const req = obj(args.request);
     switch (endpoint) {
       case 'session/list':
-        return { items: [...this.sessions.values()].filter((s) => !s.archived).map((s) => this.summary(s)) };
+        // like DSH: every stored session, archived ones included (the page filters with workspace/follow's archived set)
+        return { items: [...this.sessions.values()].map((s) => this.summary(s)) };
       case 'session/create': {
         const s = this.newSession(null, str(req.cwd) ?? WS);
         this.emit('api-session/added', [this.summary(s)]);
@@ -611,14 +621,14 @@ export class MockEngine {
           this.pinned = this.pinned.filter((x) => x !== s.id);
           this.pushPins();
         }
-        this.emit('api-session/removed', [s.id]);
-        return { archivedSessionIds: [...this.sessions.values()].filter((x) => x.archived).map((x) => x.id) };
+        this.pushArchived();
+        return { archivedSessionIds: this.archivedIds() };
       }
       case 'workspace/unarchiveSession': {
         const s = this.need(req.sessionId);
         s.archived = false;
-        this.emit('api-session/added', [this.summary(s)]);
-        return { archivedSessionIds: [...this.sessions.values()].filter((x) => x.archived).map((x) => x.id) };
+        this.pushArchived();
+        return { archivedSessionIds: this.archivedIds() };
       }
       case 'session/fork': {
         const src = this.need(req.sessionId);

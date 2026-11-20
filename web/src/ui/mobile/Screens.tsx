@@ -29,6 +29,7 @@ import {
   setPref,
   showToast,
   topSessions,
+  archived,
   visibleSessions,
   webUpdateReady,
 } from '../../state/store';
@@ -621,9 +622,10 @@ function SearchScreen() {
     if (!query) return setRes(null);
     const t = setTimeout(async () => {
       try {
-        setRes((await getClient().searchSessions(query)).items);
+        // deleted (archived) conversations stay out of the results too
+        setRes((await getClient().searchSessions(query)).items.filter((x) => !archived.value.has(x.sessionId)));
       } catch {
-        setRes(sessions.value.filter((s) => (s.title ?? '').includes(query)).map((s) => ({ sessionId: s.sessionId, snippet: '' })));
+        setRes(topSessions.value.filter((s) => (s.title ?? '').includes(query)).map((s) => ({ sessionId: s.sessionId, snippet: '' })));
       }
     }, 200);
     return () => clearTimeout(t);

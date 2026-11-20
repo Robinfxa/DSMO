@@ -227,8 +227,12 @@ export class DshClient {
 
   // ---------- pins (workspace registry) ----------
 
-  /** `workspace/follow`: calls [onPinned] with the full pin set (most recent first) on every change. */
-  watchPins(onPinned: (ids: string[]) => void): () => void {
+  /**
+   * `workspace/follow`: calls [onPinned] with the full pin set (most recent first) and
+   * [onArchived] with the full archived set on every change. `session/list` includes archived
+   * sessions; this set is how a client leaves them out (dsh-Go's sessions_state does the same).
+   */
+  watchPins(onPinned: (ids: string[]) => void, onArchived?: (ids: string[]) => void): () => void {
     let stopped = false;
     let stream: MuxStream | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -237,8 +241,11 @@ export class DshClient {
       stream = this.mux.open('workspace/follow', {}, {
         onItem: (item) => {
           const m = obj(item);
-          if (m.type === 'baseline') onPinned(strList(obj(m.value).pinnedSessionIds));
-          else if (m.type === 'pinned') onPinned(strList(m.pinnedSessionIds));
+          if (m.type === 'baseline') {
+            onPinned(strList(obj(m.value).pinnedSessionIds));
+            onArchived?.(strList(obj(m.value).archivedSessionIds));
+          } else if (m.type === 'pinned') onPinned(strList(m.pinnedSessionIds));
+          else if (m.type === 'archived') onArchived?.(strList(m.archivedSessionIds));
         },
         onEnd: () => retry(),
         onError: (e) => (e instanceof DshClosedError ? undefined : retry()),

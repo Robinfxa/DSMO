@@ -144,6 +144,11 @@ const mq = typeof matchMedia === 'function' ? matchMedia('(max-width: 767px)') :
 export const isMobile = signal(!!mq?.matches);
 mq?.addEventListener('change', (e) => (isMobile.value = e.matches));
 export const pinned = signal<string[]>([]);
+/**
+ * Archived (deleted) conversations: `session/list` still returns them, so the list leaves these
+ * out. From workspace/follow (baseline + `archived` frames) and each archive call's answer.
+ */
+export const archived = signal<Set<string>>(new Set());
 /** messageId → feedback of the open conversation. */
 export const feedback = signal<Record<string, { rating: 'positive' | 'negative'; version: string }>>({});
 /** 修改输入: rewriting the prompt at [seq] of the open conversation. */
@@ -159,7 +164,10 @@ export const getTranscript = () => transcript;
 export const protoEngine = () => engineForProto;
 
 export const current = computed(() => sessions.value.find((s) => s.sessionId === currentId.value) ?? null);
-export const topSessions = computed(() => sessions.value.filter((s) => !s.parentSessionId && s.origin !== 'subagent'));
+export const topSessions = computed(() => {
+  const gone = archived.value;
+  return sessions.value.filter((s) => !s.parentSessionId && s.origin !== 'subagent' && !gone.has(s.sessionId));
+});
 /** The sidebar list: other versions of an edited / regenerated conversation stay out (see versions.ts). */
 /** Sessions another feature shows in its own place (DS Bot's team): kept out of the list. */
 export const ownedElsewhere = signal<Set<string>>(new Set());
@@ -299,7 +307,10 @@ export async function boot() {
   } catch {
     /* state listener shows the error; the mux keeps retrying */
   }
-  client.watchPins((ids) => (pinned.value = ids));
+  client.watchPins(
+    (ids) => (pinned.value = ids),
+    (ids) => (archived.value = new Set(ids)),
+  );
   void loadAccount();
   void client.modelCatalog().then((c) => (catalog.value = c)).catch(() => {});
 }
@@ -625,13 +636,21 @@ export async function deleteSession(id: string) {
   const gone = sessions.value.filter((x) => ids.has(x.sessionId));
   sessions.value = sessions.value.filter((x) => !ids.has(x.sessionId));
   if (currentId.value && ids.has(currentId.value)) openSession(null);
+  // out of the list at once; the engine's answers (the whole archived set) confirm it
+  const pending = new Set(ids);
+  archived.value = new Set([...archived.value, ...ids]);
   try {
-    for (const x of ids) await client.archiveSession(x);
+    for (const x of ids) {
+      const set = await client.archiveSession(x);
+      pending.delete(x);
+      archived.value = new Set([...set, ...pending]);
+    }
     showToast('已删除对话', '撤销', async () => {
-      for (const x of ids) await client.unarchiveSession(x).catch(() => {});
+      for (const x of ids) await client.unarchiveSession(x).then((left) => (archived.value = new Set(left)), () => {});
       for (const g of gone) upsertSession(g);
     });
   } catch (e) {
+    archived.value = new Set([...archived.value].filter((x) => !ids.has(x)));
     for (const g of gone) upsertSession(g);
     showToast(errText(e));
   }
@@ -640,9 +659,22 @@ export async function deleteSession(id: string) {
 export async function deleteAll() {
   const ids = topSessions.value.map((s) => s.sessionId);
   openSession(null);
-  for (const id of ids) await client.archiveSession(id).catch(() => {});
+  const pending = new Set(ids);
+  archived.value = new Set([...archived.value, ...ids]);
+  let failed = 0;
+  let engine: string[] = [...archived.value];
+  for (const id of ids) {
+    try {
+      engine = await client.archiveSession(id);
+    } catch {
+      failed++;
+      engine = engine.filter((x) => x !== id);
+    }
+    pending.delete(id);
+    archived.value = new Set([...engine, ...pending]);
+  }
   await refreshSessions();
-  showToast('已删除全部对话');
+  showToast(failed ? `有 ${failed} 个对话没删掉，再试一次` : '已删除全部对话');
 }
 
 // ------------------------------------------------------------------ model / permission
