@@ -15,7 +15,10 @@ import {
   catalogPlugins,
   clearPluginData,
   findPlugin,
+  hasUpdate,
   installPlugin,
+  pluginUpdates,
+  updatePlugin,
   installed,
   isEnabled,
   isInstalled,
@@ -44,6 +47,19 @@ function afterInstall(title: string, outcome: InstallOutcome) {
   if (!outcome.restart) return showToast(`已安装「${title}」`);
   if (!onLocalHost.value) return showToast(`已安装「${title}」，在主机上重启 DSH 后生效`);
   confirm(`「${title}」装好了`, '重启本机引擎后生效。正在生成的回复会中断。', '重启引擎', () => {
+    void local('engine.restart')
+      .then(() => showToast('引擎正在重启'))
+      .catch((e) => showToast(errText(e)));
+  }, false);
+}
+
+/** After updating one or more plugins: an engine half that loads only after a restart says so. */
+export function afterUpdate(titles: string[], restart: boolean) {
+  if (!titles.length) return;
+  const what = titles.length === 1 ? `「${titles[0]}」` : `「${titles[0]}」等 ${titles.length} 个插件`;
+  if (!restart) return showToast(`已更新${what}`);
+  if (!onLocalHost.value) return showToast(`已更新${what}，在主机上重启 DSH 后生效`);
+  confirm(`已更新${what}`, '重启本机引擎后用上新版本。正在生成的回复会中断。', '重启引擎', () => {
     void local('engine.restart')
       .then(() => showToast('引擎正在重启'))
       .catch((e) => showToast(errText(e)));
@@ -128,6 +144,24 @@ export function PluginTile({ p, size = 'md' }: { p: ApiDemoManifest; size?: 'md'
 
 function GetButton({ p }: { p: ApiDemoManifest }) {
   const [busy, setBusy] = useState(false);
+  if (isInstalled(p.id) && hasUpdate(p.id))
+    return (
+      <button
+        class="plg-get"
+        type="button"
+        disabled={busy}
+        onClick={(e) => {
+          e.stopPropagation();
+          setBusy(true);
+          updatePlugin(p.id)
+            .then((r) => afterUpdate([p.title], r.restart))
+            .catch((err) => showToast(errText(err)))
+            .finally(() => setBusy(false));
+        }}
+      >
+        {busy ? '更新中' : '更新'}
+      </button>
+    );
   if (isInstalled(p.id))
     return (
       <span class="plg-get done" aria-label="已安装">
@@ -354,6 +388,7 @@ function Installed() {
   if (q && !mine.length && !host.length) return <NoMatch q={q} />;
   return (
     <>
+      {!q && pluginUpdates.value.length > 0 && <UpdateAll />}
       {!all.length && !q && (
         <div class="plg-empty">
           <span>还没有装插件</span>
@@ -408,6 +443,43 @@ function Installed() {
   );
 }
 
+/** 「N 个插件有更新 · 全部更新」 on 已安装. */
+function UpdateAll() {
+  const [busy, setBusy] = useState(false);
+  const ids = pluginUpdates.value;
+  const run = async () => {
+    setBusy(true);
+    const titles: string[] = [];
+    let restart = false;
+    const failed: string[] = [];
+    for (const id of ids) {
+      const p = findPlugin(id);
+      try {
+        restart = (await updatePlugin(id)).restart || restart;
+        if (p) titles.push(p.title);
+      } catch (e) {
+        failed.push(`${p?.title ?? id}：${errText(e)}`);
+      }
+    }
+    setBusy(false);
+    if (failed.length) showToast(`没能更新 ${failed.join('；')}`);
+    afterUpdate(titles, restart);
+  };
+  return (
+    <div class="plg-group">
+      <div class="plg-row static">
+        <div class="plg-row-m">
+          <div class="plg-row-t">{ids.length} 个插件有更新</div>
+          <div class="plg-row-s">更新后插件的数据和设置都会保留</div>
+        </div>
+        <button class="plg-get" type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? '更新中' : '全部更新'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- detail
 
 export function PluginDetailPage({ id }: { id: string }) {
@@ -436,7 +508,7 @@ export function PluginDetailPage({ id }: { id: string }) {
   };
   const kv: [string, string, boolean?][] = [
     ['开发者', p.official ? 'DSMO 官方' : p.author ?? '社区'],
-    ['版本', p.version],
+    ['版本', hasUpdate(id) ? `${p.version}（已装 ${installed.value.find((x) => x.id === id)?.version ?? '旧版'}）` : p.version],
     ...(tier ? [['审核', TIER_INFO[tier] ?? `第 ${tier} 级`] as [string, string]] : []),
     ...(p.license ? [['许可证', p.license] as [string, string]] : []),
     ['包名', p.id, true],
@@ -468,6 +540,22 @@ export function PluginDetailPage({ id }: { id: string }) {
               <div class="plg-enable">
                 <span>已安装</span>
               </div>
+            )}
+            {hasUpdate(id) && (
+              <button
+                class="plg-btn pri"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  updatePlugin(id)
+                    .then((r) => afterUpdate([p.title], r.restart))
+                    .catch((e) => showToast(errText(e)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {busy ? '正在更新…' : `更新到 v${p.version}`}
+              </button>
             )}
             <button class="plg-btn" type="button" onClick={() => openPluginManage(id)}>
               管理

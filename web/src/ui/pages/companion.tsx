@@ -35,8 +35,9 @@ import {
   type MoodState,
   type Overview,
   type TextType,
+  PLUGIN_ID,
 } from '../../maidsh/api';
-import { installed } from '../../plugins/frontend';
+import { hasUpdate, installed } from '../../plugins/frontend';
 import { confirm, currentId, errText, getTranscript, openPage, pages, showToast } from '../../state/store';
 import { Switch } from '../common';
 import { MIc } from '../mobile/MIc';
@@ -84,13 +85,14 @@ const SOURCE: Record<string, string> = {
   import: '导入的',
 };
 
-/** Not installed: where to get it. Installed but not answering: restart. */
+/** Not installed: where to get it. An older version than the page needs: update it. Installed but not answering: restart. */
 function Missing({ module, inline }: { module: Module; inline?: boolean }) {
   const inst = hasModule(module);
-  const text = inst ? `${MODULE_TITLE[module]}装好了，重启引擎后生效。` : `还没装「${MODULE_TITLE[module]}」。`;
-  const btn = !inst && (
-    <button class="plg-text-btn" type="button" onClick={() => openPage(`plugin:${encodeURIComponent('@api-demo/maidsh-' + module)}`)}>
-      去插件市场安装
+  const old = inst && hasUpdate(PLUGIN_ID[module]);
+  const text = old ? `「${MODULE_TITLE[module]}」有新版本，更新后才能用这里。` : inst ? `${MODULE_TITLE[module]}装好了，重启引擎后生效。` : `还没装「${MODULE_TITLE[module]}」。`;
+  const btn = (!inst || old) && (
+    <button class="plg-text-btn" type="button" onClick={() => openPage(`plugin:${encodeURIComponent(PLUGIN_ID[module])}`)}>
+      {old ? '去更新' : '去插件市场安装'}
     </button>
   );
   if (inline)

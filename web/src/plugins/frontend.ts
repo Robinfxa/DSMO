@@ -260,6 +260,106 @@ export async function installPlugin(id: string): Promise<InstallOutcome> {
   return { restart };
 }
 
+// ------------------------------------------------------------------ updates
+
+/** a is a later version than b (numeric dot parts: 1.0.10 > 1.0.9; a pre-release tag is ignored). */
+export function newerVersion(a: string, b: string): boolean {
+  const parts = (v: string) => String(v ?? '').split(/[-+]/)[0].split('.').map((x) => Number.parseInt(x, 10) || 0);
+  const x = parts(a);
+  const y = parts(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  }
+  return false;
+}
+
+/** Installed plugins the market has a later version of (the page's market comes with the hot-updated page). */
+export const pluginUpdates = computed(() =>
+  installed.value.filter((x) => {
+    const p = findPlugin(x.id);
+    return !!p && newerVersion(p.version, x.version);
+  }).map((x) => x.id),
+);
+export const hasUpdate = (id: string) => pluginUpdates.value.includes(id);
+
+/**
+ * Brings an installed plugin to the market's version: the engine half to its newly pinned version
+ * (its data on the host stays), the skills it brings rewritten. Options, on/off, schedules and
+ * the one-time engine setup stay as they are.
+ */
+export async function updatePlugin(id: string): Promise<InstallOutcome> {
+  const p = findPlugin(id);
+  const x = installed.value.find((i) => i.id === id);
+  if (!p || !x) throw new Error('找不到这个插件');
+  validateManifest(p);
+  let restart = false;
+  if (p.engine) {
+    // DSH refuses installBundle over an installed package (`already-installed`): updateBundle
+    // removes the old version and installs the new one; the plugin's data on the host stays.
+    const u = (await getClient().updateBundle(p.engine.package, p.engine.version)) as Record<string, unknown>;
+    const from = typeof u.from === 'string' ? u.from : '';
+    if (!from) {
+      // not on this host (another host, or removed there): install it
+      restart = bundleOutcome(await getClient().installBundle(`${p.engine.package}@${p.engine.version}`)).restart;
+    } else if (u.step === 'check' && !newerVersion(p.engine.version, from)) {
+      // already this version or newer there
+    } else {
+      restart = bundleOutcome((u.result ?? {}) as Record<string, unknown>).restart;
+    }
+    void loadContributions();
+  }
+  let skills = x.made?.skills;
+  if (p.skills?.length && skillsInstallable()) {
+    await native.installSkills(p.skills);
+    const now = p.skills.map((k) => k.name);
+    const gone = (skills ?? []).filter((n) => !now.includes(n));
+    if (gone.length) await native.removeSkills(gone).catch(() => {});
+    skills = now;
+  }
+  installed.value = installed.value.map((i) => (i.id === id ? { ...i, version: p.version, made: { ...(i.made ?? {}), ...(skills ? { skills } : {}) } } : i));
+  await save();
+  return { restart };
+}
+
+/** Official plugins update themselves; one try per version while the engine stays up (it may be off at start). */
+const autoTried = new Set<string>();
+let autoRun: Promise<{ updated: string[]; restart: boolean }> | null = null;
+
+/** Updates every installed official plugin that has an update; returns the titles updated. */
+export function autoUpdatePlugins(): Promise<{ updated: string[]; restart: boolean }> {
+  if (autoRun) return autoRun;
+  autoRun = (async () => {
+    await null; // let autoRun be set first: with nothing to do, `finally` would otherwise run before it
+    const out = { updated: [] as string[], restart: false };
+    try {
+      for (const id of [...pluginUpdates.value]) {
+        const p = findPlugin(id);
+        if (!p?.official) continue;
+        const key = `${id}@${p.version}`;
+        if (autoTried.has(key)) continue;
+        autoTried.add(key);
+        try {
+          const r = await updatePlugin(id);
+          out.updated.push(p.title);
+          out.restart ||= r.restart;
+        } catch {
+          // stays 「有更新」; the button tries again, and so does the next engine start
+        }
+      }
+    } finally {
+      autoRun = null;
+    }
+    return out;
+  })();
+  return autoRun;
+}
+
+/** The engine came back (or the page started): failed tries get another go. */
+export function retryAutoUpdates() {
+  autoTried.clear();
+  return autoUpdatePlugins();
+}
+
 export async function removePlugin(id: string) {
   const p = findPlugin(id);
   if (p?.engine) {

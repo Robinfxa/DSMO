@@ -4,7 +4,8 @@
 import { effect, signal } from '@preact/signals';
 import { botSessions } from '../plugins/conflicts';
 import { errText, showToast } from '../state/store';
-import { get, hasModule, post } from './api';
+import { hasUpdate } from '../plugins/frontend';
+import { MaidshError, PLUGIN_ID, get, hasModule, post } from './api';
 
 const SCOPE = '/api/maidsh/scope';
 
@@ -63,6 +64,9 @@ export async function toggleScope(sessionId: string) {
     await setConversationScope(sessionId, enable);
     showToast(enable ? '已在这段对话里打开陪伴' : '已在这段对话里关掉陪伴：TA 不会在这里记事、带心情，也不会在这里主动找你');
   } catch (e) {
-    showToast(errText(e));
+    // An older 总控 (before 0.4.0) has no scope route
+    if (e instanceof MaidshError && e.missing)
+      showToast(hasUpdate(PLUGIN_ID.core) ? '「MaiDSH 总控」要先更新：插件 › 已安装 › 更新，再重启引擎' : '「MaiDSH 总控」还没在引擎里运行：重启引擎后再试');
+    else showToast(errText(e));
   }
 }

@@ -444,6 +444,15 @@ export class DshClient {
   async listAgentPresets() {
     return list(obj(await this.call('agentPresets/list', {})).presets).map(obj);
   }
+  /**
+   * pluginManager/updateBundle: replaces an installed third-party bundle with an exact newer version
+   * (remove, then install; the plugin's data stays). Answers {from, to, step, result: ChangeResult}:
+   * `from` is '' when this profile doesn't have the package, and a version that isn't newer is
+   * refused at step 'check'.
+   */
+  async updateBundle(name: string, version: string) {
+    return obj(await this.call('pluginManager/updateBundle', { name, version }, 30 * 60_000));
+  }
   async removeBundle(name: string) {
     return obj(await this.call('pluginManager/removeBundle', { name }));
   }
