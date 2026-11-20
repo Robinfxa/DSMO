@@ -94,7 +94,7 @@ App → 页面   window.__apiDemo.reply(id, ok, value)
 |---|---|---|
 | `back` | — | 关最上层（浮层 → 抽屉 → 功能页），然后 `backResult`；没东西可关就让 App 退到后台 |
 | `resumed` | `{awayMs}` | 重新打开当前对话的 follow |
-| `webUpdate.ready` | `{version}` | 下载好了新前端：提示「界面有更新 · 刷新」（不点也会在下次打开时用新的） |
+| `webUpdate.ready` | `{version}` | 下载好了新前端：页面不提示，找个不碍事的时候自己 `webUpdate.apply`（`state/autoUpdate.ts`）；没切成的下次打开时用新的 |
 | `openSession` | `{sessionId}` | 打开那个对话（通知点进来、最近对话） |
 | `compose` | `{newSession, sessionId?, text}` | 分享进来的文字放进（新）对话的输入框，不发送 |
 | `voice.partial` / `voice.final` / `voice.error` | `{text}` / `{text}` / `{message}` | 听写结果 |

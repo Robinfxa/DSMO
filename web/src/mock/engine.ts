@@ -256,10 +256,10 @@ export class MockEngine {
 
   // ------------------------------------------------------------------ sessions
 
-  private newSession(title: string | null, cwd = WS): MockSession {
+  private newSession(title: string | null, cwd = WS, id = `session-${uuid()}`): MockSession {
     const t = now();
     const s: MockSession = {
-      id: `session-${uuid()}`,
+      id,
       title,
       createdAt: t,
       updatedAt: t,
@@ -911,8 +911,10 @@ export class MockEngine {
 
   private seed() {
     const ago = (min: number) => now() - min * 60_000;
+    // the same ids on every load, so a reload (an interface update) can come back to one
+    let seeded = 0;
     const mk = (title: string, minutesAgo: number, turns: Array<[string, string, string?]>) => {
-      const s = this.newSession(title);
+      const s = this.newSession(title, WS, `session-demo-${++seeded}`);
       for (const [u, a, r] of turns) {
         s.turn++;
         this.append(s, 'turn/start', { turn: s.turn });

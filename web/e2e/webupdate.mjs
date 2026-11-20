@@ -68,16 +68,58 @@ await row('使用新界面').click();
 await page.waitForTimeout(300);
 check(await page.evaluate(() => window.__applied === true), 'switches to it');
 
-// the prompt after an automatic download: its 刷新 can be tapped, and it stays long enough to
-await page.evaluate(() => ((window.__applied = false), window.__apiDemo.event('webUpdate.ready', { version: 'fed9876' })));
-await page.waitForTimeout(5000);
-check(await page.isVisible('.toast .toast-act'), 'prompt still there after 5 s');
-const box = await page.locator('.toast .toast-act').boundingBox();
-check(box && box.height >= 36, `刷新 is big enough to tap (${box && Math.round(box.height)} px)`);
-await shot('03-prompt');
-await page.tap('.toast .toast-act');
+// automatic: a downloaded page is switched to without asking, at a quiet moment
+const leave = async () => {
+  for (let i = 0; i < 4 && (await page.isVisible('[aria-label="返回"] >> nth=-1')); i++) {
+    await page.click('[aria-label="返回"] >> nth=-1');
+    await page.waitForTimeout(400);
+  }
+};
+const ready = (v) => page.evaluate((v) => ((window.__applied = false), window.__apiDemo.event('webUpdate.ready', { version: v })), v);
+const applied = () => page.evaluate(() => window.__applied === true);
+await leave();
+await page.click('[aria-label="打开边栏"]');
+await page.waitForTimeout(400);
+const title = (await page.textContent('.m-item .m-item-t >> nth=1')).trim();
+await page.click('.m-item .m-item-t >> nth=1');
+await page.waitForTimeout(800);
+
+// typing: it waits
+await page.fill('#input', '写到一半');
+await ready('fed9876');
+await page.waitForTimeout(4500);
+check(!(await applied()), 'waits while something is typed');
+check(!(await page.isVisible('.toast:has-text("界面有更新")')), 'no prompt');
+await page.fill('#input', '');
+await page.evaluate(() => document.activeElement?.blur());
+await page.waitForTimeout(2600);
+check(await applied(), 'switches by itself once nothing is in the way');
+const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('api-demo:resume-after-update') || 'null'));
+check(!!saved?.id, 'notes the open conversation first');
+
+// the new page comes back to the same conversation
+await page.reload();
+await page.waitForTimeout(1800);
+await page.click('[aria-label="打开边栏"]');
+await page.waitForTimeout(400);
+check(((await page.textContent('.m-item.on .m-item-t').catch(() => '')) ?? '').trim() === title, `back in 「${title}」 after the switch`);
+await page.click('[aria-label="打开边栏"]').catch(() => {});
+await page.keyboard.press('Escape').catch(() => {});
 await page.waitForTimeout(300);
-check(await page.evaluate(() => window.__applied === true), 'tapping 刷新 switches');
+
+// in the background: at once, even with a draft (kept for the new page)
+await page.evaluate(() => {
+  const ta = document.querySelector('#input');
+  ta && (ta.value = '后台时写的', ta.dispatchEvent(new Event('input', { bubbles: true })));
+});
+await page.evaluate(() => {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+  document.dispatchEvent(new Event('visibilitychange'));
+});
+await ready('a1b2c3d');
+await page.waitForTimeout(800);
+check(await applied(), 'in the background: switches at once');
+check((await page.evaluate(() => JSON.parse(localStorage.getItem('api-demo:resume-after-update') || 'null')))?.draft === '后台时写的', 'the draft goes along');
 
 await browser.close();
 if (errors.length) {
