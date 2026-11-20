@@ -110,6 +110,7 @@ a:hover { text-decoration: underline; }
 .msg.user { display: flex; flex-direction: column; align-items: flex-end; padding: 16px 0; }
 .msg.user:first-child { padding-top: 34px; }
 .bubble { max-width: calc(100% - 68px); padding: 10px 16px; border-radius: 22px; font-size: 16px; line-height: 24px; background: var(--dsw-specific-bubble); white-space: pre-wrap; transition: background-color .2s var(--ease); }
+.initiative-mark { margin: 4px 0 2px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
 .steer { margin-top: 6px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
 .u-actions { display: flex; align-items: center; gap: 10px; height: 28px; margin-top: 6px; opacity: 0; transition: opacity .2s var(--ease); }
 .msg.user:hover .u-actions, .msg.user:focus-within .u-actions, .msg.user:last-of-type .u-actions { opacity: 1; }

@@ -128,7 +128,7 @@ test('full suite + a third-party face: one merged call, one prompt block; unplug
   await h.root.plugin(mood, { dataDir: tmp() });
   await h.root.plugin(bond, { dataDir: tmp(), hintChance: 1 });
   await h.root.plugin(thirdParty);
-  const coreFiber = await h.root.plugin(core, {});
+  const coreFiber = await h.root.plugin(core, { dataDir: tmp() });
   await settle();
 
   const svc = h.root.get('companion');
@@ -155,7 +155,7 @@ test('full suite + a third-party face: one merged call, one prompt block; unplug
 
 test('the controller alone injects nothing and calls nothing', async () => {
   const h = host();
-  await h.root.plugin(core, {});
+  await h.root.plugin(core, { dataDir: tmp() });
   h.root.emit('session/event', session(), turnEnd());
   await settle();
   assert.equal(h.calls.length, 0);
@@ -210,7 +210,7 @@ test('full suite with memory: still one merged call; memory sits in the one bloc
   await h.root.plugin(mood, { dataDir: tmp() });
   await h.root.plugin(bond, { dataDir: tmp() });
   await h.root.plugin(memory, { dataDir: tmp() });
-  await h.root.plugin(core, {});
+  await h.root.plugin(core, { dataDir: tmp() });
   await settle();
   h.root.emit('session/event', catSession('我家团子今天把杯子打翻了'), turnEnd());
   await settle();
@@ -234,4 +234,130 @@ test('memory page: add / pin / edit / delete through the same object the routes 
   assert.equal(svc.forget(f.id), true);
   assert.equal(svc.facts().length, 0);
   assert.equal(svc.remember('对方的银行卡密码是 123'), null);
+});
+
+import * as expression from '../expression/lib/index.mjs';
+import * as initiative from '../initiative/lib/index.mjs';
+
+test('expression joins the one merged call; standalone it judges for itself', async () => {
+  const h = host({ extra: { expression: { learn: [{ when: '被夸', say: '哼那还用说', tone: 'playful' }], slang: [], landed: 0 } } });
+  await h.root.plugin(expression, { dataDir: tmp() });
+  const said = (text) => session({ deriveMessages: () => [{ role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text }] }, { role: 'assistant', content: [{ type: 'text', text: '嘻嘻' }] }] });
+  h.root.emit('session/event', said('哼那还用说，我最厉害'), turnEnd());
+  await settle();
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.root.get('companionExpression').list()[0].say, '哼那还用说');
+  await h.root.plugin(core, { dataDir: tmp() });
+  await settle();
+  h.root.emit('session/event', said('哼那还用说'), turnEnd());
+  await settle();
+  assert.equal(h.calls.length, 2, 'one more call: the merged one');
+  assert.match(h.calls[1].system, /"expression"/);
+  assert.equal(h.root.get('companionExpression').list()[0].n, 2);
+});
+
+test('initiative: speaks first at the random moment with a hidden message; that turn is not analysed as hers', async (t) => {
+  const T = new Date(2026, 10, 20, 10).getTime();
+  t.mock.timers.enable({ apis: ['Date', 'setInterval'], now: T });
+  const h = host();
+  const sent = [];
+  const agent = { id: 's1', status: 'idle', followup: (m) => sent.push(m) };
+  h.root.provide('agents', { get: (id) => (id === 's1' ? agent : undefined) });
+  const dir = tmp();
+  await h.root.plugin(mood, { dataDir: tmp() });
+  await h.root.plugin(initiative, { dataDir: dir });
+  await h.root.plugin(core, { dataDir: tmp() });
+  await settle();
+  h.root.emit('session/event', session(), turnEnd());
+  await settle();
+  const calls = h.calls.length;
+  const svc = h.root.get('companionInitiative');
+  const next = svc.state().nextAt;
+  assert.ok(next >= T + 2 * 3_600_000, 'not right after chatting');
+  t.mock.timers.setTime(next + 60_000);
+  const plan = await svc.check();
+  assert.equal(plan.kind, 'random');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].source.kind, 'maidsh-initiative');
+  assert.match(sent[0].content[0].text, /这不是对方发来的消息/);
+  assert.ok(Object.isFrozen(sent[0]) && sent[0].id);
+  assert.equal(svc.state().today, 1);
+  // TA 主动的那一轮结束：总控不分析、不算对方说的话
+  const initiated = session({
+    deriveMessages: () => [
+      { role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '今天被夸了' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '真棒' }] },
+      sent[0],
+      { role: 'assistant', content: [{ type: 'text', text: '在干嘛呀' }] },
+    ],
+  });
+  h.root.emit('session/event', initiated, turnEnd());
+  await settle();
+  assert.equal(h.calls.length, calls, 'no analysis for the turn she did not start');
+  assert.equal(await svc.check(), null, 'waits for her reply before trying again');
+  t.mock.timers.reset();
+});
+
+test('import and deep learning run through the controller: one call per chunk, memory and expression together, undo', async () => {
+  const h = host({
+    extra: {
+      memory: { facts: [{ text: '对方叫小林，是护士', cat: 'identity', kw: ['小林', '护士'], quote: '我是护士' }], episodes: [{ summary: '你们第一次聊到深夜', at: '2026-11-01', kw: ['深夜'], salience: 6 }] },
+      expression: { learn: [{ when: '撒娇', say: '抱抱嘛', tone: 'soft' }], slang: [] },
+    },
+  });
+  h.root.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-flash' }) });
+  await h.root.plugin(memory, { dataDir: tmp() });
+  await h.root.plugin(expression, { dataDir: tmp() });
+  await h.root.plugin(core, { dataDir: tmp() });
+  await settle();
+  const svc = h.root.get('companion');
+  const dry = await svc.learn({ textType: 'aboutme', text: '我叫小林，是护士。', dryRun: true });
+  assert.equal(dry.value.est.calls, 2);
+  assert.equal(h.calls.length, 0, 'a dry run costs nothing');
+  const r = await svc.learn({ textType: 'aboutme', title: '自我介绍', text: '我叫小林，是护士。' });
+  assert.equal(r.ok, true);
+  for (let i = 0; i < 20 && svc.jobs()[0].status !== 'done'; i++) await settle();
+  assert.equal(svc.jobs()[0].status, 'done');
+  assert.match(h.calls[0].system, /关于对方的介绍/);
+  assert.doesNotMatch(h.calls[0].system, /"expression"/, 'expression sits out an about-me text');
+  const facts = h.root.get('companionMemory').facts();
+  assert.ok(facts[0].pinned && facts[0].jobId);
+  // 深度学习一段对话：记忆和表达一起学（表达只认她的原话）
+  const s = await svc.learn({ kind: 'session', messages: [{ role: 'user', text: '我是护士，抱抱嘛', at: Date.now() }, { role: 'assistant', text: '抱抱你' }] });
+  for (let i = 0; i < 20 && svc.jobs().at(-1).status !== 'done'; i++) await settle();
+  assert.equal(svc.jobs().at(-1).status, 'done');
+  const call = h.calls.find((c) => /你们的一段对话/.test(c.system));
+  assert.match(call.system, /"memory"[\s\S]*"expression"/);
+  assert.equal(h.root.get('companionExpression').list()[0].say, '抱抱嘛');
+  svc.job('undo', s.value.id);
+  assert.equal(h.root.get('companionExpression').list().length, 0);
+});
+
+test('no model known yet: the import stops at once with a clear reason', async () => {
+  const h = host();
+  await h.root.plugin(memory, { dataDir: tmp() });
+  await h.root.plugin(core, { dataDir: tmp() });
+  await settle();
+  const svc = h.root.get('companion');
+  await svc.learn({ textType: 'aboutme', text: '我叫小林。' });
+  for (let i = 0; i < 10 && svc.jobs()[0].status === 'running'; i++) await settle();
+  assert.equal(svc.jobs()[0].status, 'failed');
+  assert.match(svc.jobs()[0].error, /先在 DSMO 里聊一句/);
+});
+
+test('DSH context messages (skill catalog, time) inside a turn do not hide who started it', async () => {
+  const h = host();
+  await h.root.plugin(mood, { dataDir: tmp() });
+  const firstTurn = session({
+    deriveMessages: () => [
+      { role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '今天被夸了' }] },
+      { role: 'user', source: { kind: 'runtime-context', form: 'snapshot' }, content: [{ type: 'text', text: 'ctx' }] },
+      { role: 'user', source: { kind: 'skill-catalog', form: 'catalog' }, content: [{ type: 'text', text: 'skills' }] },
+      { role: 'user', source: { kind: 'time-context', form: 'snapshot' }, content: [{ type: 'text', text: 'time' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '真棒' }] },
+    ],
+  });
+  h.root.emit('session/event', firstTurn, turnEnd());
+  await settle();
+  assert.equal(h.calls.length, 1);
 });

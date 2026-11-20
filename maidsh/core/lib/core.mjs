@@ -57,11 +57,23 @@ export function normalizeAspect(raw) {
     else prompt = { order: Number.isFinite(a.prompt.order) ? a.prompt.order : 500, text: a.prompt.text, maxChars: Math.min(LIMITS.totalChars, Math.max(20, a.prompt.maxChars ?? LIMITS.aspectChars)) };
   }
   const fn = (f) => (typeof f === 'function' ? f : null);
+  // 可选：参加深度学习和导入（§11）。instructions 是 (textType) => 说明，返回 '' 表示这类材料不参加
+  let batch = null;
+  if (a.batch !== undefined) {
+    const b = a.batch ?? {};
+    const errs = checkSchema(b.schema).map((e) => `batch.${e}`);
+    if (JSON.stringify(b.schema ?? null).length > LIMITS.schemaBytes * 2) errs.push(`batch.schema 超过 ${LIMITS.schemaBytes * 2} 字节`);
+    if (typeof b.apply !== 'function') errs.push('batch.apply 要是函数');
+    const ins = typeof b.instructions === 'function' ? b.instructions : typeof b.instructions === 'string' ? () => b.instructions : null;
+    if (!ins) errs.push('batch.instructions 要是函数或字符串');
+    errors.push(...errs);
+    if (!errs.length) batch = { schema: b.schema, instructions: (t) => String(ins(t) ?? '').slice(0, 600), apply: b.apply, finish: fn(b.finish), undo: fn(b.undo) };
+  }
   return {
     errors,
     aspect: errors.length
       ? null
-      : { id: a.id, title: String(a.title ?? a.id).slice(0, 24), version, analysis, onAnalysis: fn(a.onAnalysis), prompt, state: fn(a.state) },
+      : { id: a.id, title: String(a.title ?? a.id).slice(0, 24), version, analysis, onAnalysis: fn(a.onAnalysis), prompt, state: fn(a.state), batch },
   };
 }
 

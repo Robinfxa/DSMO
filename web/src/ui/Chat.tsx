@@ -49,6 +49,9 @@ interface Group {
   notices: Notice[];
 }
 
+/** maidsh-initiative 唤醒 AI 时那条隐藏消息的来源（见 maidsh/CONTRACT.md §10）。 */
+const INITIATIVE_SOURCE = 'maidsh-initiative';
+
 /** One user message and everything the agent did for it. */
 function groupItems(items: ChatItem[]): Group[] {
   const out: Group[] = [];
@@ -262,7 +265,12 @@ function GroupView({ g, busy, last, sib, forkSeq }: { g: Group; busy: boolean; l
 
   return (
     <>
-      {g.user && <UserMsg user={g.user} text={userText} sib={sib?.kind === 'edit' ? sib : undefined} />}
+      {g.user && g.user.sourceKind === INITIATIVE_SOURCE ? (
+        // MaiDSH 主动：那条提示是给 AI 看的，不显示；只标一下这一轮是 TA 先开口
+        <div class="initiative-mark">TA 先开口</div>
+      ) : (
+        g.user && <UserMsg user={g.user} text={userText} sib={sib?.kind === 'edit' ? sib : undefined} />
+      )}
       {(g.parts.length > 0 || g.notices.length > 0 || busy) && (
         <div class={`msg assistant ${last ? 'enter' : ''}`} {...(isMobile.value && finalText && !busy ? replyPress : {})}>
           {busy && !g.parts.length && (

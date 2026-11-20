@@ -1,0 +1,28 @@
+{
+  "name": "@api-demo/maidsh-initiative",
+  "version": "1.0.0",
+  "description": "TA 会主动找你",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "MaiDSH 主动",
+    "kinds": [
+      "engine"
+    ],
+    "permissions": [],
+    "summary": "TA 会主动找你：随机的时刻想起你，约好的时间回来问问，不打扰。",
+    "engine": {
+      "package": "maidsh-initiative",
+      "version": "0.1.0"
+    },
+    "description": "TA 不再只是等你开口：聊完之后的几个小时里，TA 会在某个随机的时刻想起你，主动说一两句；你说「我去洗澡了」「开完会找你」，到时间 TA 会回来问问（这个需要装「MaiDSH 总控」）。\n\n不打扰：每天最多 3 次，两次至少隔 4 小时；深夜 23:30 到早上 8:00 不打扰；你没回，下次就隔得更久，连着两次没回就停下，等你先开口；关系冷淡时不主动。TA 主动的那条在对话里标着「TA 先开口」。\n\n手机上只有打开 DSMO 时 TA 才能主动；错过的时刻，下次打开时会补上。\n\n引擎部分是 npm 包 maidsh-initiative 0.1.0（MIT 许可），装在当前主机上。\n\n这是 MaiDSH 陪伴套件的一部分。套件里的每个插件都能单独用；心情、羁绊、记忆、表达、主动都装上再加「MaiDSH 总控」，就是完整的体验，而且每轮只多调一次模型。设计思路参考 MaiBot（麦麦），代码从头写，与 MaiBot 官方无关。",
+    "highlights": [
+      "随机的时刻想起你",
+      "约好的时间回来问问",
+      "不打扰，没回就退"
+    ]
+  }
+}

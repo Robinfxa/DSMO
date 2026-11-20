@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bm25, similarity, tokens } from '../lib/text.mjs';
+import { bm25, similarity, tokens } from '../lib/shared/text.mjs';
 import {
   LIMITS, MEMORY_INSTRUCTIONS, MEMORY_SCHEMA, addEpisode, addFact, applyAnalysis, applyConsolidation, consolidationRequest,
   emptyMemory, forget, maintain, markRecalled, recall, relativeDate, render, residents, retention, strengthen,
@@ -179,4 +179,25 @@ test('her own words come first; the last chat impression only fills in when they
   assert.match(m.compose('今天好累'), /团子打翻了杯子/, 'lingers through the chat impression');
   m.afterTurn({ facts: [], cue: '聊团子的糗事' }, { user: '今天好累' });
   assert.match(m.compose('团子今天乖不乖'), /团子打翻了杯子/, 'and can still be properly recalled right after');
+});
+
+test('batch: about-me facts are pinned and need no quote; stories stay in the story world; undo restores', async () => {
+  const { applyBatch, finishBatch, undoBatch, MEMORY_BATCH_SCHEMA, memoryBatchInstructions } = await import('../lib/core.mjs');
+  const m = emptyMemory();
+  const old = addFact(m, { text: '对方住在杭州', cat: 'identity', kw: ['杭州'], quote: '我在杭州' }, { now: T0, user: '我在杭州' });
+  applyBatch(m, { facts: [{ text: '对方叫小林', cat: 'identity', kw: ['小林'] }, { text: '对方住在上海', cat: 'identity', kw: ['上海'] }] }, { now: T0, jobId: 'j1', textType: 'aboutme' });
+  assert.ok(m.facts.filter((f) => f.jobId === 'j1').every((f) => f.pinned && f.source === 'import'));
+  applyBatch(m, { facts: [{ text: '魔法学院在云上', cat: 'stable', kw: ['魔法学院'] }], episodes: [{ summary: '你们在魔法学院第一次见面', at: '2026-01-01', kw: ['魔法学院'], salience: 8, feeling: '害羞' }] }, { now: T0, jobId: 'j2', textType: 'story' });
+  assert.equal(m.facts.find((f) => f.jobId === 'j2').cat, 'world');
+  assert.equal(m.episodes[0].story, true);
+  assert.ok(!residents(m, { now: T0 }).some((f) => f.cat === 'world'));
+  const chat = applyBatch(m, { facts: [{ text: '对方是护士', cat: 'identity', kw: ['护士'], quote: '我是护士' }] }, { now: T0, jobId: 'j3', textType: 'chatlog', user: '今天好累' });
+  assert.equal(chat[0].cat, 'uncertain', 'chat logs still need her own words');
+  assert.equal(finishBatch(m, 'j1'), true);
+  assert.ok(consolidationRequest(m, T0).user.includes('对方叫小林'));
+  undoBatch(m, 'j2');
+  assert.equal(m.episodes.length, 0);
+  assert.ok(old);
+  assert.ok(JSON.stringify(MEMORY_BATCH_SCHEMA).length <= 4096);
+  assert.equal(memoryBatchInstructions('session'), memoryBatchInstructions('chatlog'));
 });

@@ -85,12 +85,31 @@ export function loggerOf(ctx, name) {
   };
 }
 
-const textOf = (m) =>
+export const textOf = (m) =>
   (Array.isArray(m?.content) ? m.content : [])
     .filter((b) => b?.type === 'text' && typeof b.text === 'string')
     .map((b) => b.text)
     .join('\n')
     .trim();
+
+/**
+ * 一段消息里最后一轮是谁发起的（source.kind）：'user'、'maidsh-initiative'、'schedule'……；没有时为 ''。
+ * DSH 会在轮次里插入用户角色的上下文消息（运行时上下文、技能目录、当前时间……），它们都带 `source.form`
+ * （instructions / catalog / snapshot），不算发起者。
+ */
+export function startedBy(msgs) {
+  const m = (Array.isArray(msgs) ? msgs : []).findLast((x) => x?.role === 'user' && !x.source?.form && x.source?.kind !== 'runtime-context');
+  return m ? (m.source?.kind ?? 'user') : '';
+}
+
+/** `session/event` 是不是一轮正常结束；是就返回会话，否则 null（不看是谁发起的）。 */
+export function endedSession(a, b) {
+  const session = b ? a : a?.session;
+  const ev = b ?? a?.event;
+  if (!session || ev?.type !== 'turn/end' || ev.data?.reason?.kind !== 'completed') return null;
+  const h = session.header ?? {};
+  return h.origin === 'subagent' || h.parentSession ? null : session;
+}
 
 /**
  * `session/event` → 刚完成的一轮 { sessionId, user, reply, session }，不是就返回 null。
@@ -110,6 +129,8 @@ export function turnOf(a, b) {
     return null;
   }
   if (!Array.isArray(msgs)) return null;
+  // 这一轮是谁发起的：最后一条（不算运行时上下文的）用户角色消息。TA 主动、定时任务发起的轮次不算对方说的话
+  if (startedBy(msgs) !== 'user') return null;
   const user = textOf(msgs.findLast((m) => m?.role === 'user' && (m.source?.kind ?? 'user') === 'user'));
   const reply = textOf(msgs.findLast((m) => m?.role === 'assistant'));
   if (!user || !reply) return null;

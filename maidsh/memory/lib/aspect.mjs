@@ -1,8 +1,8 @@
 // 记忆面：服务 companionMemory + 交给总控的面登记 + 单独模式的请求。DSH 相关由插件外壳传入。
 
 import {
-  LIMITS, MEMORY_INSTRUCTIONS, MEMORY_SCHEMA, addEpisode, addFact, applyAnalysis, applyConsolidation, consolidationRequest,
-  emptyMemory, forget, maintain, markRecalled, recall, render, residents, retention,
+  LIMITS, MEMORY_BATCH_SCHEMA, MEMORY_INSTRUCTIONS, MEMORY_SCHEMA, addEpisode, addFact, applyAnalysis, applyBatch, applyConsolidation, consolidationRequest,
+  emptyMemory, finishBatch, forget, maintain, markRecalled, memoryBatchInstructions, recall, render, residents, retention, undoBatch,
 } from './core.mjs';
 import { FEELING_INSTRUCTIONS, FEELING_SCHEMA, normalizeFeeling, todayLine } from './shared/feeling.mjs';
 
@@ -14,6 +14,7 @@ import { FEELING_INSTRUCTIONS, FEELING_SCHEMA, normalizeFeeling, todayLine } fro
 export function createMemory({ store, now = Date.now, log = () => {}, moodValence = () => 0, bondLevel = () => 2, moodFeel = () => {}, onConsolidate = () => {} }) {
   let mem = store.load();
   if (!mem || mem.v !== 1) mem = emptyMemory();
+  const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
   const safe = (f, fallback) => {
     try {
       return f();
@@ -37,10 +38,10 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
     const key = `${mem.turn}\u0000${latest}`;
     if (cache?.key === key) return cache.text;
     const t = now();
-    const bond = Number(safe(bondLevel, 2)) || 2;
+    const bond = num(safe(bondLevel, 2), 2);
     const res = residents(mem, { now: t, bondLevel: bond });
     // 先按对方这一轮的话找；什么都没想起时，再按上一轮的聊天印象找（话题延续）[MaiBot 启发式召回]
-    const opts = { now: t, moodValence: Number(safe(moodValence, 0)) || 0, bondLevel: bond, exclude: new Set(res.map((f) => f.id)) };
+    const opts = { now: t, moodValence: num(safe(moodValence, 0), 0), bondLevel: bond, exclude: new Set(res.map((f) => f.id)) };
     let rec = recall(mem, { ...opts, query: latest });
     // 话题延续想起的只是「萦绕」：不强化、不占 6 轮不重复的名额，等对方真提起时还能正式想起
     let lingering = false;
@@ -153,6 +154,27 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
     analysis: { schema: MEMORY_SCHEMA, instructions: MEMORY_INSTRUCTIONS },
     onAnalysis: (result, turn) => afterTurn(result, turn),
     prompt: { order: 600, maxChars: LIMITS.budget, text: (turn) => compose(turn?.latest ?? '') },
+    batch: {
+      schema: MEMORY_BATCH_SCHEMA,
+      instructions: memoryBatchInstructions,
+      apply(result, chunk) {
+        const n = applyBatch(mem, result, { now: now(), jobId: chunk.jobId, textType: chunk.textType, user: chunk.user ?? '' }).length;
+        cache = null;
+        save();
+        return n;
+      },
+      finish(job) {
+        if (finishBatch(mem, job.id)) {
+          save();
+          onConsolidate();
+        }
+      },
+      undo(jobId) {
+        undoBatch(mem, jobId);
+        cache = null;
+        save();
+      },
+    },
     state: () => ({ facts: mem.facts.filter((f) => !f.supersededBy).length, episodes: mem.episodes.length, short: mem.profile.short, impression: mem.profile.impression, turn: mem.turn }),
   };
 

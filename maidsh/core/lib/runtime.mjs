@@ -57,6 +57,9 @@ export function createCompanion({ complete, log = () => {}, now = Date.now, rand
     version: 1,
     register: (aspect) => registry.register(aspect),
     aspects: () => registry.list().map(({ id, title, version }) => ({ id, title, version })),
+    /** 登记的面（完整对象，只给总控自己用，比如批量学习）。 */
+    registered: () => registry.list(),
+    safely: (aspect, what, run, fallback) => registry.safely(aspect, what, run, fallback),
     /** 给 DSMO「陪伴」页的整体状态（JSON 可序列化）。 */
     state: () => ({
       lastFeeling,

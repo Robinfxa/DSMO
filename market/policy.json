@@ -14,13 +14,17 @@
     "@api-demo/maidsh-mood",
     "@api-demo/maidsh-bond",
     "@api-demo/maidsh-core",
-    "@api-demo/maidsh-memory"
+    "@api-demo/maidsh-memory",
+    "@api-demo/maidsh-expression",
+    "@api-demo/maidsh-initiative"
   ],
   "featured": [
     "@api-demo/persona-library",
     "@api-demo/memory-share",
     "@api-demo/maidsh-mood",
     "@api-demo/maidsh-memory",
+    "@api-demo/maidsh-initiative",
+    "@api-demo/maidsh-expression",
     "@api-demo/maidsh-bond",
     "@api-demo/maidsh-core",
     "@api-demo/quick-prompts",

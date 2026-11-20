@@ -1,0 +1,38 @@
+{
+  "name": "maidsh-initiative",
+  "version": "0.1.0",
+  "description": "MaiDSH·主动：TA 会在随机的时刻、约好的时间主动找你，不打扰，单独可用",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "dsh-plugin",
+    "companion",
+    "deepseek-harness"
+  ],
+  "main": "lib/index.mjs",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Robinfxa/DSMO.git",
+    "directory": "maidsh/initiative"
+  }
+}
