@@ -61,6 +61,28 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
 
   /// The page has talked to the bridge since its last load.
   bool _alive = false;
+
+  /// Draw the page as a real Android view (hybrid composition) instead of a Flutter texture.
+  /// Some phones — Huawei/Honor, older Android — never refresh the texture: the page freezes after
+  /// its first frames (DSMO's fade-in stuck part-way; dsh-Go issue 1587's white screen). Decided once.
+  bool? _hybrid;
+
+  static Future<bool> _needsHybrid() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final info = await const MethodChannel('dsh/diagnostics').invokeMapMethod<String, Object?>('info');
+      final d = info?['device'];
+      final m = d is Map ? d : const {};
+      final maker = '${m['manufacturer'] ?? ''} ${m['brand'] ?? ''}'.toLowerCase();
+      final sdk = m['sdkInt'] is int ? m['sdkInt'] as int : 99;
+      final hybrid = maker.contains('huawei') || maker.contains('honor') || sdk <= 29;
+      debugPrint('dsmo-webview device="$maker" sdk=$sdk hybrid=$hybrid');
+      return hybrid;
+    } catch (e) {
+      debugPrint('dsmo-webview device info failed: $e');
+      return false;
+    }
+  }
   Timer? _aliveTimer;
 
   /// Events for a page that is still loading (a host switch reloads it).
@@ -255,8 +277,16 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
         ),
       );
       _watchStart(bridge);
+      _hybrid ??= await _needsHybrid();
       await controller.loadRequest(proxy.entry);
       if (mounted && _key == key) setState(() => _controller = controller);
+      // Which WebView this phone has (a white or frozen page is usually its version): into logcat.
+      unawaited(Future<void>.delayed(const Duration(seconds: 3), () async {
+        try {
+          final ua = await controller.runJavaScriptReturningResult('navigator.userAgent');
+          debugPrint('dsmo-webview ua=$ua');
+        } catch (_) {}
+      }));
     } on Object catch (e) {
       if (mounted && _key == key) setState(() => _error = '$e');
     }
@@ -363,7 +393,14 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
     // The Scaffold shrinks the page by the keyboard's height, so the composer stays above it.
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: SafeArea(bottom: false, child: WebViewWidget(controller: c)),
+      body: SafeArea(
+        bottom: false,
+        child: _hybrid == true && c.platform is AndroidWebViewController
+            ? WebViewWidget.fromPlatformCreationParams(
+                params: AndroidWebViewWidgetCreationParams(controller: c.platform as AndroidWebViewController, displayWithHybridComposition: true),
+              )
+            : WebViewWidget(controller: c),
+      ),
     );
   }
 
