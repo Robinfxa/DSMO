@@ -124,6 +124,11 @@ export function ImportRunPage() {
             {r.skipped ? ` · 跳过 ${r.skipped} 个导入过的` : ''}
             {r.failed.length ? ` · ${r.failed.length} 个没有导入` : ''}
           </div>
+          {r.running && r.part && (
+            <div class="plg-row-s">
+              正在导入很长的对话「{r.part.title}」：第 {r.part.index + 1} / {r.part.count} 段
+            </div>
+          )}
           {r.error && (
             <div class="plg-row-s danger">
               引擎没有回应：{r.error}

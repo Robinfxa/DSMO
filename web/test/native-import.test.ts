@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseJson, type ImportedChat } from '../src/history/imported';
-import { batches, importRun, importedSessionId, runImport, sourceIdOf, toWire } from '../src/history/native';
+import { batches, importRun, importedSessionId, nativeImportSupported, runImport, sourceIdOf, splitParts, toWire } from '../src/history/native';
 import { setDshGoTransport } from '../src/plugins/dshgo';
 import { parseLogEvent } from '../src/engine/events';
 import { Transcript } from '../src/engine/transcript';
@@ -88,5 +88,71 @@ describe('client half of the session import', () => {
     const r = await runImport(fixture);
     expect(r.error).toContain('not available');
     expect(r.done).toBe(0);
+  });
+
+  const longChat = (n: number, id = 'long'): ImportedChat => ({
+    id: `deepseek:${id}`, title: '很长的对话', createdAt: 1, updatedAt: 2, source: 'deepseek',
+    messages: Array.from({ length: n }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', text: `第 ${i} 条` })) as ImportedChat['messages'],
+  });
+
+  it('cuts a long conversation into parts by count and by size', () => {
+    expect(splitParts(toWire(longChat(9001))).map((p) => p.length)).toEqual([3000, 3000, 3000, 1]);
+    const big = toWire({ ...longChat(10), messages: Array.from({ length: 10 }, () => ({ role: 'user', text: 'x'.repeat(1000) })) as ImportedChat['messages'] });
+    expect(splitParts(big, { maxBytes: 3500 }).map((p) => p.length)).toEqual([3, 3, 3, 1]);
+  });
+
+  it('sends a long conversation alone, part by part, when the bridge takes parts', async () => {
+    const sent: any[] = [];
+    setDshGoTransport({
+      get: async () => ({ status: 200, json: { supported: true, version: 1, parts: true } }),
+      post: async (_p, body: any) => {
+        sent.push(body);
+        return { status: 200, json: { results: body.conversations.map((c: any) => (c.part && c.part.index < c.part.count - 1 ? { sourceId: c.sourceId, status: 'partial', part: c.part.index } : { sourceId: c.sourceId, status: 'imported' })) } };
+      },
+    });
+    expect(await nativeImportSupported()).toBe(true);
+    const r = await runImport([longChat(9001), longChat(3, 'short')]);
+    expect(sent.map((b) => b.conversations.map((c: any) => (c.part ? `${c.part.index}/${c.part.count}:${c.messages.length}` : `whole:${c.messages.length}`)))).toEqual([
+      ['0/4:3000'], ['1/4:3000'], ['2/4:3000'], ['3/4:1'], ['whole:3'],
+    ]);
+    expect(sent[0].conversations[0].title).toBe('很长的对话');
+    expect([r.imported, r.failed.length, r.done]).toEqual([2, 0, 2]);
+    expect(importRun.value?.part).toBeUndefined();
+  });
+
+  it('starts a long conversation again from part 0 once when the bridge lost its place', async () => {
+    let first = true;
+    const order: string[] = [];
+    setDshGoTransport({
+      get: async () => ({ status: 200, json: { supported: true, version: 1, parts: true } }),
+      post: async (_p, body: any) => {
+        const c = body.conversations[0];
+        order.push(`${c.part.index}`);
+        if (first && c.part.index === 1) {
+          first = false;
+          return { status: 200, json: { results: [{ sourceId: c.sourceId, status: 'failed', code: 'part-order' }] } };
+        }
+        return { status: 200, json: { results: [c.part.index < c.part.count - 1 ? { status: 'partial' } : { status: 'imported' }] } };
+      },
+    });
+    await nativeImportSupported();
+    const r = await runImport([longChat(4500)]);
+    expect(order).toEqual(['0', '1', '0', '1']);
+    expect(r.imported).toBe(1);
+  });
+
+  it('an older bridge without parts still gets the conversation and says why it refused', async () => {
+    const sent: any[] = [];
+    setDshGoTransport({
+      get: async () => ({ status: 200, json: { supported: true, version: 1 } }),
+      post: async (_p, body: any) => {
+        sent.push(body);
+        return { status: 200, json: { results: [{ status: 'failed', code: 'invalid', reason: 'messages' }] } };
+      },
+    });
+    await nativeImportSupported();
+    const r = await runImport([longChat(4500)]);
+    expect(sent[0].conversations[0].part).toBeUndefined();
+    expect(r.failed[0].reason).toBe('消息超过 4000 条，更新 App 后可以导入');
   });
 });

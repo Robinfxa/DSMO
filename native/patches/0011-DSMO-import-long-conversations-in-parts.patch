@@ -1,0 +1,303 @@
+From 120cc2ec048515cce52bc817378f8ebe644db6c9 Mon Sep 17 00:00:00 2001
+From: DSMO <dsmo@users.noreply.github.com>
+Date: Fri, 20 Nov 2026 03:50:42 -0500
+Subject: [PATCH] DSMO: import long conversations in parts
+
+A conversation over 4000 messages (or bigger than one request may be)
+now comes in parts: {..., part: {index, count}} with the same sourceId,
+in order. Each part is checked and staged under $DSH_HOME/tmp/dsh-go-import;
+the last part writes the whole Session at once, the same way a one-piece
+conversation is written, so an import cut off part-way leaves no
+half-written Session. Parts answer {status: "partial", part}; a part that
+does not follow the one before answers {code: "part-order"}. A whole
+conversation may have up to 100000 messages and 256 MiB; staging left
+unfinished for a day is removed. GET advertises parts: true.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dsh-go-bridge/lib/session-import.js       | 110 ++++++++++++++++--
+ runtime/tests/session-import.test.mjs         |  66 ++++++++++-
+ 2 files changed, 165 insertions(+), 11 deletions(-)
+
+diff --git a/runtime/bridge/dsh-go-bridge/lib/session-import.js b/runtime/bridge/dsh-go-bridge/lib/session-import.js
+index bd27999f..b14f84b8 100644
+--- a/runtime/bridge/dsh-go-bridge/lib/session-import.js
++++ b/runtime/bridge/dsh-go-bridge/lib/session-import.js
+@@ -1,13 +1,20 @@
+ // Native import of chats exported from chat.deepseek.com (or any user/assistant transcript)
+ // into real Sessions on this host, through the public sessionPersistence seam only.
+ //
+-//   GET  /dsh-go/v1/sessions/import   {supported, version: 1, format: 4}
++//   GET  /dsh-go/v1/sessions/import   {supported, version: 1, format: 4, parts: true, maxPartMessages, maxMessages}
+ //   POST /dsh-go/v1/sessions/import   {source, workspaceId? | cwd?, conversations: [...]}
+ //                                     -> {results: [{sourceId, status, sessionId?, code?}]}
+ //
+ // The browser parses the export file and sends normalized conversations in small batches:
+ //   {sourceId, title, createdAt, updatedAt?, messages: [{role, text, think?, model?, time?}]}
+ //
++// A conversation too long for one request (more than MAX_MESSAGES messages, or bigger than a
++// request may be) comes in parts, in order, each with `part: {index, count}` (0-based) and the
++// same sourceId: every part is checked and staged to a file; the last one writes the whole
++// Session at once, exactly as a one-piece conversation is written, so an import cut off part-way
++// (the app closed) leaves no half-written Session. Parts answer {status: "partial", part}; a part
++// that does not follow the one before answers {code: "part-order"} (start again from part 0).
++//
+ // Each conversation becomes one closed Session log: completed turns of one user message and
+ // one assistant step, a user-sourced title (so the title model never renames it), and an
+ // ignorable `plugin:dsh-go/import` record naming where it came from. The Session id is derived
+@@ -16,13 +23,24 @@
+ // Imported assistant messages carry provider `deepseek-import` and no replay state: when the
+ // user continues the chat, every adapter sends them as plain history.
+ import { createHash, randomUUID } from "node:crypto";
++import { appendFile, mkdir, readdir, readFile, rm, stat as fsStat, writeFile } from "node:fs/promises";
++import { homedir } from "node:os";
++import { join } from "node:path";
+ 
+ const ROOT = "/dsh-go/v1/sessions/import";
+ const FORMAT = 4;
+ const PROVIDER = "deepseek-import";
+ const MAX_BODY = 8 * 1024 * 1024;
+ const MAX_CONVERSATIONS = 50;
++/** Messages in one request's conversation (or one part of a long one). */
+ const MAX_MESSAGES = 4000;
++/** Messages in a whole conversation sent in parts. */
++const MAX_TOTAL_MESSAGES = 100_000;
++const MAX_PARTS = 500;
++/** Staged bytes for one conversation sent in parts. */
++const MAX_STAGED = 256 * 1024 * 1024;
++/** Staged parts nobody finished are removed after a day. */
++const STAGE_TTL_MS = 24 * 60 * 60 * 1000;
+ const MAX_TEXT = 512 * 1024;
+ const MAX_GENERATIONS = 64;
+ const SOURCES = new Set(["deepseek", "chatgpt", "api-demo", "dsh-go", "other"]);
+@@ -43,11 +61,11 @@ export function importedSessionId(source, sourceId, generation = 0) {
+ }
+ 
+ /** Validates one conversation; returns it normalized or a reason string. */
+-export function normalizeConversation(raw) {
++export function normalizeConversation(raw, { maxMessages = MAX_MESSAGES } = {}) {
+   if (!isObject(raw)) return "not an object";
+   const sourceId = text(raw.sourceId, 256);
+   if (!sourceId || /[\u0000-\u001f\u007f]/.test(sourceId)) return "sourceId";
+-  if (!Array.isArray(raw.messages) || raw.messages.length === 0 || raw.messages.length > MAX_MESSAGES) return "messages";
++  if (!Array.isArray(raw.messages) || raw.messages.length === 0 || raw.messages.length > maxMessages) return "messages";
+   const messages = [];
+   for (const m of raw.messages) {
+     if (!isObject(m) || (m.role !== "user" && m.role !== "assistant")) return "message role";
+@@ -125,7 +143,20 @@ export function importEvents(conv, { source, importedAt = Date.now(), uuid = ran
+   return events;
+ }
+ 
+-export function createSessionImport(ctx, { readBody, send }) {
++/** The messages of one part, checked the way normalizeConversation checks them; null if any is bad. */
++function partMessages(raw) {
++  if (!Array.isArray(raw?.messages) || raw.messages.length === 0 || raw.messages.length > MAX_MESSAGES) return "messages";
++  for (const m of raw.messages) {
++    if (!isObject(m) || (m.role !== "user" && m.role !== "assistant")) return "message role";
++    if (text(m.text, MAX_TEXT) === undefined || (m.think !== undefined && text(m.think, MAX_TEXT) === undefined)) return "message text";
++  }
++  return raw.messages.map((m) => ({ role: m.role, text: m.text, ...(m.think !== undefined ? { think: m.think } : {}), ...(m.model !== undefined ? { model: m.model } : {}), ...(m.time !== undefined ? { time: m.time } : {}) }));
++}
++
++/** Where parts of long conversations wait for their last part. */
++export const defaultStagingDir = () => join(process.env.DSH_HOME || join(homedir(), ".dsh"), "tmp", "dsh-go-import");
++
++export function createSessionImport(ctx, { readBody, send, stagingDir = defaultStagingDir() }) {
+   const seam = () => {
+     const persistence = ctx.get("sessionPersistence");
+     for (const m of ["create", "stat", "list", "open"]) if (typeof persistence?.[m] !== "function") return;
+@@ -135,8 +166,8 @@ export function createSessionImport(ctx, { readBody, send }) {
+     try { return (await persistence.stat(id)) != null; }
+     catch (error) { if (/NotFound/.test(error?.name ?? "") || error?.code === "ENOENT") return false; throw error; }
+   };
+-  const importOne = async ({ persistence }, raw, { source, cwd, workspace }) => {
+-    const conv = normalizeConversation(raw);
++  const importOne = async ({ persistence }, raw, { source, cwd, workspace, maxMessages }) => {
++    const conv = normalizeConversation(raw, { maxMessages });
+     const sourceId = isObject(raw) && typeof raw.sourceId === "string" ? raw.sourceId.slice(0, 256) : null;
+     if (typeof conv === "string") return { sourceId, status: "failed", code: "invalid", reason: conv };
+     const deleted = (id) => { try { return persistence.dshGoDeletion?.deleted?.(id) === true; } catch { return false; } };
+@@ -183,11 +214,73 @@ export function createSessionImport(ctx, { readBody, send }) {
+     return { sourceId, status: "imported", sessionId };
+   };
+ 
++  const stageKey = (source, sourceId) => createHash("sha256").update(`${source}\u0000${sourceId}`).digest("hex").slice(0, 32);
++  const cleanStale = async () => {
++    try {
++      for (const f of await readdir(stagingDir)) {
++        const st = await fsStat(join(stagingDir, f)).catch(() => null);
++        if (st && Date.now() - st.mtimeMs > STAGE_TTL_MS) await rm(join(stagingDir, f), { force: true });
++      }
++    } catch { /* no staging yet */ }
++  };
++  /** One part of a long conversation: stage it; the last part writes the Session. */
++  const importPart = async (services, raw, opts) => {
++    const sourceId = text(raw.sourceId, 256);
++    if (!sourceId || /[\u0000-\u001f\u007f]/.test(sourceId)) return { sourceId: null, status: "failed", code: "invalid", reason: "sourceId" };
++    const { index, count } = raw.part;
++    if (!Number.isInteger(count) || count < 1 || count > MAX_PARTS || !Number.isInteger(index) || index < 0 || index >= count) {
++      return { sourceId, status: "failed", code: "invalid", reason: "part" };
++    }
++    const messages = partMessages(raw);
++    if (typeof messages === "string") return { sourceId, status: "failed", code: "invalid", reason: messages };
++    const key = stageKey(opts.source, sourceId);
++    const metaFile = join(stagingDir, `${key}.json`), linesFile = join(stagingDir, `${key}.jsonl`);
++    const lines = messages.map((m) => JSON.stringify(m)).join("\n") + "\n";
++    let meta;
++    if (index === 0) {
++      // Already imported (or imported under a newer generation): nothing to stage.
++      const { persistence } = services;
++      const deleted = (id) => { try { return persistence.dshGoDeletion?.deleted?.(id) === true; } catch { return false; } };
++      let generation = 0, sessionId;
++      for (; generation < MAX_GENERATIONS; generation++) { sessionId = importedSessionId(opts.source, sourceId, generation); if (!deleted(sessionId)) break; }
++      if (generation < MAX_GENERATIONS && await exists(persistence, sessionId)) return { sourceId, status: "skipped", sessionId };
++      await mkdir(stagingDir, { recursive: true });
++      meta = { source: opts.source, sourceId, count, next: 0, bytes: 0, messages: 0, title: raw.title, createdAt: raw.createdAt, updatedAt: raw.updatedAt };
++      await writeFile(linesFile, "");
++    } else {
++      try { meta = JSON.parse(await readFile(metaFile, "utf8")); } catch { meta = null; }
++      if (!meta || meta.next !== index || meta.count !== count || meta.source !== opts.source || meta.sourceId !== sourceId) {
++        return { sourceId, status: "failed", code: "part-order" };
++      }
++      if (raw.updatedAt !== undefined) meta.updatedAt = raw.updatedAt;
++    }
++    meta.bytes += Buffer.byteLength(lines);
++    meta.messages += messages.length;
++    if (meta.bytes > MAX_STAGED || meta.messages > MAX_TOTAL_MESSAGES) {
++      await rm(metaFile, { force: true }); await rm(linesFile, { force: true });
++      return { sourceId, status: "failed", code: "too-large" };
++    }
++    await appendFile(linesFile, lines);
++    meta.next = index + 1;
++    if (index < count - 1) {
++      await writeFile(metaFile, JSON.stringify(meta));
++      return { sourceId, status: "partial", part: index };
++    }
++    // The last part: the whole conversation, written as one Session.
++    try {
++      const all = (await readFile(linesFile, "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l));
++      const whole = { sourceId, title: meta.title, createdAt: meta.createdAt, updatedAt: meta.updatedAt, messages: all };
++      return await importOne(services, whole, { ...opts, maxMessages: MAX_TOTAL_MESSAGES });
++    } finally {
++      await rm(metaFile, { force: true }); await rm(linesFile, { force: true });
++    }
++  };
++
+   return {
+     async handle(req, res, path) {
+       if (path !== ROOT) return false;
+       if (req.method === "GET") {
+-        send(res, 200, { supported: seam() !== undefined, version: 1, format: FORMAT });
++        send(res, 200, { supported: seam() !== undefined, version: 1, format: FORMAT, parts: true, maxPartMessages: MAX_MESSAGES, maxMessages: MAX_TOTAL_MESSAGES });
+         return true;
+       }
+       if (req.method !== "POST") {
+@@ -231,9 +324,10 @@ export function createSessionImport(ctx, { readBody, send }) {
+       }
+       cwd ??= process.cwd();
+       const results = [];
++      await cleanStale();
+       for (const raw of body.conversations) {
+         try {
+-          results.push(await importOne(services, raw, { source, cwd, workspace }));
++          results.push(isObject(raw) && raw.part !== undefined ? await importPart(services, raw, { source, cwd, workspace }) : await importOne(services, raw, { source, cwd, workspace }));
+         } catch (error) {
+           // Never send filesystem paths or engine stacks to clients.
+           ctx.logger?.warn?.(`session import: ${error?.name ?? "Error"}: ${error?.message ?? error}`);
+diff --git a/runtime/tests/session-import.test.mjs b/runtime/tests/session-import.test.mjs
+index 16531ff7..58fa4ff8 100644
+--- a/runtime/tests/session-import.test.mjs
++++ b/runtime/tests/session-import.test.mjs
+@@ -1,6 +1,9 @@
+ // dsh-go-bridge session import: the pure log builder and the route over a fake persistence seam.
+ // The live counterpart (a real DSH host, fake model) is runtime/tests/session-import-live.py.
+ import assert from 'node:assert/strict';
++import { mkdtempSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
+ import { Readable } from 'node:stream';
+ import { test } from 'node:test';
+ import { createSessionImport, importEvents, importedSessionId, normalizeConversation } from '../bridge/dsh-go-bridge/lib/session-import.js';
+@@ -89,15 +92,15 @@ function fakeHost({ corrupt = false } = {}) {
+   return { ctx, stored, attached, cached };
+ }
+ const readBody = async (req) => Buffer.concat(await req.toArray());
+-function route(host) {
++function route(host, stagingDir = mkdtempSync(join(tmpdir(), 'dsh-go-import-'))) {
+   let last;
+-  const r = createSessionImport(host.ctx, { readBody, send: (_res, status, json) => { last = { status, json }; } });
++  const r = createSessionImport(host.ctx, { readBody, send: (_res, status, json) => { last = { status, json }; }, stagingDir });
+   return async (method, body, type) => { await r.handle(Object.assign(Readable.from(body === undefined ? [] : [Buffer.from(typeof body === 'string' ? body : JSON.stringify(body))]), { method, headers: { 'content-type': type ?? 'application/json' } }), {}, '/dsh-go/v1/sessions/import'); return last; };
+ }
+ 
+ test('route: capability, import, read-back into the list cache, and re-import skips', async () => {
+   const host = fakeHost(), post = route(host);
+-  assert.deepEqual(await post('GET'), { status: 200, json: { supported: true, version: 1, format: 4 } });
++  assert.deepEqual(await post('GET'), { status: 200, json: { supported: true, version: 1, format: 4, parts: true, maxPartMessages: 4000, maxMessages: 100000 } });
+   const first = await post('POST', { source: 'deepseek', workspaceId: 'w1', conversations: [conv, { sourceId: 'bad', messages: [] }] });
+   assert.equal(first.status, 200);
+   const id = importedSessionId('deepseek', 'c1');
+@@ -138,3 +141,60 @@ test('route: unavailable without a persistence seam', async () => {
+   assert.deepEqual((await post('GET')).json.supported, false);
+   assert.equal((await post('POST', { source: 'deepseek', conversations: [] })).status, 503);
+ });
++
++// ---------------------------------------------------------------- long conversations in parts
++
++const longConv = (n) => ({
++  sourceId: 'long', title: '很长的对话', createdAt: 1_000_000, updatedAt: 2_000_000,
++  messages: Array.from({ length: n }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', text: `第 ${i} 条` })),
++});
++const partsOf = (conv, size) => {
++  const count = Math.ceil(conv.messages.length / size);
++  return Array.from({ length: count }, (_, index) => ({ ...conv, messages: conv.messages.slice(index * size, (index + 1) * size), part: { index, count } }));
++};
++
++test('parts: a conversation over 4000 messages lands whole, as one Session, on its last part', async () => {
++  const host = fakeHost(), dir = mkdtempSync(join(tmpdir(), 'dsh-go-import-')), post = route(host, dir);
++  const conv = longConv(9001);
++  assert.equal((await post('POST', { source: 'deepseek', cwd: '/w', conversations: [conv] })).json.results[0].reason, 'messages', 'one piece is still capped');
++  const parts = partsOf(conv, 3000);
++  assert.equal(parts.length, 4);
++  const id = importedSessionId('deepseek', 'long');
++  for (const [i, p] of parts.entries()) {
++    const r = (await post('POST', { source: 'deepseek', cwd: '/w', conversations: [p] })).json.results[0];
++    if (i < 3) {
++      assert.deepEqual(r, { sourceId: 'long', status: 'partial', part: i });
++      assert.equal(host.stored.has(id), false, 'nothing written before the last part');
++    } else assert.deepEqual(r, { sourceId: 'long', status: 'imported', sessionId: id });
++  }
++  const events = host.stored.get(id).events;
++  assert.equal(events[0].data.messages, 9001);
++  assert.equal(events.filter((e) => e.type === 'user/message').length, 4501);
++  assert.equal(events.at(-1).data.title, '很长的对话');
++  assert.deepEqual(readdirSync(dir), [], 'staging cleaned up');
++  const again = (await post('POST', { source: 'deepseek', cwd: '/w', conversations: [parts[0]] })).json.results[0];
++  assert.deepEqual(again, { sourceId: 'long', status: 'skipped', sessionId: id }, 're-import skips at part 0');
++});
++
++test('parts: out of order or after a restart -> part-order; starting again from part 0 works', async () => {
++  const host = fakeHost(), post = route(host);
++  const parts = partsOf(longConv(10), 4);
++  assert.equal((await post('POST', { source: 'deepseek', cwd: '/w', conversations: [parts[1]] })).json.results[0].code, 'part-order');
++  await post('POST', { source: 'deepseek', cwd: '/w', conversations: [parts[0]] });
++  assert.equal((await post('POST', { source: 'deepseek', cwd: '/w', conversations: [parts[2]] })).json.results[0].code, 'part-order');
++  for (const p of parts) await post('POST', { source: 'deepseek', cwd: '/w', conversations: [p] });
++  assert.equal(host.stored.get(importedSessionId('deepseek', 'long')).events[0].data.messages, 10);
++});
++
++test('parts: bad part fields and bad messages are refused; stale staging is removed', async () => {
++  const host = fakeHost(), dir = mkdtempSync(join(tmpdir(), 'dsh-go-import-')), post = route(host, dir);
++  const p = partsOf(longConv(10), 4)[0];
++  for (const part of [{ index: 0, count: 0 }, { index: 3, count: 3 }, { index: 0.5, count: 2 }, { index: 0, count: 501 }]) {
++    assert.equal((await post('POST', { source: 'deepseek', cwd: '/w', conversations: [{ ...p, part }] })).json.results[0].reason, 'part');
++  }
++  assert.equal((await post('POST', { source: 'deepseek', cwd: '/w', conversations: [{ ...p, messages: [{ role: 'system', text: 'x' }] }] })).json.results[0].reason, 'message role');
++  writeFileSync(join(dir, 'old.json'), '{}');
++  utimesSync(join(dir, 'old.json'), new Date(0), new Date(0));
++  await post('POST', { source: 'deepseek', cwd: '/w', conversations: [] });
++  assert.ok(!readdirSync(dir).includes('old.json'));
++});
+-- 
+2.50.1 (Apple Git-155)
+

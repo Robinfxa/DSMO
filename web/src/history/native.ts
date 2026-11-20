@@ -8,6 +8,10 @@
 //
 // Hosts without the route (a remote host on an older bridge) keep the
 // on-device read-only import in imported.ts.
+//
+// A conversation over 4000 messages or 7 MiB goes alone, in parts, when the bridge says
+// `parts: true` (patch 0011): each part ≤ PART_MESSAGES messages and PART_BYTES of JSON,
+// in order, with `part: {index, count}`; the bridge writes the Session on the last part.
 
 import { signal } from '@preact/signals';
 import { obj, list, str } from '../engine/json';
@@ -21,15 +25,44 @@ const BATCH = 20;
 const BATCH_BYTES = 3 * 1024 * 1024;
 /** The bridge reads at most 8 MiB per request. */
 const MAX_ONE = 7 * 1024 * 1024;
+/** One part of a long conversation (the bridge takes 4000 messages a request). */
+const PART_MESSAGES = 3000;
+const PART_BYTES = 5 * 1024 * 1024;
+
+/** Whether the bridge takes long conversations in parts (patch 0011); set by nativeImportSupported. */
+let partsSupported = false;
 
 export async function nativeImportSupported(): Promise<boolean> {
   try {
     const r = await dshGoTransport().get(IMPORT_PATH);
     const j = obj(r.json);
+    partsSupported = j.parts === true;
     return r.status === 200 && j.supported === true && j.version === 1;
   } catch {
     return false;
   }
+}
+
+type Wire = ReturnType<typeof toWire>;
+
+/** A long conversation cut into parts of at most PART_MESSAGES messages and about PART_BYTES of JSON. */
+export function splitParts(wire: Wire, { maxMessages = PART_MESSAGES, maxBytes = PART_BYTES } = {}): Wire['messages'][] {
+  const enc = new TextEncoder();
+  const parts: Wire['messages'][] = [];
+  let cur: Wire['messages'] = [];
+  let bytes = 0;
+  for (const m of wire.messages) {
+    const size = enc.encode(JSON.stringify(m)).length + 1;
+    if (cur.length && (cur.length >= maxMessages || bytes + size > maxBytes)) {
+      parts.push(cur);
+      cur = [];
+      bytes = 0;
+    }
+    cur.push(m);
+    bytes += size;
+  }
+  if (cur.length) parts.push(cur);
+  return parts;
 }
 
 /** The conversation's id inside its source (ImportedChat ids are `<source>:<id>`). */
@@ -81,7 +114,9 @@ export async function previewImport(chats: ChatFeed): Promise<ImportPreview> {
   return p;
 }
 
-type Batch = { source: ImportedChat['source']; items: { chat: ImportedChat; wire: ReturnType<typeof toWire> }[] };
+type Batch = { source: ImportedChat['source']; items: { chat: ImportedChat; wire: Wire }[] };
+/** A conversation too long for one request, sent alone in parts. */
+type Long = { long: ImportedChat; wire: Wire };
 
 /** Fills same-source runs of at most BATCH conversations and BATCH_BYTES of JSON, one conversation at a time. */
 class Batcher {
@@ -89,10 +124,14 @@ class Batcher {
   private bytes = 0;
   private readonly enc = new TextEncoder();
 
-  /** The conversation goes into the open batch; a batch that is full comes back. 'too-large' when the bridge can't take it at all. */
-  add(chat: ImportedChat): Batch | 'too-large' | null {
+  /**
+   * The conversation goes into the open batch; a batch that is full comes back. A conversation too
+   * long for one request comes back as Long when the bridge takes parts, else 'too-large'.
+   */
+  add(chat: ImportedChat, parts = false): Batch | Long | 'too-large' | null {
     const wire = toWire(chat);
     const size = this.enc.encode(JSON.stringify(wire)).length;
+    if (parts && (size > MAX_ONE || wire.messages.length > 4000)) return { long: chat, wire };
     if (size > MAX_ONE) return 'too-large';
     const last = this.open;
     if (last && last.source === chat.source && last.items.length < BATCH && this.bytes + size <= BATCH_BYTES) {
@@ -120,7 +159,7 @@ export function batches(chats: ImportedChat[]) {
   for (const chat of chats) {
     const r = b.add(chat);
     if (r === 'too-large') tooLarge.push(chat);
-    else if (r) out.push(r);
+    else if (r && !('long' in r)) out.push(r);
   }
   const last = b.flush();
   if (last) out.push(last);
@@ -128,10 +167,10 @@ export function batches(chats: ImportedChat[]) {
 }
 
 /** The batches as the conversations stream in; only the batch being filled is held. */
-async function* batchStream(chats: ChatFeed, tooLarge: (c: ImportedChat) => void): AsyncGenerator<Batch> {
+async function* batchStream(chats: ChatFeed, tooLarge: (c: ImportedChat) => void, parts = false): AsyncGenerator<Batch | Long> {
   const b = new Batcher();
   for await (const chat of chats) {
-    const r = b.add(chat);
+    const r = b.add(chat, parts);
     if (r === 'too-large') tooLarge(chat);
     else if (r) yield r;
   }
@@ -155,6 +194,8 @@ export interface ImportRun {
   error?: string;
   /** Set when the file stopped reading part-way. */
   readError?: string;
+  /** A long conversation going in parts right now. */
+  part?: { title: string; index: number; count: number };
 }
 export const importRun = signal<ImportRun | null>(null);
 let stopRequested = false;
@@ -169,9 +210,35 @@ const REASON: Record<string, string> = {
 };
 /** The bridge's reasons for `invalid` (normalizeConversation in patch 0007) that the person can act on. */
 const INVALID: Record<string, string> = {
-  messages: '消息超过 4000 条',
+  messages: '消息超过 4000 条，更新 App 后可以导入',
   'message text': '有一条消息超过 50 万字',
 };
+/** The same reasons when the bridge takes parts (patch 0011). */
+const INVALID_PARTS: Record<string, string> = { messages: '消息超过 10 万条', 'message text': '有一条消息超过 50 万字' };
+const REASON_PARTS: Record<string, string> = { 'too-large': '对话超过 256 MB', 'part-order': '分段导入被打断了，再导入一次' };
+
+/**
+ * One long conversation, part by part; resends from part 0 once if the bridge lost its place
+ * (an earlier import cut off). Returns the last part's result.
+ */
+async function sendLong(source: ImportedChat['source'], chat: ImportedChat, wire: Wire, onPart: (index: number, count: number) => void): Promise<Record<string, unknown>> {
+  const parts = splitParts(wire);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let result: Record<string, unknown> = {};
+    for (let index = 0; index < parts.length; index++) {
+      if (stopRequested) return { status: 'stopped' };
+      onPart(index, parts.length);
+      const r = await dshGoTransport().post(IMPORT_PATH, { source, conversations: [{ ...wire, messages: parts[index], part: { index, count: parts.length } }] });
+      if (r.status !== 200) throw new Error(str(obj(obj(r.json).error).message) ?? `HTTP ${r.status}`);
+      result = obj(list(obj(r.json).results)[0]);
+      const status = str(result.status);
+      if (status === 'partial') continue;
+      break; // imported, skipped (at part 0) or failed
+    }
+    if (str(result.code) !== 'part-order') return result;
+  }
+  return { status: 'failed', code: 'part-order' };
+}
 
 /**
  * Sends the chats batch by batch as they are read; `importRun` follows along
@@ -184,15 +251,52 @@ export async function runImport(chats: ChatFeed, { removeLocal = false, total }:
   const publish = () => (importRun.value = { ...run, total: Math.max(run.total, run.done), failed: [...run.failed] });
   const landed: string[] = [];
   publish();
-  const queue = batchStream(chats, (c) => {
-    run.failed.push({ title: c.title, reason: REASON['too-large'] });
-    run.done++;
-  });
+  const parts = partsSupported;
+  const reasonOf = (r: Record<string, unknown>) => {
+    const code = str(r.code) ?? '';
+    if (code === 'invalid') return (parts ? INVALID_PARTS : INVALID)[str(r.reason) ?? ''] || REASON.invalid;
+    return (parts && REASON_PARTS[code]) || REASON[code] || '没有导入';
+  };
+  const queue = batchStream(
+    chats,
+    (c) => {
+      run.failed.push({ title: c.title, reason: REASON['too-large'] });
+      run.done++;
+    },
+    parts,
+  );
   try {
     for await (const batch of queue) {
       if (stopRequested) {
         run.stopped = true;
         break;
+      }
+      if ('long' in batch) {
+        const chat = batch.long;
+        let result: Record<string, unknown>;
+        try {
+          result = await sendLong(chat.source, chat, batch.wire, (index, count) => {
+            run.part = { title: chat.title, index, count };
+            publish();
+          });
+        } catch (e) {
+          run.error = e instanceof Error ? e.message : String(e);
+          break;
+        } finally {
+          run.part = undefined;
+        }
+        const status = str(result.status);
+        if (status === 'stopped') {
+          run.stopped = true;
+          break;
+        }
+        if (status === 'imported') run.imported++;
+        else if (status === 'skipped') run.skipped++;
+        else run.failed.push({ title: chat.title, reason: reasonOf(result) });
+        if (status === 'imported' || status === 'skipped') landed.push(chat.id);
+        run.done++;
+        publish();
+        continue;
       }
       let results: Record<string, unknown>[];
       try {
@@ -207,10 +311,7 @@ export async function runImport(chats: ChatFeed, { removeLocal = false, total }:
         const status = str(results[i]?.status);
         if (status === 'imported') run.imported++;
         else if (status === 'skipped') run.skipped++;
-        else {
-          const code = str(results[i]?.code) ?? '';
-          run.failed.push({ title: chat.title, reason: (code === 'invalid' && INVALID[str(results[i]?.reason) ?? '']) || REASON[code] || '没有导入' });
-        }
+        else run.failed.push({ title: chat.title, reason: reasonOf(results[i] ?? {}) });
         if (status === 'imported' || status === 'skipped') landed.push(chat.id);
       });
       run.done += batch.items.length;
