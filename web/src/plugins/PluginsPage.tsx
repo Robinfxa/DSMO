@@ -32,7 +32,7 @@ import {
 } from './frontend';
 import { CATEGORIES, PERM_INFO, SHELF, TIER_INFO, catInfo, categoryOf, hasToggle, matches, optionsOf, relevance, type Category } from './meta';
 import { FEATURED, MARKET_TIER } from './official';
-import { POSITIONS, clashesOf, loadHostBundles, setPersonaSkipBots } from './conflicts';
+import { affectsOf, clashesOf, loadHostBundles, setPersonaSkipBots, tagInfo } from './conflicts';
 import { AutomationPreview, EnginePreview, LayoutPreview, SkillPreview, SkinPreview, SkinSwatch, ToolsPreview, themeNow } from './preview';
 import { describeTiming, runSchedule, scheduleState, setScheduleTime, skillsInstallable } from './automation';
 import { local } from '../bridge/native';
@@ -75,7 +75,7 @@ function ClashCard({ p }: { p: ApiDemoManifest }) {
             <div class="plg-row-m">
               <div class="plg-row-t">
                 和「{x.with}」
-                <em class="tm-badge warn">{POSITIONS[x.position].title}</em>
+                <em class="tm-badge warn">{tagInfo(x.position).title}</em>
               </div>
               <div class="plg-row-s wrap">{x.text}</div>
               {x.fix === 'persona-skip-bots' &&
@@ -441,6 +441,8 @@ export function PluginDetailPage({ id }: { id: string }) {
     ...(p.license ? [['许可证', p.license] as [string, string]] : []),
     ['包名', p.id, true],
     ...(p.engine ? [['引擎部分', `${p.engine.package}@${p.engine.version}`, true] as [string, string, boolean]] : []),
+    // its clash tags: another plugin with one of these may clash with it
+    ...(affectsOf(p).length ? [['会写到', affectsOf(p).map((t) => tagInfo(t).title).join('、')] as [string, string]] : []),
   ];
   return (
     <div class="plg plg-detail">

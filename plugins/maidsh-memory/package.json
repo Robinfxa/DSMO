@@ -1,6 +1,6 @@
 {
   "name": "@api-demo/maidsh-memory",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "会自动记、会淡忘、带着感情的记忆",
   "license": "MIT",
   "keywords": [
@@ -13,6 +13,9 @@
       "engine"
     ],
     "permissions": [],
+    "affects": [
+      "prompt.memory"
+    ],
     "summary": "像人一样记得你：聊过的事会自己记下，久了会淡忘，聊到相关的事又会自然想起来。",
     "engine": {
       "package": "maidsh-memory",

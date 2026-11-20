@@ -1,5 +1,5 @@
 {
   "package": "@api-demo/maidsh-memory",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "source": "plugins/maidsh-memory"
 }

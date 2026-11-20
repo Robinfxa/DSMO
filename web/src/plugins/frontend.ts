@@ -29,8 +29,8 @@ export interface ApiDemoManifest {
   license?: string;
   /** Optional; derived from `kinds` when absent. */
   category?: 'appearance' | 'interface' | 'tools' | 'skills' | 'automation' | 'engine';
-  /** Shared places it writes to (conflicts.ts): `prompt.persona`, `prompt.memory`. */
-  affects?: ('prompt.persona' | 'prompt.memory')[];
+  /** Clash tags (market/tags.json, conflicts.ts): the shared places it writes to. Same tag, may clash. */
+  affects?: string[];
   /** Longer text for the detail page; paragraphs separated by a blank line. */
   description?: string;
   /** Up to five short selling points. */

@@ -1,6 +1,6 @@
 {
   "name": "@api-demo/memory-share",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "长期记忆：跨对话记住你说过的事",
   "license": "MIT",
   "keywords": [
@@ -15,6 +15,9 @@
       "slot"
     ],
     "permissions": [],
+    "affects": [
+      "prompt.memory"
+    ],
     "engine": {
       "package": "dsh-plugin-memory-share",
       "version": "0.6.0",

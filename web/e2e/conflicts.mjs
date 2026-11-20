@@ -191,6 +191,66 @@ check(await settled('global', 0), 'and off again');
 const sent = await page.evaluate(() => window.__personaCalls.filter((c) => c.action === 'set-session-persona').map((c) => c.sessionId));
 check(sent.length > 0 && !sent.includes('r-weekly') && !sent.includes(''), 'only conversation ids are sent (not the room id)');
 
+// Tags (market/tags.json): any two plugins with the same tag clash, and an engine package
+// installed by hand is known by tags.json's `engines` — no code per pair.
+{
+  const c2 = await browser.newContext({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true, colorScheme: scheme });
+  await c2.addInitScript(() => {
+    localStorage.setItem('api-demo:plugins', JSON.stringify([{ id: '@api-demo/memory-share', enabled: true, version: '1.1.1', setupDone: true }]));
+    localStorage.setItem('api-demo:prefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('api-demo:prefs') || '{}'), advanced: true }));
+  });
+  const p2 = await c2.newPage();
+  p2.on('pageerror', (e) => errors.push(e.message));
+  const go = async (entry) => {
+    await p2.click('[aria-label="打开边栏"]');
+    await p2.waitForTimeout(400);
+    await p2.click(`.m-frow:has-text("${entry}")`);
+    await p2.waitForTimeout(700);
+  };
+  const leave = async () => {
+    for (let i = 0; i < 4 && (await p2.isVisible('[aria-label="返回"] >> nth=-1')); i++) {
+      await p2.click('[aria-label="返回"] >> nth=-1');
+      await p2.waitForTimeout(400);
+    }
+  };
+  const detail = async (title) => {
+    await go('插件');
+    await p2.click('.plg-search input, input[type="search"]').catch(() => {});
+    await p2.click(`.plg-card:has-text("${title}"), .plg-row:has-text("${title}")`);
+    await p2.waitForTimeout(500);
+    return (await p2.textContent('.plg-detail')) ?? '';
+  };
+  await p2.goto(`${base}#plain`);
+  await p2.waitForTimeout(1500);
+
+  let t = await detail('MaiDSH 记忆');
+  check(t.includes('可能冲突') && t.includes('和「长期记忆」') && t.includes('把记住的事加进每一轮对话'), 'same tag (prompt.memory): MaiDSH 记忆 vs 长期记忆');
+  check(/会写到\s*长期记忆/.test(t), 'detail: 会写到 lists its tags');
+  await p2.screenshot({ path: join(shots, `${scheme}-09-tag-clash.png`) });
+  await leave();
+
+  t = await detail('MaiDSH 心情');
+  check(!t.includes('可能冲突'), 'MaiDSH 心情: nothing else has 情绪 yet');
+  await leave();
+
+  // a community emotion package installed by hand through 引擎插件
+  await p2.click('[aria-label="打开边栏"]');
+  await p2.waitForTimeout(400);
+  await p2.click('.m-me [aria-label="设置"]');
+  await p2.waitForTimeout(400);
+  await p2.click('.m-row:has-text("引擎插件")');
+  await p2.waitForTimeout(700);
+  await p2.fill('.npm-row input', '@7gzgn/dsh-emotion');
+  await p2.click('.npm-row .plg-get');
+  await p2.waitForSelector('.m-alert');
+  await p2.click('.m-alert-btns button >> nth=-1');
+  await p2.waitForTimeout(700);
+  await leave();
+  t = await detail('MaiDSH 心情');
+  check(t.includes('和「@7gzgn/dsh-emotion」') && t.includes('情绪'), 'engine package by hand (tags.json engines): MaiDSH 心情 vs dsh-emotion');
+  await c2.close();
+}
+
 await browser.close();
 if (errors.length) {
   console.error(errors.join('\n'));

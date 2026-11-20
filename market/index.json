@@ -209,7 +209,7 @@
     },
     {
       "tier": 3,
-      "integrity": "sha256-RZPFkCp5IVxLlsZUmiIfsP8cpFLWg4CbnaBLVbcuW94=",
+      "integrity": "sha256-r0wT3h07gT9oSzeDTUgCqexcsf524oUF9+gLPURSoro=",
       "manifest": {
         "v": 1,
         "title": "MaiDSH 记忆",
@@ -217,6 +217,9 @@
           "engine"
         ],
         "permissions": [],
+        "affects": [
+          "prompt.memory"
+        ],
         "summary": "像人一样记得你：聊过的事会自己记下，久了会淡忘，聊到相关的事又会自然想起来。",
         "engine": {
           "package": "maidsh-memory",
@@ -229,14 +232,14 @@
           "自然想起，不念清单"
         ],
         "id": "@api-demo/maidsh-memory",
-        "version": "1.0.1",
+        "version": "1.0.2",
         "license": "MIT",
         "official": true
       }
     },
     {
       "tier": 3,
-      "integrity": "sha256-RSFfa45YrQeHCrbCrAeueRplSfZazpkl/4CxV5V2x2c=",
+      "integrity": "sha256-LESP7QY6DqDaC+gy903zQqbp/JQY6bwJp7f27YPLgz8=",
       "manifest": {
         "v": 1,
         "title": "MaiDSH 心情",
@@ -245,6 +248,9 @@
           "engine"
         ],
         "permissions": [],
+        "affects": [
+          "prompt.mood"
+        ],
         "engine": {
           "package": "maidsh-mood",
           "version": "0.1.1"
@@ -256,14 +262,14 @@
           "性格可以调"
         ],
         "id": "@api-demo/maidsh-mood",
-        "version": "1.0.2",
+        "version": "1.0.3",
         "license": "MIT",
         "official": true
       }
     },
     {
       "tier": 3,
-      "integrity": "sha256-OYUu41n8G4fZEUadT4UI7gDmMCauSXI1/xkWNnujNDs=",
+      "integrity": "sha256-vXoTnLO/4OZKs061eXsYxTDEPiCPltKVy3pYs2sSAL4=",
       "manifest": {
         "v": 1,
         "title": "长期记忆",
@@ -273,6 +279,9 @@
           "slot"
         ],
         "permissions": [],
+        "affects": [
+          "prompt.memory"
+        ],
         "engine": {
           "package": "dsh-plugin-memory-share",
           "version": "0.6.0",
@@ -300,14 +309,14 @@
           }
         ],
         "id": "@api-demo/memory-share",
-        "version": "1.1.0",
+        "version": "1.1.1",
         "license": "MIT",
         "official": true
       }
     },
     {
       "tier": 3,
-      "integrity": "sha256-H1zrkwuWZb30UQLsXEeOMlx3gXmOPB9qo++g/hs822U=",
+      "integrity": "sha256-/oQsZNJWru4SHgoqe5+yEL/8xpOy1yzzjFsKzVeENII=",
       "manifest": {
         "v": 1,
         "title": "人设库",
@@ -317,6 +326,9 @@
           "slot"
         ],
         "permissions": [],
+        "affects": [
+          "prompt.persona"
+        ],
         "slots": [
           {
             "slot": "sider.features",
@@ -351,7 +363,7 @@
           "随时切换或关闭"
         ],
         "id": "@api-demo/persona-library",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "license": "MIT",
         "official": true
       }

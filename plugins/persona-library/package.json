@@ -1,6 +1,6 @@
 {
   "name": "@api-demo/persona-library",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "人设库：给 AI 一个固定的身份、性格和说话方式",
   "license": "MIT",
   "keywords": [
@@ -15,6 +15,9 @@
       "slot"
     ],
     "permissions": [],
+    "affects": [
+      "prompt.persona"
+    ],
     "slots": [
       {
         "slot": "sider.features",

@@ -4,37 +4,58 @@
 // instructions and memory, and a persona or memory plugin goes into every conversation,
 // Bot conversations included.
 //
-// A listing says where it writes with `affects`; the community packages DSMO lists (and the
-// same packages installed by hand through 引擎插件) are known here by package name.
+// Tags, not pairs: a listing names the places it writes to with `affects`, tags defined once in
+// market/tags.json; two plugins with the same tag clash. A new plugin that writes where others
+// already do just uses the tag — no change here. Engine packages are known by their listing's
+// tags (also when installed by hand through 引擎插件), and community packages DSMO doesn't list
+// by tags.json's `engines`. Only DSMO's own features are written here (NATIVE below).
 //
 // The persona library has a per-conversation mode, which gives one clash a fix: switch the
 // persona off in Bot conversations (`set-mode session` + `set-session-persona none` for each
 // Bot's sessions, kept up as Bots come and go). The memory package can't exclude a
 // conversation from outside, so that clash is only explained.
 
-import { effect, signal } from '@preact/signals';
+import { computed, effect, signal } from '@preact/signals';
+import tagsFile from '../../../market/tags.json';
 import { native } from '../bridge/native';
 import { dsBot } from '../bots/store';
 import { getClient } from '../state/store';
 import { catalogPlugins, findPlugin, installed, type ApiDemoManifest } from './frontend';
 
-export type Position = 'prompt.persona' | 'prompt.memory';
+/** A clash tag (market/tags.json), e.g. `prompt.persona`. */
+export type Tag = string;
+interface TagInfo {
+  title: string;
+  what: string;
+}
+const TAGS = tagsFile.tags as Record<Tag, TagInfo>;
+/** A tag's name and what it means; an unknown one (a sideloaded listing) shows as it is. */
+export const tagInfo = (t: Tag): TagInfo => TAGS[t] ?? { title: t, what: `写到「${t}」` };
 
-export const POSITIONS: Record<Position, { title: string; what: string }> = {
-  'prompt.persona': { title: '每一轮的人设', what: '给 AI 定下身份、性格和说话方式，加进每一轮对话' },
-  'prompt.memory': { title: '长期记忆', what: '把记住的事加进每一轮对话' },
+/** Engine package → its tags: from the listings, then tags.json's community packages. */
+const engineTags = computed(() => {
+  const out = new Map<string, Tag[]>();
+  for (const [pkg, x] of Object.entries(tagsFile.engines as Record<string, { affects: Tag[] }>)) out.set(pkg, x.affects);
+  for (const p of catalogPlugins.value) if (p.engine && p.affects?.length) out.set(p.engine.package, p.affects);
+  return out;
+});
+
+export const affectsOf = (p: Pick<ApiDemoManifest, 'affects' | 'engine'>): Tag[] => p.affects ?? (p.engine ? engineTags.value.get(p.engine.package) : undefined) ?? [];
+
+/** DSMO's own features that use a tagged place, while they are in use. */
+const NATIVE: Record<Tag, { with: string; active: () => boolean; text: () => string | null; fix?: Clash['fix'] }> = {
+  'prompt.persona': {
+    with: 'DS Bot',
+    active: () => hasBots(),
+    fix: 'persona-skip-bots',
+    text: () => (personaSkipBots.value ? null : '每个 Bot 有自己的角色和说明。人设会加进所有对话，包括 Bot 的对话，可能盖过 Bot 自己的设定。'),
+  },
+  'prompt.memory': {
+    with: 'DS Bot',
+    active: () => hasBots(),
+    text: () => 'Bot 有自己的记忆。长期记忆也会加进 Bot 的对话，Bot 记下的事也可能存进你的长期记忆里。这个插件不能只对某些对话关掉。',
+  },
 };
-
-/** Engine packages that write to these places, whether listed in the market or installed by hand. */
-const KNOWN_ENGINE: Record<string, { title: string; affects: Position[] }> = {
-  'dsh-persona-dafeiyu': { title: '人设库', affects: ['prompt.persona'] },
-  '@7gzgn/dsh-emotion': { title: 'dsh-emotion', affects: ['prompt.persona'] },
-  'dsh-plugin-memory-share': { title: '长期记忆', affects: ['prompt.memory'] },
-  'dsh-agentmemory': { title: 'dsh-agentmemory', affects: ['prompt.memory'] },
-  'maidsh-memory': { title: 'MaiDSH 记忆', affects: ['prompt.memory'] },
-};
-
-export const affectsOf = (p: Pick<ApiDemoManifest, 'affects' | 'engine'>): Position[] => p.affects ?? (p.engine ? KNOWN_ENGINE[p.engine.package]?.affects : undefined) ?? [];
 
 /** Engine packages installed and on, on this host (null until read). */
 export const hostBundles = signal<string[] | null>(null);
@@ -47,7 +68,7 @@ export async function loadHostBundles() {
 }
 
 export interface Clash {
-  position: Position;
+  position: Tag;
   /** What it clashes with: another plugin, an engine package, or a DSMO feature. */
   with: string;
   kind: 'plugin' | 'engine' | 'native';
@@ -63,7 +84,7 @@ const hasBots = () => dsBot.value.availability === 'ready' && (dsBot.value.team?
 
 /**
  * Where [p] writes and what else does: other plugins that are on, engine packages on this host,
- * DS Bot. For a plugin not yet installed, what installing it would run into.
+ * DSMO's own features. For a plugin not yet installed, what installing it would run into.
  */
 export function clashesOf(p: ApiDemoManifest): Clash[] {
   const mine = affectsOf(p);
@@ -73,20 +94,18 @@ export function clashesOf(p: ApiDemoManifest): Clash[] {
     .filter((x) => x.enabled && x.id !== p.id)
     .map((x) => findPlugin(x.id))
     .filter((x): x is ApiDemoManifest => !!x);
+  // packages DSMO installs show up as their plugin, not again as an engine package
   const ownPackages = new Set([p.engine?.package, ...catalogPlugins.value.map((x) => x.engine?.package)].filter(Boolean));
-  for (const pos of mine) {
+  for (const tag of mine) {
+    const { what } = tagInfo(tag);
     for (const o of others)
-      if (affectsOf(o).includes(pos))
-        out.push({ position: pos, with: o.title, kind: 'plugin', text: `「${o.title}」也在${POSITIONS[pos].what}，两个一起开，AI 会收到两份，可能互相打架。建议只留一个。` });
+      if (affectsOf(o).includes(tag)) out.push({ position: tag, with: o.title, kind: 'plugin', text: `「${o.title}」也在${what}，两个一起开，AI 会收到两份，可能互相打架。建议只留一个。` });
     for (const pkg of hostBundles.value ?? [])
-      if (!ownPackages.has(pkg) && KNOWN_ENGINE[pkg]?.affects.includes(pos))
-        out.push({ position: pos, with: pkg, kind: 'engine', text: `主机上装着引擎插件 ${pkg}，它也在${POSITIONS[pos].what}。建议在「引擎插件」里停用其中一个。` });
-    if (hasBots()) {
-      if (pos === 'prompt.persona' && !personaSkipBots.value)
-        out.push({ position: pos, with: 'DS Bot', kind: 'native', fix: 'persona-skip-bots', text: '每个 Bot 有自己的角色和说明。人设会加进所有对话，包括 Bot 的对话，可能盖过 Bot 自己的设定。' });
-      if (pos === 'prompt.memory')
-        out.push({ position: pos, with: 'DS Bot', kind: 'native', text: 'Bot 有自己的记忆。长期记忆也会加进 Bot 的对话，Bot 记下的事也可能存进你的长期记忆里。这个插件不能只对某些对话关掉。' });
-    }
+      if (!ownPackages.has(pkg) && engineTags.value.get(pkg)?.includes(tag))
+        out.push({ position: tag, with: pkg, kind: 'engine', text: `主机上装着引擎插件 ${pkg}，它也在${what}。建议在「引擎插件」里停用其中一个。` });
+    const n = NATIVE[tag];
+    const text = n?.active() ? n.text() : null;
+    if (n && text) out.push({ position: tag, with: n.with, kind: 'native', text, fix: n.fix });
   }
   return out;
 }
