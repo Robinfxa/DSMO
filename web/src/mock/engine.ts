@@ -603,6 +603,7 @@ export class MockEngine {
         return { items: [...this.sessions.values()].map((s) => this.summary(s)) };
       case 'session/create': {
         const s = this.newSession(null, str(req.cwd) ?? WS);
+        if (str(req.workspaceId)) this.host.addSession(str(req.workspaceId)!, s.id);
         this.emit('api-session/added', [this.summary(s)]);
         return { sessionId: s.id, agentPreset: 'standard' };
       }

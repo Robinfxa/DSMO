@@ -3,6 +3,7 @@
 // `$events`, the open conversation from `session/follow`, approvals from
 // `$events` waterfalls.
 
+import type { JSX } from 'preact';
 import { list, obj, str } from '../engine/json';
 import { addVersion, bumpedForkTitle, familyMembers, hiddenVersions, setActiveVersion, versionsVersion } from './versions';
 import { batch, computed, signal } from '@preact/signals';
@@ -96,7 +97,9 @@ export type Overlay =
   | { kind: 'panel'; pluginId: string; panel: string }
   | { kind: 'dshgo'; pkg: string; id: string }
   | { kind: 'text'; title: string; body: string; mono?: boolean }
-  | { kind: 'image'; src: string; alt: string };
+  | { kind: 'image'; src: string; alt: string }
+  /** A small panel of choices: a bottom sheet on the phone, a dialog on the computer. */
+  | { kind: 'sheet'; title: string; body: () => JSX.Element };
 
 export interface Toast {
   id: number;
@@ -227,6 +230,8 @@ export async function boot() {
     const { MockEngine } = await import('../mock/engine');
     const engine = new MockEngine();
     engineForProto = engine;
+    // e2e: the prototype's engine, for tests that mirror its workspaces into a stand-in host
+    (window as { __mockEngine?: unknown }).__mockEngine = engine;
     setBrowserSkillSink((op, payload) => engine.skillFs(op, payload));
     (await import('../mock/dshgo')).setMockSessionImport((source, convs) => engine.importConversations(source, convs));
     setBrowserLocal((await import('../mock/local')).createMockLocal(engine.userSkills));

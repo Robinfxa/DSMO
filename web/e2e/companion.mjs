@@ -6,7 +6,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { startMaidshHost } from './maidsh-host.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
@@ -41,10 +41,13 @@ await api('/api/maidsh/learn', { textType: 'aboutme', title: '自我介绍', tex
 await settled();
 
 const ALL = ['core', 'mood', 'bond', 'memory', 'expression', 'initiative'];
-const seed = (mods) => (list) => localStorage.setItem('api-demo:plugins', JSON.stringify(list.map((m) => ({ id: `@api-demo/maidsh-${m}`, enabled: true, version: '1.0.0', setupDone: true }))));
+// installed at the market's versions (an older one would read as 「有新版本」)
+const VERSIONS = Object.fromEntries(JSON.parse(readFileSync(join(here, '..', '..', 'market', 'index.json'), 'utf8')).plugins.map((p) => [p.manifest.id, p.manifest.version]));
+const seed = () => ([list, versions]) =>
+  localStorage.setItem('api-demo:plugins', JSON.stringify(list.map((m) => ({ id: `@api-demo/maidsh-${m}`, enabled: true, version: versions[`@api-demo/maidsh-${m}`] ?? '1.0.0', setupDone: true }))));
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const ctx = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, colorScheme: scheme });
-await ctx.addInitScript(seed(), ALL);
+await ctx.addInitScript(seed(), [ALL, VERSIONS]);
 const page = await ctx.newPage();
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && !/404|Failed to load resource/.test(m.text()) && errors.push('console: ' + m.text()));
@@ -222,7 +225,7 @@ check(!(await body()).includes('TA 等你先开口'), '主动: no longer stopped
 // 记忆 not installed / installed but the engine not restarted
 {
   const c2 = await browser.newContext({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true, colorScheme: scheme });
-  await c2.addInitScript(seed(), ['core', 'memory']);
+  await c2.addInitScript(seed(), [['core', 'memory'], VERSIONS]);
   const p2 = await c2.newPage();
   p2.on('pageerror', (e) => errors.push(e.message));
   // this engine runs neither: 表达 isn't installed in DSMO, 记忆 is but the engine hasn't restarted
@@ -248,7 +251,7 @@ check(!(await body()).includes('TA 等你先开口'), '主动: no longer stopped
 // desktop: the sider slot
 {
   const c3 = await browser.newContext({ viewport: { width: 1280, height: 820 }, colorScheme: scheme });
-  await c3.addInitScript(seed(), ALL);
+  await c3.addInitScript(seed(), [ALL, VERSIONS]);
   await c3.addInitScript(() => localStorage.setItem('api-demo:prefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('api-demo:prefs') || '{}'), advanced: true })));
   const p3 = await c3.newPage();
   p3.on('pageerror', (e) => errors.push(e.message));

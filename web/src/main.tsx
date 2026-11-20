@@ -12,6 +12,7 @@ import { loadInstalled, retryAutoUpdates, settleEngineSetups } from './plugins/f
 import { afterUpdate } from './plugins/PluginsPage';
 import { watchConflicts } from './plugins/conflicts';
 import { watchMaidshScope } from './maidsh/scope';
+import { watchLore } from './ui/lore/pick';
 import { onNative } from './bridge/native';
 import { startGuard } from './plugins/guard';
 import { loadContributions, setDshGoTransport } from './plugins/dshgo';
@@ -25,6 +26,7 @@ async function main() {
   await loadInstalled();
   void watchConflicts();
   watchMaidshScope();
+  watchLore();
   await loadVersions();
   void loadImported();
   startGuard();

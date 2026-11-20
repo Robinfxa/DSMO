@@ -10,6 +10,8 @@ import { errText, forkConversation, sessionsLive } from '../../state/store';
 import { hasModule } from '../../maidsh/api';
 import { learnConversation } from '../pages/companion';
 import { isScopeOff, toggleScope } from '../../maidsh/scope';
+import { hasLore } from '../../lore/api';
+import { ChapterBar, chooseWork, conversationLabel, loreReady } from '../lore/pick';
 import { openImportedPage } from '../../history/ui';
 import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
@@ -78,6 +80,7 @@ export function MobileApp() {
       <div class="m-stage" onTouchStart={(e) => onTouchStart(e, 'edge')} onTouchMove={onTouchMove}>
         <TopBar />
         <SafeBanner />
+        {!welcome && <ChapterBar />}
         <div class={`m-content ${welcome ? 'welcome' : ''}`}>{welcome ? <Welcome /> : <Chat />}</div>
         <Composer />
         <button class="m-stage-scrim" type="button" aria-label="关闭边栏" tabIndex={open ? 0 : -1} onClick={() => (drawerOpen.value = false)} />
@@ -353,11 +356,14 @@ function SessionRow({ s, picking, onPick, onMulti }: { s: SessionSummary; pickin
   const ref = useRef<HTMLDivElement>(null);
   const press = useLongPress(() => menu());
   if (renaming.value === s.sessionId) return <RenameRow s={s} />;
-  const menu = () =>
+  const menu = async () => {
+    // 设定集's line names this conversation's work: read it first when not known yet (briefly)
+    if (hasLore()) await loreReady(s.sessionId);
     openPopover(ref.current!.querySelector('.m-item-more') ?? ref.current!, [
       { icon: 'edit', label: '重命名', run: () => (renaming.value = s.sessionId) },
       { icon: isPinned ? 'unpin' : 'pin', label: isPinned ? '取消置顶' : '置顶', run: () => void togglePin(s.sessionId) },
       { icon: 'fork', label: '分叉', run: () => ((drawerOpen.value = false), void forkConversation(s.sessionId)) },
+      ...(hasLore() ? [{ icon: 'book' as const, label: conversationLabel(s.sessionId), run: () => chooseWork({ kind: 'conversation', sessionId: s.sessionId }) }] : []),
       ...(hasModule('core')
         ? [
             { icon: 'sparkle' as const, label: '让 TA 深度学习这段对话', run: () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))) },
@@ -376,6 +382,7 @@ function SessionRow({ s, picking, onPick, onMulti }: { s: SessionSummary; pickin
         run: () => confirm('删除对话？', `「${s.title || '新对话'}」会从列表中移除。`, '删除', () => void deleteSession(s.sessionId)),
       },
     ]);
+  };
   const on = !!picking?.has(s.sessionId);
   return (
     <div

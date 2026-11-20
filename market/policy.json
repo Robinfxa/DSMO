@@ -16,7 +16,8 @@
     "@api-demo/maidsh-core",
     "@api-demo/maidsh-memory",
     "@api-demo/maidsh-expression",
-    "@api-demo/maidsh-initiative"
+    "@api-demo/maidsh-initiative",
+    "@api-demo/dsmo-lore"
   ],
   "featured": [
     "@api-demo/persona-library",

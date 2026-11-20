@@ -4,6 +4,7 @@
 // served from the same origin, so the plugins' own loopback / same-origin checks pass as in the app.
 //
 //   const host = await startMaidshHost({ modules: ['core', 'mood', 'bond', 'memory', 'expression', 'initiative'] });
+//   (设定集: modules: ['lore'] — maidsh/lore, the dsmo-lore package)
 //   host.url  → http://127.0.0.1:<port>/index.html
 //   host.ctx  → the cordis context (services: companionMood, companionBond, …)
 //   await host.stop();
@@ -64,6 +65,9 @@ export async function startMaidshHost({ modules = ['core', 'mood', 'bond', 'memo
   });
   // the route a learning job uses when no turn has run yet (DSH: the agent's default model)
   ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-chat' }) });
+  // DSH's workspaces (设定集's 工作区 layer): the e2e mirrors the prototype's with setWorkspaces
+  let workspaces = [];
+  ctx.provide('workspaceRegistry', { list: () => workspaces });
 
   for (const m of modules) {
     const mod = await import(pathToFileURL(path.join(repo, 'maidsh', m, 'lib', 'index.mjs')).href);
@@ -91,6 +95,10 @@ export async function startMaidshHost({ modules = ['core', 'mood', 'bond', 'memo
     url: `http://127.0.0.1:${port}/index.html`,
     ctx,
     routes,
+    /** [{ id, sessionIds }], as DSH's workspaceRegistry.list() gives them. */
+    setWorkspaces(list) {
+      workspaces = list;
+    },
     async stop() {
       server.close();
       ctx.registry?.dispose?.();

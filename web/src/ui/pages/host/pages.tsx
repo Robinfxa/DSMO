@@ -3,6 +3,8 @@
 // DSH Host directly, like every other page here; the same lists-and-rows idiom
 // as 设置 and 插件.
 
+import { hasLore, readBindings, refreshWorks, workTitle } from '../../../lore/api';
+import { chooseWork } from '../../lore/pick';
 import { useEffect, useState } from 'preact/hooks';
 import type { WorkspaceInfo } from '../../../engine/client';
 import { askText, backPage, confirm, errText, getClient, openPage, openSession, pages, showToast } from '../../../state/store';
@@ -357,6 +359,15 @@ function PromptEditor({ value, onSave }: { value: string; onSave: (v: string) =>
 export function WorkspacesPage() {
   const [items, setItems] = useState<WorkspaceInfo[] | null>(null);
   useEffect(() => getClient().watchWorkspaces(setItems), []);
+  // 设定集: which work each workspace uses (only when it's installed)
+  const lore = hasLore();
+  const [loreMap, setLoreMap] = useState<Record<string, string> | null>(null);
+  const readLore = () => void Promise.all([readBindings(), refreshWorks()]).then(([b]) => setLoreMap(b.workspaces), () => setLoreMap(null));
+  useEffect(() => void (lore && readLore()), [lore]);
+  const loreLabel = (id: string) => {
+    const v = loreMap?.[id];
+    return v === undefined ? '跟随默认' : v === 'off' ? '关' : `《${workTitle(v) ?? '?'}》`;
+  };
   if (!items) return <Loading />;
   const act = async (fn: () => Promise<unknown>, ok?: string) => {
     try {
@@ -413,6 +424,11 @@ export function WorkspacesPage() {
                 {i > 0 && (
                   <button class="plg-text-btn" type="button" onClick={() => act(() => getClient().moveWorkspace(w.workspaceId, items[i - 1].workspaceId))}>
                     上移
+                  </button>
+                )}
+                {lore && loreMap && (
+                  <button class="plg-text-btn" type="button" onClick={() => chooseWork({ kind: 'workspace', workspaceId: w.workspaceId }, readLore)}>
+                    设定集：{loreLabel(w.workspaceId)}
                   </button>
                 )}
                 <span class="grow" />

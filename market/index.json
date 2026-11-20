@@ -89,6 +89,48 @@
     },
     {
       "tier": 3,
+      "integrity": "sha256-pnPN5NDmqcgYxNcht9pVQNwtj/eI5adnd5GTLHOTWm8=",
+      "manifest": {
+        "v": 1,
+        "title": "设定集",
+        "kinds": [
+          "engine",
+          "slot"
+        ],
+        "permissions": [],
+        "affects": [
+          "prompt.lore"
+        ],
+        "slots": [
+          {
+            "slot": "sider.features",
+            "id": "open",
+            "title": "设定集",
+            "icon": "FxSkill",
+            "action": {
+              "open": "lore"
+            }
+          }
+        ],
+        "summary": "写小说、跑团时让 AI 记得人物是谁、写到第几章时处在什么状态、世界有哪些规矩。",
+        "engine": {
+          "package": "dsmo-lore",
+          "version": "0.1.0"
+        },
+        "description": "给一部作品建一份设定集：人物卡、世界设定、人物之间的关系，以及按章节记的状态——伤势、位置、手里的东西、身份、立场，都记「从第几章起为真」。写到第 20 章，AI 知道沈砚左臂的伤是第 11 章受的、玉佩第 20 章已经丢了；回头改旧章节，也按那一章的样子写。\n\n每轮不多调模型：常驻一份人物名单（200 字以内），对话里提到谁，就把谁此刻的设定加进去（默认 600 字以内，放不下的整条不放，提醒 AI 自己查）。AI 还有三个工具：查设定、记下变化（名字对不上会提醒，不会把「林婉」「林晚」记成两个人）、拿一章正文对照设定查矛盾（每条结论都附正文原句，只报告，不改你的稿子）。\n\n在「设置 › 写作 › 设定集」（电脑上是边栏的「设定集」）里建作品、写人物和设定、看每一章的状态；对话的「更多」里选这段对话用哪部作品，用着作品的对话顶部会显示「《书名》· 第 N 章」，能直接改章节。\n\n哪段对话用哪部作品，按「对话 › 工作区 › 默认」来定，出厂是关：不写小说的对话一个字都不加，工具也不出现。可以导入 SillyTavern 的角色卡（JSON 或 PNG）和世界书，只取设定，开场白、指令和脚本跳过并列出来，导错了可以整次撤销。\n\n和 MaiDSH 记忆一起装时，用了作品的对话里，故事世界的设定以设定集为准，记忆只管发生过的事。\n\n引擎部分是 npm 包 dsmo-lore 0.1.0（MIT 许可），装在当前主机上。只兼容 SillyTavern 公开的数据格式，不含它的代码。",
+        "highlights": [
+          "按章节记状态",
+          "每轮不多调模型",
+          "兼容酒馆角色卡和世界书"
+        ],
+        "id": "@api-demo/dsmo-lore",
+        "version": "1.0.0",
+        "license": "MIT",
+        "official": true
+      }
+    },
+    {
+      "tier": 3,
       "integrity": "sha256-y7wBMHEQuWcVQoTmJHdJ36QpZn4rdzebxxYGMlJNYlI=",
       "manifest": {
         "v": 1,

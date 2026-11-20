@@ -2,6 +2,7 @@ import { useEffect } from 'preact/hooks';
 import { onNative } from '../bridge/native';
 import { layoutHidden } from '../plugins/frontend';
 import { resumeAfterUpdate, startAutoWebUpdate } from '../state/autoUpdate';
+import { ChapterBar } from './lore/pick';
 import { conn, current, currentId, draft, drawerOpen, handleBack, isMobile, newChat, openSession, pages, prefs, protoEngine, refreshFollow, setPref, toast, webUpdateReady } from '../state/store';
 import { MobileApp } from './mobile/MobileApp';
 import { Chat } from './Chat';
@@ -147,6 +148,7 @@ export function App() {
             </button>
           </div>
           <Header />
+          {!welcome && <ChapterBar />}
           <div class="content" id="content">
             {welcome ? <h1 class="greeting">今天有什么可以帮到你？</h1> : <Chat />}
           </div>

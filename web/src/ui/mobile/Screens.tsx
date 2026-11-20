@@ -1,6 +1,8 @@
 // Phone layout: full-screen pages (设置 and its sub-pages, 搜索, 账号管理),
 // grouped cards with icons and chevrons like a native settings app.
 
+import { hasLore, refreshWorks } from '../../lore/api';
+import { worksValue } from '../pages/lore';
 import { importHistory, openImportedPage } from '../../history/ui';
 import { exportConversations, exportFileName } from '../../history/export';
 import { ACCOUNT_SIGN_IN, accountView, balance, cancelSignIn, canSignIn, CURRENCY, isActive, money, PHASE_TEXT, profile, refreshAccountDetails, reopenBrowser, signIn, signOut, type Wallet } from '../../account/account';
@@ -156,6 +158,16 @@ function Group({ title, children, note }: { title?: string; children: ComponentC
   );
 }
 
+/** 写作: 设定集 (dsmo-lore), apart from 陪伴; its value is the works as last read. */
+function WritingGroup() {
+  useEffect(() => void refreshWorks().catch(() => {}), []);
+  return (
+    <Group title="写作">
+      <Row icon="book" label="设定集" value={worksValue()} onClick={() => toPage('lore')} />
+    </Group>
+  );
+}
+
 function Row({ icon, label, value, onClick, danger, chevron = true, right }: { icon?: MIconName; label: string; value?: string; onClick?: () => void; danger?: boolean; chevron?: boolean; right?: ComponentChildren }) {
   const inner = (
     <>
@@ -283,6 +295,7 @@ function SettingsHome() {
         <Row icon="bell" label="通知" onClick={() => toPage('notify-settings')} />
         <Row icon="shield" label="系统权限" onClick={() => toPage('access')} />
       </Group>
+      {hasLore() && <WritingGroup />}
       {installed.value.some((x) => (x.id === '@api-demo/persona-library' || x.id === '@api-demo/memory-share' || x.id === '@api-demo/maidsh-core') && x.enabled) && (
         <Group title="陪伴">
           {installed.value.some((x) => x.id === '@api-demo/maidsh-core' && x.enabled) && <Row icon="heart" label="TA 的状态" onClick={() => toPage('companion')} />}

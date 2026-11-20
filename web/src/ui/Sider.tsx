@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { hasLore } from '../lore/api';
+import { chooseWork, conversationLabel, loreReady } from './lore/pick';
 import { conn, errText, forkConversation, sessionsLive, showToast } from '../state/store';
 import { hasModule } from '../maidsh/api';
 import { learnConversation } from './pages/companion';
@@ -226,7 +228,9 @@ export function closeMenu() {
   menuEl?.remove();
   menuEl = null;
 }
-function openMenu(btn: HTMLElement, s: SessionSummary) {
+function openMenu(btn: HTMLElement, s: SessionSummary, ready = false) {
+  // 设定集's line names this conversation's work: read it first (briefly) when not known yet
+  if (!ready && hasLore()) return void loreReady(s.sessionId).then(() => openMenu(btn, s, true));
   closeMenu();
   const r = btn.getBoundingClientRect();
   const el = document.createElement('div');
@@ -247,6 +251,7 @@ function openMenu(btn: HTMLElement, s: SessionSummary) {
   };
   opt('IconEditOutline16', '重命名', false, () => (renaming.value = s.sessionId));
   opt({ svg: M.fork }, '分叉到新对话', false, () => void forkConversation(s.sessionId));
+  if (hasLore()) opt({ svg: M.book }, conversationLabel(s.sessionId), false, () => chooseWork({ kind: 'conversation', sessionId: s.sessionId }));
   if (hasModule('core')) opt({ svg: M.sparkle }, '让 TA 深度学习这段对话', false, () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))));
   if (hasModule('core')) opt({ svg: M.sparkle }, isScopeOff(s.sessionId) ? '在这段对话里打开陪伴' : '在这段对话里关掉陪伴', false, () => void toggleScope(s.sessionId));
   opt('IconTrashOutline16', '删除', true, () =>

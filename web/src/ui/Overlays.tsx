@@ -151,6 +151,20 @@ function OverlayBody({ o }: { o: Overlay }) {
           </div>
         </div>
       );
+    case 'sheet':
+      if (isMobile.value)
+        return (
+          <div class="m-bsheet" role="dialog" aria-modal="true" aria-label={o.title}>
+            <div class="m-bsheet-t">{o.title}</div>
+            <div class="m-bsheet-b">{o.body()}</div>
+          </div>
+        );
+      return (
+        <Panel label={o.title} cls="form sheet">
+          <Head title={o.title} />
+          <div class="p-scroll">{o.body()}</div>
+        </Panel>
+      );
     case 'text':
       return (
         <Panel label={o.title} cls="form">

@@ -296,3 +296,10 @@ body.is-m .ver-nav { color: var(--m-sub); font-size: 14px; }
 .ver-nav svg { width: 16px; height: 16px; }
 .u-ver { display: flex; justify-content: flex-end; margin-top: 4px; }
 .a-actions .m-ic svg { width: 16px; height: 16px; }
+
+/* A sheet of choices (Overlay kind 'sheet'): rises from the bottom */
+body.is-m .overlay[data-kind="sheet"] { align-items: flex-end; }
+.m-bsheet { position: relative; width: 100%; max-height: 82vh; overflow-y: auto; padding: 8px 0 calc(16px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; background: var(--m-pop); transform: translateY(100%); transition: transform .26s cubic-bezier(.2, .8, .2, 1); }
+.overlay.open .m-bsheet { transform: none; }
+.m-bsheet::before { content: ""; display: block; width: 36px; height: 4px; margin: 0 auto 10px; border-radius: 2px; background: var(--m-line); }
+.m-bsheet-t { padding: 0 20px 8px; color: var(--m-sub); font-size: 13px; }

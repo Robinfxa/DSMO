@@ -185,6 +185,13 @@ export class MockHost {
   baselineItems() {
     return this.workspaces;
   }
+  /** A conversation made in a workspace belongs to it (DSH: the workspace lists its sessionIds). */
+  addSession(workspaceId: string, sessionId: string) {
+    const w = this.workspaces.find((x) => x.workspaceId === workspaceId);
+    if (!w || w.sessionIds.includes(sessionId)) return;
+    w.sessionIds.push(sessionId);
+    this.pushWs({ type: 'upsert', workspace: w });
+  }
   private pushWs(value: unknown) {
     for (const d of this.wsWatchers) d(value);
   }
