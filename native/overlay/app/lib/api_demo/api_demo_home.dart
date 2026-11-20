@@ -32,6 +32,7 @@ import '../ui/web/dsh_web_launcher.dart';
 import '../ui/web/web_home.dart' show WebEntryHost;
 import '../ui/web/web_target.dart';
 import 'bridge.dart';
+import 'display_rescue.dart';
 import 'proxy.dart';
 import 'web_update.dart';
 
@@ -66,22 +67,90 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
   /// its first frames (DSMO's fade-in stuck part-way; dsh-Go issue 1587's white screen). Decided once.
   bool? _hybrid;
 
-  static Future<bool> _needsHybrid() async {
-    if (!Platform.isAndroid) return false;
-    try {
-      final info = await const MethodChannel('dsh/diagnostics').invokeMapMethod<String, Object?>('info');
-      final d = info?['device'];
-      final m = d is Map ? d : const {};
-      final maker = '${m['manufacturer'] ?? ''} ${m['brand'] ?? ''}'.toLowerCase();
-      final sdk = m['sdkInt'] is int ? m['sdkInt'] as int : 99;
-      final hybrid = maker.contains('huawei') || maker.contains('honor') || sdk <= 29;
-      debugPrint('dsmo-webview device="$maker" sdk=$sdk hybrid=$hybrid');
-      return hybrid;
-    } catch (e) {
-      debugPrint('dsmo-webview device info failed: $e');
-      return false;
-    }
+  /// The display mode the person picked in the rescue panel (display_rescue.dart); auto by default.
+  WebDisplay _display = WebDisplay.auto;
+
+  /// Huawei / Honor or Android 10 and lower: the phones whose WebView has shown a white or frozen page.
+  bool _risky = false;
+  String _device = '读不到';
+  String? _ua;
+
+  /// The page's recent errors (console and load errors), for the rescue panel.
+  final _pageLog = <String>[];
+  bool _rescue = false;
+  bool _chip = false;
+  Timer? _rescueTimer;
+  Timer? _chipTimer;
+
+  void _logPage(String line) {
+    _pageLog.add(line.length > 300 ? '${line.substring(0, 300)}…' : line);
+    if (_pageLog.length > 20) _pageLog.removeAt(0);
   }
+
+  Future<bool> _decideHybrid() async {
+    _display = await WebDisplayPrefs.load();
+    var risky = false;
+    if (Platform.isAndroid) {
+      try {
+        final info = await const MethodChannel('dsh/diagnostics').invokeMapMethod<String, Object?>('info');
+        final d = info?['device'];
+        final m = d is Map ? d : const {};
+        final maker = '${m['manufacturer'] ?? ''} ${m['brand'] ?? ''}'.toLowerCase();
+        final sdk = m['sdkInt'] is int ? m['sdkInt'] as int : 99;
+        risky = maker.contains('huawei') || maker.contains('honor') || sdk <= 29;
+        _device = '${m['manufacturer'] ?? ''} ${m['model'] ?? ''} · Android ${m['android'] ?? '?'}（SDK $sdk）';
+      } catch (e) {
+        debugPrint('dsmo-webview device info failed: $e');
+      }
+    }
+    _risky = risky;
+    final hybrid = switch (_display) { WebDisplay.texture => false, WebDisplay.hybrid => true, WebDisplay.auto => risky };
+    debugPrint('dsmo-webview device="$_device" risky=$risky display=${_display.name} hybrid=$hybrid');
+    return hybrid;
+  }
+
+  /// After a load: if the page never talks to the bridge, open the rescue panel; on the risky phones,
+  /// offer it for a while (a page that runs but isn't drawn can't say so itself).
+  void _armRescue(ApiDemoBridge bridge) {
+    _rescueTimer?.cancel();
+    _chipTimer?.cancel();
+    _rescueTimer = Timer(const Duration(seconds: 25), () {
+      if (!mounted || !identical(_bridge, bridge) || _alive) return;
+      setState(() => _rescue = true);
+    });
+    if (!_risky) return;
+    unawaited(WebDisplayPrefs.confirmed().then((ok) {
+      if (ok || !mounted || !identical(_bridge, bridge)) return;
+      setState(() => _chip = true);
+      _chipTimer = Timer(const Duration(seconds: 30), () {
+        if (mounted) setState(() => _chip = false);
+      });
+    }));
+  }
+
+  Future<void> _switchDisplay() async {
+    final next = (_hybrid ?? false) ? WebDisplay.texture : WebDisplay.hybrid;
+    await WebDisplayPrefs.save(next);
+    if (!mounted) return;
+    // A new controller and widget in the other mode (the build reopens the page when the key is gone).
+    setState(() {
+      _display = next;
+      _hybrid = next == WebDisplay.hybrid;
+      _rescue = false;
+      _chip = false;
+      _key = null;
+    });
+  }
+
+  DisplayDiagnostics _diagnostics() => DisplayDiagnostics(
+        mode: _display,
+        hybrid: _hybrid ?? false,
+        alive: _alive,
+        device: _device,
+        ua: _ua,
+        log: List.of(_pageLog),
+        page: _web == null ? '安装包里的页面' : '下载的页面 ${_web!.version}',
+      );
   Timer? _aliveTimer;
 
   /// Events for a page that is still loading (a host switch reloads it).
@@ -165,6 +234,8 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
       off();
     }
     _aliveTimer?.cancel();
+    _rescueTimer?.cancel();
+    _chipTimer?.cancel();
     _bridge?.dispose();
     unawaited(_proxy?.close());
     super.dispose();
@@ -237,6 +308,7 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
       await controller.setOnConsoleMessage((m) {
         if (m.level == JavaScriptLogLevel.error || m.level == JavaScriptLogLevel.warning) {
           debugPrint('dsmo-page ${m.level.name}: ${m.message}');
+          if (m.level == JavaScriptLogLevel.error) _logPage(m.message);
         }
       });
       await controller.addJavaScriptChannel('ApiDemoNative', onMessageReceived: (m) => unawaited(bridge.handle(m.message)));
@@ -254,6 +326,7 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
           onWebResourceError: (error) {
             // No URL here: the first one carries the proxy's per-launch secret.
             debugPrint('dsmo-page load error ${error.errorCode} ${error.errorType?.name} mainFrame=${error.isForMainFrame}: ${error.description}');
+            _logPage('加载失败 ${error.errorCode}：${error.description}');
             if ((error.isForMainFrame ?? false) && mounted && identical(_bridge, bridge)) {
               setState(() => _error = '${error.description}（${error.errorCode}）');
             }
@@ -276,13 +349,16 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
         ),
       );
       _watchStart(bridge);
-      _hybrid ??= await _needsHybrid();
+      _hybrid ??= await _decideHybrid();
+      _pageLog.clear();
       await controller.loadRequest(proxy.entry);
       if (mounted && _key == key) setState(() => _controller = controller);
+      _armRescue(bridge);
       // Which WebView this phone has (a white or frozen page is usually its version): into logcat.
       unawaited(Future<void>.delayed(const Duration(seconds: 3), () async {
         try {
           final ua = await controller.runJavaScriptReturningResult('navigator.userAgent');
+          _ua = '$ua'.replaceAll('"', '');
           debugPrint('dsmo-webview ua=$ua');
         } catch (_) {}
       }));
@@ -390,7 +466,7 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
     if (_error != null) return _Notice(title: '页面没能打开', message: _error!, action: ('重试', () => setState(() => _key = null)));
     if (c == null) return const ColoredBox(color: Colors.transparent, child: Center(child: CircularProgressIndicator.adaptive()));
     // The Scaffold shrinks the page by the keyboard's height, so the composer stays above it.
-    return Scaffold(
+    final page = Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
@@ -401,6 +477,33 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
             : WebViewWidget(controller: c),
       ),
     );
+    // Drawn by Flutter on top of the page: visible even when the WebView shows nothing.
+    void hide() => setState(() {
+          _rescue = false;
+          _chip = false;
+        });
+    return Stack(fit: StackFit.expand, children: [
+      page,
+      if (_chip && !_rescue) RescueChip(onTap: () => setState(() => _rescue = true)),
+      if (_rescue)
+        RescuePanel(
+          info: _diagnostics(),
+          onSwitch: () => unawaited(_switchDisplay()),
+          onReload: () {
+            hide();
+            final bridge = _bridge;
+            if (bridge == null) return;
+            _pageLog.clear();
+            unawaited(bridge.controller.reload());
+            _armRescue(bridge);
+          },
+          onClose: hide,
+          onFine: () {
+            hide();
+            unawaited(WebDisplayPrefs.confirm());
+          },
+        ),
+    ]);
   }
 
   /// Until the engine pages are rebuilt in the bundled page (docs/native-pages.md), these open dsh-Go's.
