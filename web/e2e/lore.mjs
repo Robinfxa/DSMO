@@ -7,7 +7,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import os from 'node:os';
 import { startMaidshHost } from './maidsh-host.mjs';
@@ -98,10 +98,12 @@ const api = async (p, body) =>
   (await fetch(new URL(`/api/dsmo-lore${p}`, host.url), body ? { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body) } : {})).json();
 
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
-const seed = (list) => localStorage.setItem('api-demo:plugins', JSON.stringify(list.map((id) => ({ id, enabled: true, version: '1.0.0', setupDone: true }))));
+// installed at the market's current version (an older one would make the page ask for an update first)
+const LORE_VERSION = JSON.parse(readFileSync(join(here, '..', '..', 'market', 'plugins', 'dsmo-lore.json'), 'utf8')).version;
+const seed = ({ list, version }) => localStorage.setItem('api-demo:plugins', JSON.stringify(list.map((id) => ({ id, enabled: true, version, setupDone: true }))));
 const phone = async (installed, { width = 390 } = {}) => {
   const ctx = await browser.newContext({ viewport: { width, height: 820 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, colorScheme: scheme });
-  await ctx.addInitScript(seed, installed);
+  await ctx.addInitScript(seed, { list: installed, version: LORE_VERSION });
   await ctx.addInitScript(() => localStorage.setItem('api-demo:prefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('api-demo:prefs') || '{}'), advanced: true })));
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
