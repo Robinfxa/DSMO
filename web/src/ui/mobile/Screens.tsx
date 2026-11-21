@@ -15,8 +15,11 @@ import { canSpeak, native } from '../../bridge/native';
 import { findPlugin, installed } from '../../plugins/frontend';
 import { background, backgroundPlugin } from '../../plugins/background';
 import {
+  catalog,
   clearApiKey,
   confirm,
+  currentId,
+  openPage,
   credential,
   deleteAll,
   errText,
@@ -38,6 +41,7 @@ import {
   webUpdateReady,
 } from '../../state/store';
 import { Protected } from '../Protected';
+import { inUse, readProviderStatus, type ProviderStatus } from '../../engine/providers';
 import { REGIONS } from '../regions';
 import { openFeature } from '../pages/registry';
 import { MIc } from './MobileApp';
@@ -362,8 +366,9 @@ function Account() {
   };
   return (
     <>
+      <ProviderGroup />
       <DeepSeekAccount />
-      <Group title="API Key">
+      <Group title="DeepSeek API Key">
         <Row icon="person" label="当前状态" value={acc?.configured ? (acc.source === 'env' ? '已设置 · 启动环境提供' : '已设置') : '未设置'} />
       </Group>
       <div class="m-group">
@@ -390,6 +395,50 @@ function Account() {
         </Protected>
       </div>
     </>
+  );
+}
+
+/** 模型提供方: what this conversation (or a new one) uses, and how each provider stands — DeepSeek and the ones added by hand. */
+function ProviderGroup() {
+  const [list, setList] = useState<ProviderStatus[] | null>(null);
+  const [err, setErr] = useState('');
+  const signed = accountView.value?.signedIn;
+  const keyed = credential.value?.configured;
+  const cat = catalog.value;
+  useEffect(() => {
+    let live = true;
+    readProviderStatus().then(
+      (x) => live && (setList(x), setErr('')),
+      (e) => live && setErr(errText(e)),
+    );
+    return () => void (live = false);
+  }, [signed, keyed, cat]);
+  const use = inUse();
+  return (
+    <Group title="模型提供方" note="用哪个模型在输入框下方的模型按钮里换；新对话默认在「设置 › 模型」。">
+      {use && <Row icon="model" label={currentId.value ? '正在用' : '新对话用'} value={`${use.name} · ${use.model}`} chevron={false} />}
+      {err ? (
+        <Row label="读不到提供方" value={err.length > 24 ? '引擎没有回应' : err} chevron={false} />
+      ) : !list ? (
+        <Row label="正在读取…" chevron={false} />
+      ) : (
+        list.map((p) => (
+          <Row
+            key={p.id}
+            label={p.name}
+            value={p.status}
+            right={
+              <>
+                <span class={`m-prov-dot ${p.ok ? 'dot-ok' : 'dot-warn'}`} aria-label={p.ok ? '可用' : '不可用'} />
+                {p.own && <MIc n="chevron" />}
+              </>
+            }
+            onClick={p.own ? () => ((screens.value = []), openPage(`provider:${p.id}`)) : undefined}
+          />
+        ))
+      )}
+      <Row label="管理模型提供方" onClick={() => toPage('providers')} />
+    </Group>
   );
 }
 

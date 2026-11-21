@@ -320,8 +320,15 @@ export async function boot() {
     (ids) => (archived.value = new Set(ids)),
   );
   void loadAccount();
-  void client.modelCatalog().then((c) => (catalog.value = c)).catch(() => {});
+  void refreshCatalog();
 }
+
+/** Re-reads the model catalog (after a provider is added or removed). */
+export const refreshCatalog = () =>
+  getClient()
+    .modelCatalog()
+    .then((c) => (catalog.value = c))
+    .catch(() => {});
 
 function approvalTitle(r: ApprovalRequest) {
   return sessions.value.find((s) => s.sessionId === r.sessionId)?.title ?? r.toolName;

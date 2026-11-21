@@ -4,7 +4,8 @@
 // a credential reference (`apiKeyEnv`) and the key itself goes to `credentials/set`; models are
 // `{ id, name?, contextWindow?, maxTokens?, input? }` objects, at least one.
 
-import { getClient } from '../state/store';
+import { catalog, credential, currentSelection, getClient, refreshCatalog } from '../state/store';
+import { accountView } from '../account/account';
 
 /** Settings namespace (Loader entry id) of the pi-ai adapter. */
 export const PI_AI_NS = 'llm-pi-ai';
@@ -185,10 +186,69 @@ export async function createProvider(d: { name: string; api: ProviderApi; baseUr
       throw new Error(`提供方已添加，但密钥没存上：${(e as Error)?.message ?? e}。到它的详情页重新填一次密钥。`);
     }
   }
+  void refreshCatalog();
   return id;
 }
 
 export async function removeProvider(route: string) {
   const { revision } = await readSection();
   await getClient().mutateSettings(PI_AI_NS, [{ op: 'unset', path: ['providers', route] }], revision);
+  void refreshCatalog();
+}
+
+// ------------------------------------------------------------------ 账号管理 › 模型提供方
+
+export interface ProviderStatus {
+  id: string;
+  name: string;
+  /** A route added under 模型提供方 (it has a detail page). */
+  own: boolean;
+  ok: boolean;
+  /** 「账号已登录」「密钥已设置 · 3 个模型」「没有密钥」, or the Host's complaint. */
+  status: string;
+}
+
+/** The provider and model in use now: this conversation's, or new chats' default. */
+export function inUse(): { provider: string; name: string; model: string } | null {
+  const sel = currentSelection();
+  if (!sel) return null;
+  const g = catalog.value?.groups.find((x) => x.id === sel.provider);
+  const m = g?.models.find((x) => x.id === sel.model);
+  return { provider: sel.provider, name: g?.name ?? sel.provider, model: m?.name ?? sel.model };
+}
+
+const DEEPSEEK = 'deepseek-official';
+
+/** DeepSeek, the routes added here, and any other provider the catalog can route to, with how each stands. */
+export async function readProviderStatus(): Promise<ProviderStatus[]> {
+  const c = getClient();
+  const [entries, d] = await Promise.all([c.listConfigurableProviders(), c.describeSettings().catch(() => ({ namespaces: [] as unknown[] }))]);
+  const ns = (Array.isArray(d.namespaces) ? d.namespaces : []).map((x) => (x && typeof x === 'object' ? (x as Record<string, unknown>) : {})).find((x) => isPiAiNs(x.ns));
+  const routes = ((ns?.value as Record<string, unknown> | undefined)?.providers ?? {}) as Record<string, Record<string, unknown>>;
+  const refs = Object.values(routes).map((r) => r?.apiKeyEnv).filter((x): x is string => typeof x === 'string');
+  const creds = refs.length ? await c.describeCredentials(refs).catch(() => ({}) as Record<string, { configured: boolean }>) : {};
+  const groups = catalog.value?.groups ?? [];
+  const count = (id: string) => groups.find((g) => g.id === id)?.models.length ?? 0;
+  const out: ProviderStatus[] = [];
+  for (const e of entries) {
+    const id = String(e.provider ?? '');
+    if (!id) continue;
+    const name = (typeof e.displayName === 'string' && e.displayName) || id;
+    const err = typeof e.error === 'string' && e.error ? e.error : null;
+    const own = isPiAiNs(e.settingsNs) && Array.isArray(e.settingsPath) && e.settingsPath.length > 0;
+    if (id === DEEPSEEK) {
+      const signed = !!accountView.value?.signedIn;
+      const key = !!credential.value?.configured;
+      out.unshift({ id, name, own: false, ok: signed || key, status: err ?? (signed ? '账号已登录' : key ? 'API Key 已设置' : '未登录') });
+    } else if (own) {
+      const r = routes[id] ?? {};
+      const ref = typeof r.apiKeyEnv === 'string' ? r.apiKeyEnv : '';
+      const hasKey = !!ref && !!(creds as Record<string, { configured: boolean }>)[ref]?.configured;
+      const n = count(id) || (Array.isArray(r.models) ? r.models.length : 0);
+      out.push({ id, name, own: true, ok: !err && hasKey, status: err ?? (hasKey ? `密钥已设置 · ${n} 个模型` : '没有密钥') });
+    } else if (groups.some((g) => g.id === id) || err) {
+      out.push({ id, name, own: false, ok: !err, status: err ?? `可用 · ${count(id)} 个模型` });
+    }
+  }
+  return out;
 }

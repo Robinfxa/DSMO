@@ -699,8 +699,16 @@ export class MockEngine {
         const events = s.log.filter((e) => e.seq < before).slice(-200);
         return { records: events.map((event) => ({ type: 'event', event })), hasMore: (events[0]?.seq ?? 0) > 0 };
       }
-      case 'session/modelCatalog':
-        return MODEL_CATALOG;
+      case 'session/modelCatalog': {
+        // routes added under 模型提供方 join the catalog, like the real adapter registers them
+        const routes = this.host.piAiRoutes();
+        const own = Object.entries(routes).map(([id, v]) => ({
+          id,
+          name: str(obj(v).displayName) ?? id,
+          models: list(obj(v).models).map((m) => ({ id: str(obj(m).id) ?? '', name: str(obj(m).name) ?? str(obj(m).id) ?? '' })),
+        }));
+        return { ...MODEL_CATALOG, routableProviders: [...MODEL_CATALOG.routableProviders, ...own.map((g) => g.id)], groups: [...MODEL_CATALOG.groups, ...own] };
+      }
       case 'session/selectModel': {
         const s = this.need(req.sessionId);
         s.model = { provider: str(req.provider) ?? s.model.provider, model: str(req.model) ?? s.model.model, reasoningEffort: str(req.reasoningEffort) ?? s.model.reasoningEffort };

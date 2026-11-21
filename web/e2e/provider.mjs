@@ -91,7 +91,42 @@ check(prof.displayName === '芯云' && prof.api === 'openai-completions' && prof
 check(prof.apiKeyEnv === 'CUSTOM_XINYUNTOKEN_API_KEY' && !('apiKey' in prof) && st.creds.CUSTOM_XINYUNTOKEN_API_KEY === 'sk-xinyun-123', 'key stored as a credential, named by apiKeyEnv');
 check(JSON.stringify(prof.models.map((m) => m.id)) === JSON.stringify(['model-large', 'model-small', 'deepseek-v4']) && prof.models[0].name === 'Model Large' && prof.models[0].contextWindow === 131072, `models as objects: ${JSON.stringify(prof.models)}`);
 
+// 账号管理 shows the providers and which one is in use
+await page.click('[aria-label="返回"] >> nth=-1');
+await page.waitForTimeout(400);
+await page.click('[aria-label="打开边栏"]', { timeout: 1500 }).catch(() => {});
+await page.waitForTimeout(300);
+await page.click('.m-me [aria-label="设置"]');
+await page.waitForTimeout(400);
+await page.click('.m-row:has-text("账号管理")');
+await page.waitForTimeout(800);
+const rowText = async (label) => (await page.textContent(`.m-row:has(.m-row-t:text-is("${label}"))`).catch(() => '')) ?? '';
+check((await rowText('新对话用')).includes('DeepSeek · V4 Pro'), `in use: ${await rowText('新对话用')}`);
+check((await rowText('芯云')).includes('密钥已设置 · 3 个模型') && (await page.isVisible('.m-row:has(.m-row-t:text-is("芯云")) .dot-ok')), `芯云: ${await rowText('芯云')}`);
+check((await rowText('DeepSeek')).length > 0, `DeepSeek: ${await rowText('DeepSeek')}`);
+await shot('5-account');
+await page.click('.m-row:has(.m-row-t:text-is("芯云"))');
+await page.waitForTimeout(600);
+check(await page.evaluate(() => [...document.querySelectorAll('.pg-body input')].some((i) => i.value === 'https://xinyuntoken.com/v1')), '芯云 opens its detail page');
+await page.click('[aria-label="返回"] >> nth=-1');
+await page.waitForTimeout(400);
+// the catalog has it now: pick one of its models in the picker, and 账号管理 says so
+const picked = await page.evaluate(async () => {
+  const c = await window.__mockEngine.rpc.call('session/modelCatalog', {});
+  return c.groups.find((g) => g.id === 'custom-xinyuntoken')?.models.map((m) => m.id).join();
+});
+check(picked === 'model-large,model-small,deepseek-v4', `the model catalog lists 芯云's models: ${picked}`);
+await page.goto('about:blank');
+await page.goto(`${base}#plain`);
+await page.waitForTimeout(1200);
+
 // a bad address says why instead of doing nothing
+await page.click('[aria-label="打开边栏"]');
+await page.waitForTimeout(300);
+await page.click('.m-me [aria-label="设置"]');
+await page.waitForTimeout(300);
+await page.click('.m-row:has-text("模型提供方")');
+await page.waitForTimeout(500);
 await page.click('.plg-link:has-text("添加提供方")');
 await page.waitForTimeout(400);
 await page.fill('input[placeholder="https://api.example.com/v1"]', 'xinyuntoken.com');

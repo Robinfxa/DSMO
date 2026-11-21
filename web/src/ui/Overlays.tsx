@@ -37,6 +37,7 @@ import {
   archived,
   errText,
 } from '../state/store';
+import { inUse, readProviderStatus, type ProviderStatus } from '../engine/providers';
 import { Ic, Select, Switch, useAsync } from './common';
 import { Protected } from './Protected';
 import { REGIONS } from './regions';
@@ -373,6 +374,7 @@ function Settings({ tab: initial }: { tab?: 'general' | 'data' }) {
                   </button>
                 )}
               </div>
+              <ProviderCell />
               {pluginCssSuspended.value && (
                 <div class="note warn">有插件的样式遮住了授权卡或登录框，已暂停所有插件样式。到「插件」里停用或移除它后再打开。</div>
               )}
@@ -695,6 +697,37 @@ function InputDialog({ o }: { o: { title: string; value: string; placeholder?: s
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 设置 › 账号: which provider is in use, and whether the others are ready (the phone's 账号管理 has the full list). */
+function ProviderCell() {
+  const [list, setList] = useState<ProviderStatus[] | null>(null);
+  const cat = catalog.value;
+  const keyed = credential.value?.configured;
+  useEffect(() => {
+    let live = true;
+    readProviderStatus().then(
+      (x) => live && setList(x),
+      () => live && setList([]),
+    );
+    return () => void (live = false);
+  }, [cat, keyed]);
+  const use = inUse();
+  const bad = (list ?? []).filter((p) => !p.ok);
+  return (
+    <div class="cell">
+      <div class="cell-text">
+        <div>模型提供方</div>
+        <div class="cell-desc">
+          {use ? `正在用 ${use.name} · ${use.model}` : '还没选模型'}
+          {bad.length > 0 && `；${bad.map((p) => `${p.name}：${p.status}`).join('；')}`}
+        </div>
+      </div>
+      <button class="btn" type="button" onClick={() => (closeOverlay(), openPage('providers'))}>
+        管理
+      </button>
     </div>
   );
 }

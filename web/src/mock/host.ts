@@ -170,6 +170,11 @@ export class MockHost {
     return () => void this.accountWatchers.delete(deliver);
   }
 
+  /** 模型提供方 routes as stored (the engine's model catalog lists them). */
+  piAiRoutes(): Record<string, unknown> {
+    return obj(this.settings.get('llm-pi-ai')?.value.providers);
+  }
+
   /** Where a credential is set (the Host never returns the value itself). */
   private secretSlots(_ns: string): { path: string[]; set: boolean }[] {
     // pi-ai routes name their key by reference (apiKeyEnv); the key itself is a credential
