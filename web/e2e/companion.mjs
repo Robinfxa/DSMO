@@ -212,13 +212,13 @@ check(await page.isVisible('.cp-tabs button[aria-selected="true"]:text-is("学�
 await shot('6-deep-learn');
 
 // TA stopped after being ignored: 让 TA 继续主动
-await page.route('**/api/maidsh-initiative/state', (r) =>
+await page.route('**/api/maidsh-initiative/state*', (r) =>
   r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, value: { enabled: true, today: 3, perDay: 3, nextAt: 0, followups: [{ at: Date.now() + 3600_000, reason: '面试' }], ignored: 3, stopped: true, quiet: '23:30–08:00' } }) }),
 );
 await tab('主动');
 t = await body();
 check(t.includes('TA 等你先开口') && t.includes('来问问你面试的事'), '主动: stopped, with a follow-up');
-await page.unroute('**/api/maidsh-initiative/state');
+await page.unroute('**/api/maidsh-initiative/state*');
 await page.click('.plg-btn.pri:text-is("让 TA 继续主动")');
 check(await toastIs('TA 会继续主动来找你'), '主动: resume');
 check(!(await body()).includes('TA 等你先开口'), '主动: no longer stopped');

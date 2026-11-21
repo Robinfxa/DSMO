@@ -11,6 +11,9 @@ It loads Playwright from `/opt/npm-tools/node_modules` and Chrome from
 cordis with a scripted model and serves `dist-proto` from the same origin. Run `npm install` in
 `maidsh/` once first (for cordis).
 
+`companion-persona.mjs` uses the same host plus a stand-in persona library: each 人设 gets its own
+陪伴 (the first one keeps what was there), and the 陪伴 page reads the one it shows.
+
 `lore.mjs` (设定集) uses the same host with `modules: ['lore']` (maidsh/lore). The prototype's
 workspaces are mirrored into the host's `workspaceRegistry` (`host.setWorkspaces`), read from
 `window.__mockEngine`. Files to import use ASCII names: the test browser's file chooser drops

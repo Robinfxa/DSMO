@@ -23,6 +23,8 @@ import {
   readJobs,
   readMemory,
   readOverview,
+  post as postApi,
+  shownProfile,
   type BondState,
   type Episode,
   type Expression,
@@ -37,8 +39,9 @@ import {
   type TextType,
   PLUGIN_ID,
 } from '../../maidsh/api';
+import { DEFAULT_PROFILE, currentPersona, linkLabel, pickedProfile, profileView, readProfiles, showProfile, syncPersonaProfile, useForPersona, type Profile } from '../../maidsh/profiles';
 import { hasUpdate, installed } from '../../plugins/frontend';
-import { confirm, currentId, errText, getTranscript, isMobile, openPage, pages, showToast } from '../../state/store';
+import { askText, backPage, closeOverlay, confirm, currentId, errText, getTranscript, isMobile, openOverlay, openPage, pages, showToast } from '../../state/store';
 import { Switch } from '../common';
 import { MIc } from '../mobile/MIc';
 
@@ -145,9 +148,18 @@ export function CompanionPage({ tab }: { tab?: Tab }) {
   useEffect(() => {
     if (tab) companionTab.value = tab;
   }, [tab]);
+  useEffect(() => {
+    // 人设可能在别处换过：先对一次，陪伴页就看当前人设的那份
+    if (!hasModule('core')) return;
+    void readProfiles()
+      .then(() => syncPersonaProfile())
+      .then((note) => note && showToast(note))
+      .catch(() => {});
+  }, []);
   const t = companionTab.value;
   return (
     <div class="plg cp">
+      <ProfileLine />
       <div class="plg-seg cp-tabs" role="tablist">
         {TABS.map((x) => (
           <button type="button" role="tab" key={x.id} aria-selected={t === x.id} onClick={() => (companionTab.value = x.id)}>
@@ -155,11 +167,118 @@ export function CompanionPage({ tab }: { tab?: Tab }) {
           </button>
         ))}
       </div>
-      {t === 'overview' && <OverviewTab />}
-      {t === 'memory' && <MemoryTab />}
-      {t === 'expression' && <ExpressionTab />}
-      {t === 'initiative' && <InitiativeTab />}
-      {t === 'learn' && <LearnTab />}
+      {/* 换了档案就整个重读 */}
+      <div key={shownProfile.value}>
+        {t === 'overview' && <OverviewTab />}
+        {t === 'memory' && <MemoryTab />}
+        {t === 'expression' && <ExpressionTab />}
+        {t === 'initiative' && <InitiativeTab />}
+        {t === 'learn' && <LearnTab />}
+      </div>
+    </div>
+  );
+}
+
+const PROFILES = '/api/maidsh/profiles';
+
+// ---------------------------------------------------------------- 档案（每个人设一份，maidsh/profiles.ts）
+
+/** 页顶：正在看谁的陪伴。只有一份、也没关联过人设时不显示。 */
+function ProfileLine() {
+  const v = profileView.value;
+  if (!v || (v.profiles.length < 2 && !v.profiles.some((p) => p.persona))) return null;
+  const p = v.profiles.find((x) => x.id === shownProfile.value);
+  if (!p) return null;
+  const other = shownProfile.value !== v.default;
+  return (
+    <div class="plg-group cp-prof">
+      <div class="plg-row" role="button" tabIndex={0} onClick={() => openPage('companion-profiles')}>
+        <div class="plg-row-m">
+          <div class="plg-row-t">
+            「{p.name}」的陪伴{other && <em class="tm-badge quiet">不是现在用的</em>}
+          </div>
+          <div class="plg-row-s">{other ? '只是在看：聊天时用的还是当前人设的那份' : `${linkLabel(p)} · 每个人设各有一份`}</div>
+        </div>
+        <MIc n="chevron" />
+      </div>
+    </div>
+  );
+}
+
+/** 陪伴 › 档案：每个人设各有一份陪伴；看、改名、给当前人设用、删除。 */
+export function CompanionProfilesPage() {
+  const [persona, setPersona] = useState<string | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void readProfiles().catch((e) => setError(e instanceof MaidshError && e.missing ? '「MaiDSH 总控」还没在引擎里运行，或者版本太老：更新后重启引擎再看' : errText(e)));
+    void currentPersona().then(setPersona);
+  }, []);
+  const v = profileView.value;
+  if (error) return <div class="plg-empty-line">{error}</div>;
+  if (!v) return <div class="plg-empty-line">正在读取…</div>;
+
+  const act = async (fn: () => Promise<unknown>, done: string) => {
+    try {
+      await fn();
+      await readProfiles();
+      showToast(done);
+    } catch (e) {
+      showToast(errText(e));
+    }
+  };
+  const post = (body: Record<string, unknown>) => postApi(PROFILES, body);
+  const menu = (p: Profile) => {
+    const item = (icon: Parameters<typeof MIc>[0]['n'], label: string, fn: () => void, danger = false) => (
+      <button class={`lo-opt ${danger ? 'danger' : ''}`} type="button" onClick={() => (closeOverlay(), fn())}>
+        <MIc n={icon} />
+        <span class="lo-opt-t">{label}</span>
+      </button>
+    );
+    const forNow = persona === undefined ? null : persona ? `「${persona}」` : '没开人设时';
+    openOverlay({
+      kind: 'sheet',
+      title: `「${p.name}」的陪伴`,
+      body: () => (
+        <div class="lo-pick">
+          {item('eye', '看这一份', () => (showProfile(p.id === v.default ? null : p.id), backPage()))}
+          {forNow && p.id !== v.default && item('check', `给${forNow}用`, () => void act(() => useForPersona(p.id, persona ?? null), `${forNow}现在用「${p.name}」这份陪伴`))}
+          {item('edit', '改名', () => askText('改名', p.name, (name) => void act(() => post({ action: 'rename', id: p.id, name }), '已改名')))}
+          {p.id !== DEFAULT_PROFILE &&
+            item(
+              'trash',
+              '删除这一份',
+              () =>
+                confirm(
+                  `删除「${p.name}」的陪伴？`,
+                  `这一份的记忆、心情、关系、学会的说法和主动的安排都会删掉，不能恢复。${p.persona ? '这个人设下次用时从头开始。' : ''}`,
+                  '删除',
+                  () => void act(() => post({ action: 'delete', id: p.id }).then(() => pickedProfile.value === p.id && showProfile(null)), '已删除'),
+                ),
+              true,
+            )}
+        </div>
+      ),
+    });
+  };
+
+  return (
+    <div class="plg">
+      <p class="plg-note">每个人设各有一份陪伴：记忆、心情、关系、学会的说法和主动的安排都分开。换人设时自动换成那个人设的一份，没开人设时也有单独的一份。</p>
+      <div class="plg-group">
+        {v.profiles.map((p) => (
+          <div class="plg-row" role="button" tabIndex={0} key={p.id} onClick={() => menu(p)}>
+            <div class="plg-row-m">
+              <div class="plg-row-t">
+                {p.name}
+                {p.id === v.default && <em class="tm-badge">现在用的</em>}
+                {p.id === shownProfile.value && p.id !== v.default && <em class="tm-badge quiet">正在看</em>}
+              </div>
+              <div class="plg-row-s">{linkLabel(p)}</div>
+            </div>
+            <MIc n="more" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -482,8 +482,9 @@ export function applyConsolidation(mem, text, taken) {
 // ---------- 交给总控的分析 ----------
 
 export const MEMORY_INSTRUCTIONS =
-  'facts：关于对方本人、以后用得上的事，≤3 条，第三人称 ≤40 字；quote 必须是对方这轮的原话，AI 说的不算，没原话不记；' +
-  'cat：identity 身份/relation 你们的关系设定/stable 稳定事实/pref 喜好雷点/recent 近况/uncertain 拿不准；更正旧说法时 supersedes 填旧说法。' +
+  'facts：现实里对方本人的、以后用得上的事，≤3 条，第三人称 ≤40 字；quote 须是对方这轮的原话，AI 说的不算，没原话不记；' +
+  '扮演里对方的动作、台词都不算，拿不准就不记。' +
+  'cat：identity 身份/relation 关系设定/stable 稳定事实/pref 喜好雷点/recent 近况/uncertain 拿不准；更正旧说法时 supersedes 填旧说法。' +
   'event：这轮你们之间值得记住的经历，没有就省略，扮演里发生的 story=true。日期写绝对日期。cue：这轮聊了什么、气氛如何。forget：对方要求忘掉的。' +
   '寒暄不记；密码、证件号、银行卡、门牌永不记。';
 
@@ -554,7 +555,7 @@ const BY_TYPE = {
   aboutme: `这是对方写的自我介绍。facts：关于对方的事实（最多 8 条），cat 选 identity / stable / pref / relation / recent；不需要 quote。episodes：介绍里提到的对方的重要经历（最多 3 段）。${COMMON}`,
   backstory: `这是你们的关系设定和过往。facts：你们关系的设定（cat 用 relation）和关于对方的事实（最多 8 条）；不需要 quote。episodes：你们之间发生过的事（最多 5 段），按时间写清楚；是虚构的就 story=true。${COMMON}`,
   story: `这是你们一起写的故事 / 剧情。facts：故事世界的设定（cat 一律用 world，最多 8 条），不要当成对方本人的事。episodes：故事里你们之间发生的事（最多 5 段），story=true。${COMMON}`,
-  chatlog: `这是你们的聊天记录，【对方】是用户，【TA】是 AI。facts：关于对方本人、以后用得上的事（最多 8 条），quote 必须是【对方】的原话，AI 说的不算；更正过的只写最终状态。episodes：你们之间值得记住的经历（最多 5 段），日期按材料里的日期换算；扮演里发生的 story=true。${COMMON}`,
+  chatlog: `这是你们的聊天记录，【对方】是用户，【TA】是 AI。facts：关于对方本人、以后用得上的事（最多 8 条），quote 必须是【对方】的原话，AI 说的不算；扮演里对方的动作和台词不算对方本人的事；更正过的只写最终状态。episodes：你们之间值得记住的经历（最多 5 段），日期按材料里的日期换算；扮演里发生的 story=true。${COMMON}`,
 };
 BY_TYPE.session = BY_TYPE.chatlog;
 export const memoryBatchInstructions = (textType) => BY_TYPE[textType] ?? '';

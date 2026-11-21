@@ -6,6 +6,7 @@ import { botSessions } from '../plugins/conflicts';
 import { errText, showToast } from '../state/store';
 import { hasUpdate, installed } from '../plugins/frontend';
 import { MaidshError, PLUGIN_ID, get, hasModule, post } from './api';
+import { syncPersonaProfile } from './profiles';
 
 const SCOPE = '/api/maidsh/scope';
 
@@ -65,6 +66,7 @@ export function watchMaidshScope() {
     if (!readOnce) {
       readOnce = true;
       void refreshScope();
+      followPersonaQuietly();
     }
     const ids = botSessions();
     const key = [...ids].sort().join('\n');
@@ -75,6 +77,21 @@ export function watchMaidshScope() {
     });
   });
 }
+
+/** 人设可能在别处换过（DSH 网页版、另一台设备）：开 App 和回到前台时对一次，换了才说一句。 */
+let followBusy = false;
+function followPersonaQuietly() {
+  if (followBusy) return;
+  followBusy = true;
+  void syncPersonaProfile()
+    .then((note) => note && showToast(note))
+    .catch(() => {})
+    .finally(() => (followBusy = false));
+}
+if (typeof document !== 'undefined')
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && hasModule('core')) followPersonaQuietly();
+  });
 
 /** 菜单里的开关：切换后提示一句做了什么。 */
 export async function toggleScope(sessionId: string) {

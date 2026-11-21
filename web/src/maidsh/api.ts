@@ -6,6 +6,7 @@
 // 404: that plugin isn't running in the engine (not installed, or installed and the engine not
 // restarted). 401 / 403: not this device's engine, or no longer signed in — treated as unreachable.
 
+import { signal } from '@preact/signals';
 import { installed } from '../plugins/frontend';
 
 export type Module = 'core' | 'mood' | 'bond' | 'memory' | 'expression' | 'initiative';
@@ -34,6 +35,14 @@ export class MaidshError extends Error {
     return this.status === 404;
   }
 }
+
+/**
+ * Which 档案 (CONTRACT §13) the 陪伴 page reads and writes: the one the current 人设 uses, or
+ * the one picked in the list (maidsh/profiles.ts sets it). Without `?profile=` the routes answer
+ * for the default 档案, which after the first switch may belong to another 人设.
+ */
+export const shownProfile = signal('default');
+const forProfile = (path: string) => `${path}${path.includes('?') ? '&' : '?'}profile=${encodeURIComponent(shownProfile.value)}`;
 
 async function answer<T>(res: Response): Promise<T> {
   const j = (await res.json().catch(() => null)) as { ok?: boolean; value?: unknown; error?: string } | null;
@@ -91,7 +100,7 @@ export interface Overview {
 }
 export const aspect = <T>(o: Overview | null, id: string): T | null => (o?.aspects.find((a) => a.id === id)?.state as T | undefined) ?? null;
 
-export const readOverview = () => get<Overview>('/api/maidsh/state');
+export const readOverview = () => get<Overview>(forProfile('/api/maidsh/state'));
 
 // ---------------------------------------------------------------- 记忆: /api/maidsh-memory/*
 
@@ -123,8 +132,8 @@ export interface MemoryList {
   profile: { impression: string; short: string };
   turn: number;
 }
-export const readMemory = () => get<MemoryList>('/api/maidsh-memory/list');
-export const mutateMemory = (body: Record<string, unknown>) => post<MemoryList & { imported?: number }>('/api/maidsh-memory/mutate', body);
+export const readMemory = () => get<MemoryList>(forProfile('/api/maidsh-memory/list'));
+export const mutateMemory = (body: Record<string, unknown>) => post<MemoryList & { imported?: number }>(forProfile('/api/maidsh-memory/mutate'), body);
 
 // ---------------------------------------------------------------- 表达: /api/maidsh-expression/*
 
@@ -141,13 +150,13 @@ export interface Expression {
   source?: string;
   seen?: number;
 }
-export const readExpression = () => get<{ items: Expression[]; turn: number }>('/api/maidsh-expression/list');
-export const mutateExpression = (body: Record<string, unknown>) => post<{ items: Expression[]; turn: number }>('/api/maidsh-expression/mutate', body);
+export const readExpression = () => get<{ items: Expression[]; turn: number }>(forProfile('/api/maidsh-expression/list'));
+export const mutateExpression = (body: Record<string, unknown>) => post<{ items: Expression[]; turn: number }>(forProfile('/api/maidsh-expression/mutate'), body);
 
 // ---------------------------------------------------------------- 主动: /api/maidsh-initiative/*
 
-export const readInitiative = () => get<InitiativeState>('/api/maidsh-initiative/state');
-export const mutateInitiative = (body: Record<string, unknown>) => post<InitiativeState>('/api/maidsh-initiative/mutate', body);
+export const readInitiative = () => get<InitiativeState>(forProfile('/api/maidsh-initiative/state'));
+export const mutateInitiative = (body: Record<string, unknown>) => post<InitiativeState>(forProfile('/api/maidsh-initiative/mutate'), body);
 
 // ---------------------------------------------------------------- 学习与导入: /api/maidsh/learn, /api/maidsh/jobs
 
@@ -168,7 +177,10 @@ export interface Job {
   error?: string;
   duplicateOf?: string;
 }
-/** Learn (or with dryRun, only estimate): `{ textType, title, text }` or `{ kind: 'session', sessionId | messages }`. */
-export const learn = (body: Record<string, unknown>) => postRaw('/api/maidsh/learn', body);
+/**
+ * Learn (or with dryRun, only estimate): `{ textType, title, text }` goes into the shown 档案;
+ * `{ kind: 'session', sessionId | messages }` into that conversation's own 档案 (the engine decides).
+ */
+export const learn = (body: Record<string, unknown>) => postRaw('/api/maidsh/learn', body.kind === 'session' ? body : { profile: shownProfile.value, ...body });
 export const readJobs = () => get<Job[]>('/api/maidsh/jobs');
 export const actOnJob = (action: 'cancel' | 'pause' | 'resume' | 'undo', id: string) => post<Job>('/api/maidsh/jobs', { action, id });

@@ -159,6 +159,8 @@ test('details fade into an impression: frozen small things gather, then one rewr
 
 test('the analysis contract fits the controller’s limits', () => {
   assert.ok(MEMORY_INSTRUCTIONS.length <= 300, `${MEMORY_INSTRUCTIONS.length}`);
+  // 扮演里对 TA 的角色做的事（「摸摸你的鳍」）不能记成对方本人的喜好，否则会带进每一段对话
+  assert.match(MEMORY_INSTRUCTIONS, /扮演里对方的动作、台词都不算/);
   const { errors } = normalizeAspect({ id: 'memory', analysis: { schema: MEMORY_SCHEMA, instructions: MEMORY_INSTRUCTIONS } });
   assert.deepEqual(errors, []);
 });

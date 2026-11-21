@@ -17,6 +17,7 @@
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { dsBot } from '../../bots/store';
+import { followPersona, relinkPersona } from '../../maidsh/profiles';
 import { personaSkipBots, personaSkipSyncing, setPersonaSkipBots, syncPersonaSkipBots } from '../../plugins/conflicts';
 import { backPage, confirm, errText, openPage, showToast } from '../../state/store';
 import { Switch } from '../common';
@@ -126,6 +127,24 @@ async function refresh(): Promise<Status> {
   }
 }
 
+/**
+ * 人设换好以后陪伴跟着换（maidsh/profiles.ts）：[done] 后面接上陪伴那边的一句话。
+ * 只在一次操作做完时调用：编辑正文的中途会用临时名字，不能拿它去建档案。
+ */
+async function follow(done: string) {
+  const s = status.value;
+  let note = '';
+  try {
+    note = await followPersona(s && !s.globalOff && s.current ? s.currentName || s.current : null);
+  } catch {
+    /* 总控没在跑或是老版本：陪伴不动 */
+  }
+  showToast(note ? `${done}。${note}` : done);
+}
+
+/** 人设改了名字：陪伴那份跟着改关联。 */
+const relink = (from: string, to: string) => relinkPersona(from, to).catch(() => {});
+
 async function readText(id: string): Promise<string> {
   const one = (await getJson(`${BASE}/persona?id=${encodeURIComponent(id)}`)) as Record<string, unknown>;
   return typeof one.text === 'string' ? one.text : '';
@@ -186,7 +205,7 @@ export function PersonaPage() {
     setBusy(id ?? 'off');
     try {
       await mutate({ action: 'set-current', id });
-      showToast(id ? `已启用「${name}」` : '已关闭人设');
+      await follow(id ? `已启用「${name}」` : '已关闭人设');
     } catch (e) {
       showToast(errText(e));
     } finally {
@@ -299,7 +318,7 @@ export function PersonaDetailPage({ id }: { id: string }) {
     setBusy(true);
     try {
       await mutate({ action: 'set-current', id: p.id });
-      showToast(`已启用「${p.name}」`);
+      await follow(`已启用「${p.name}」`);
     } catch (e) {
       showToast(errText(e));
     } finally {
@@ -310,7 +329,7 @@ export function PersonaDetailPage({ id }: { id: string }) {
     confirm(`删除「${p.name}」？`, on ? '它正在使用，删掉后会换回默认的人设。删除后不能恢复。' : '删除后不能恢复。', '删除', async () => {
       try {
         await mutate({ action: 'remove', id: p.id });
-        showToast('已删除');
+        await follow('已删除');
         backPage();
       } catch (e) {
         showToast(errText(e));
@@ -395,14 +414,17 @@ export function PersonaEditPage({ target }: { target: string }) {
         const after = await mutate({ action: 'import', name: n, text: body });
         const made = [...after.personas].reverse().find((p) => p.name === n && own(p));
         if (made) await mutate({ action: 'set-current', id: made.id });
-        showToast(`已启用「${n}」`);
+        await follow(`已启用「${n}」`);
         backPage();
         if (copyOf) backPage();
         return;
       }
       const textChanged = body !== orig!.text.trim();
       if (!textChanged) {
-        if (n !== orig!.name) await mutate({ action: 'rename', id: editId, name: n });
+        if (n !== orig!.name) {
+          await mutate({ action: 'rename', id: editId, name: n });
+          await relink(orig!.name, n);
+        }
         showToast('已保存');
         backPage();
         return;
@@ -421,7 +443,9 @@ export function PersonaEditPage({ target }: { target: string }) {
       if (wasOn) await mutate({ action: 'set-current', id: made.id });
       await mutate({ action: 'remove', id: editId });
       await mutate({ action: 'rename', id: made.id, name: n });
-      showToast('已保存');
+      await relink(orig!.name, n);
+      if (wasOn) await follow('已保存');
+      else showToast('已保存');
       // the details page was for the old id
       backPage();
       backPage();
