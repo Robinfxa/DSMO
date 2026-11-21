@@ -3,12 +3,13 @@
 // DSH Host directly, like every other page here; the same lists-and-rows idiom
 // as 设置 and 插件.
 
-import { PI_AI_NS, baseUrlError, createProvider, discoverModels, isPiAiNs, keyError, normalizeBaseUrl, normalizeKey, removeProvider, type DiscoveredModel, type ProviderApi } from '../../../engine/providers';
+import { COST_NOTE, netLine, replyLine, useProbe } from '../../probe';
+import { PI_AI_NS, modelsOf, baseUrlError, createProvider, discoverModels, isPiAiNs, keyError, normalizeBaseUrl, normalizeKey, removeProvider, type DiscoveredModel, type ProviderApi } from '../../../engine/providers';
 import { hasLore, readBindings, refreshWorks, workTitle } from '../../../lore/api';
 import { chooseWork } from '../../lore/pick';
 import { useEffect, useState } from 'preact/hooks';
 import type { WorkspaceInfo } from '../../../engine/client';
-import { askText, backPage, confirm, errText, getClient, openPage, openSession, pages, showToast } from '../../../state/store';
+import { askText, backPage, catalog, confirm, errText, getClient, openPage, openSession, pages, showToast } from '../../../state/store';
 import { Switch, fmtTime } from '../../common';
 import { sharePlugin } from '../../../share/pages';
 import { MIc } from '../../mobile/MIc';
@@ -754,9 +755,65 @@ export function ProvidersPage() {
   );
 }
 
+/** A provider's 测试连接: 网络连通 (its model list, free) and 真实小额测试 with one of its models. */
+function ProviderTest({ id }: { id: string }) {
+  const probe = useProbe();
+  const models = modelsOf(id);
+  const [model, setModel] = useState(models[0]?.id ?? '');
+  const name = catalog.value?.groups.find((g) => g.id === id)?.name ?? id;
+  return (
+    <div class="plg prov-test">
+      <section class="plg-sec">
+        <h2 class="plg-sec-t">测试连接</h2>
+        <div class="plg-group">
+          <div class="plg-row static">
+            <div class="plg-row-m">
+              <div class="plg-row-t">网络连通</div>
+              <div class="plg-row-s wrap">{probe.running === 'net' ? '正在测试…' : probe.net ? netLine(probe.net) : '读一次模型列表，不花钱'}</div>
+            </div>
+            <button class="plg-btn sm" type="button" disabled={!!probe.running} onClick={() => void probe.runNet(id)}>
+              测试
+            </button>
+          </div>
+          {models.length > 1 && (
+            <div class="plg-row static">
+              <div class="plg-row-m">
+                <div class="plg-row-t">用哪个模型</div>
+              </div>
+              <select class="sf-select" aria-label="用哪个模型测试" value={model} onChange={(e) => setModel((e.target as HTMLSelectElement).value)}>
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div class="plg-row static">
+            <div class="plg-row-m">
+              <div class="plg-row-t">真实小额测试</div>
+              <div class="plg-row-s wrap">{probe.running === 'reply' ? '正在发测试消息…' : probe.reply ? replyLine(probe.reply) : '发一条很短的消息，按正常价格计费'}</div>
+            </div>
+            <button
+              class="plg-btn sm"
+              type="button"
+              disabled={!!probe.running || !model}
+              onClick={() => confirm('发一条测试消息？', `让「${name} · ${models.find((m) => m.id === model)?.name ?? model}」回复一个「OK」，按正常价格计费，一般不到一分钱。测试用的对话结束后自动删掉。`, '发送', () => void probe.runReply(id, model))}
+            >
+              测试
+            </button>
+          </div>
+        </div>
+        <p class="plg-note">{COST_NOTE}</p>
+      </section>
+    </div>
+  );
+}
+
 export function ProviderDetailPage({ id }: { id: string }) {
   return (
     <>
+      <ProviderTest id={id} />
       <EngineSettingsNsPage ns={PI_AI_NS} path={['providers', id]} />
       <div class="plg">
         <div class="plg-group sf-reset">

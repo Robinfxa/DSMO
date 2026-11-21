@@ -4,8 +4,9 @@
 // a credential reference (`apiKeyEnv`) and the key itself goes to `credentials/set`; models are
 // `{ id, name?, contextWindow?, maxTokens?, input? }` objects, at least one.
 
-import { catalog, credential, currentSelection, getClient, refreshCatalog } from '../state/store';
+import { archived, catalog, credential, currentSelection, getClient, pickModel, quietSessions, refreshCatalog } from '../state/store';
 import { accountView } from '../account/account';
+import { parseLogEvent } from './events';
 
 /** Settings namespace (Loader entry id) of the pi-ai adapter. */
 export const PI_AI_NS = 'llm-pi-ai';
@@ -209,15 +210,46 @@ export interface ProviderStatus {
 }
 
 /** The provider and model in use now: this conversation's, or new chats' default. */
-export function inUse(): { provider: string; name: string; model: string } | null {
+export function inUse(): { provider: string; name: string; model: string; modelId: string } | null {
   const sel = currentSelection();
   if (!sel) return null;
   const g = catalog.value?.groups.find((x) => x.id === sel.provider);
   const m = g?.models.find((x) => x.id === sel.model);
-  return { provider: sel.provider, name: g?.name ?? sel.provider, model: m?.name ?? sel.model };
+  return { provider: sel.provider, name: g?.name ?? sel.provider, model: m?.name ?? sel.model, modelId: sel.model };
 }
 
 const DEEPSEEK = 'deepseek-official';
+
+/** dsh-Go's 新对话默认模型 (dsh-go app/lib/state/model_defaults_state.dart). */
+const DEFAULT_MODEL_NS = 'agent-default-model';
+
+/** The models a provider serves (from the model catalog). */
+export const modelsOf = (provider: string) => catalog.value?.groups.find((g) => g.id === provider)?.models ?? [];
+
+/**
+ * 账号管理's switch: [provider] / [model] for this conversation (or the next new one) and as new
+ * chats' default on the engine, at the model's own default thinking level.
+ */
+export async function switchTo(provider: string, model: string) {
+  const m = modelsOf(provider).find((x) => x.id === model);
+  const effort = m?.defaultEffort;
+  const c = getClient();
+  const d = await c.describeSettings().catch(() => null);
+  const ns = (Array.isArray(d?.namespaces) ? d!.namespaces : []).map((x) => (x && typeof x === 'object' ? (x as Record<string, unknown>) : {})).find((x) => x.ns === DEFAULT_MODEL_NS);
+  // an engine that doesn't keep a default (older ones): this conversation / the next one only
+  if (ns)
+    await c.mutateSettings(
+      DEFAULT_MODEL_NS,
+      [
+        { op: 'set', path: ['provider'], value: provider },
+        { op: 'set', path: ['model'], value: model },
+        effort ? { op: 'set', path: ['reasoningEffort'], value: effort } : { op: 'unset', path: ['reasoningEffort'] },
+      ],
+      Number(ns.revision ?? 0),
+    );
+  await pickModel(provider, model, effort);
+  await refreshCatalog();
+}
 
 /** DeepSeek, the routes added here, and any other provider the catalog can route to, with how each stands. */
 export async function readProviderStatus(): Promise<ProviderStatus[]> {
@@ -251,4 +283,88 @@ export async function readProviderStatus(): Promise<ProviderStatus[]> {
     }
   }
   return out;
+}
+
+// ------------------------------------------------------------------ 测试连接
+
+export interface NetProbe {
+  ok: boolean;
+  ms: number;
+  /** How many models the endpoint listed. */
+  models?: number;
+  error?: string;
+}
+export interface ReplyProbe {
+  ok: boolean;
+  ms: number;
+  reply?: string;
+  usage?: { input?: number; output?: number; total?: number };
+  error?: string;
+}
+
+const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+/**
+ * 网络连通: asks a configured route for its model list (`llm/discoverModels` with the stored key and
+ * headers — what dsh-Go's own 「测试连接」 does). Free: no model is called. Proves the address,
+ * the network and the key.
+ */
+export async function probeNetwork(provider: string): Promise<NetProbe> {
+  const t0 = now();
+  try {
+    const list = await getClient().discoverModels({ provider }, PI_AI_NS);
+    return { ok: true, ms: Math.round(now() - t0), models: list.length };
+  } catch (e) {
+    return { ok: false, ms: Math.round(now() - t0), error: String((e as Error)?.message ?? e) };
+  }
+}
+
+/** The lightest effort a model offers (off / minimal / low …), so the test spends no thinking tokens. */
+function lightestEffort(provider: string, model: string): string | undefined {
+  const m = catalog.value?.groups.find((g) => g.id === provider)?.models.find((x) => x.id === model);
+  const ids = m?.efforts.map((e) => e.id) ?? [];
+  return ['off', 'none', 'minimal', 'low'].find((x) => ids.includes(x)) ?? ids[0];
+}
+
+/**
+ * 真实小额测试: one real request through the engine to [provider] / [model] — a throwaway
+ * conversation asked to answer 「OK」 at the lightest thinking level, then deleted. It is billed
+ * like any message: the engine's system prompt rides along, so the input is a few thousand tokens.
+ */
+export async function probeReply(provider: string, model: string, timeoutMs = 90_000): Promise<ReplyProbe> {
+  const c = getClient();
+  const t0 = now();
+  let sid = '';
+  try {
+    sid = (await c.createSession()).sessionId;
+    // out of the sidebar at once (as if deleted), and no 「回复好了」
+    quietSessions.add(sid);
+    archived.value = new Set([...archived.value, sid]);
+    await c.selectModel(sid, provider, model, lightestEffort(provider, model));
+    await c.prompt(sid, [{ type: 'text', text: '这是一次连通性测试。只回复两个字母 OK，不要调用任何工具，也不要说别的。' }]);
+    while (now() - t0 < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 600));
+      const events = (await c.latestRecords(sid, 60)).map(parseLogEvent);
+      const end = events.find((e) => e.kind === 'turn-end');
+      if (!end || end.kind !== 'turn-end') continue;
+      const ms = Math.round(now() - t0);
+      const said = events.filter((e) => e.kind === 'assistant');
+      const reply = said
+        .flatMap((e) => (e.kind === 'assistant' ? e.message.parts : []))
+        .map((p) => (p.type === 'text' ? p.text : ''))
+        .join('')
+        .trim();
+      const sum = (k: 'inputTokens' | 'outputTokens' | 'totalTokens') => said.reduce((a, e) => a + ((e.kind === 'assistant' && e.usage?.[k]) || 0), 0) || undefined;
+      const usage = { input: sum('inputTokens'), output: sum('outputTokens'), total: sum('totalTokens') };
+      if (end.reason.kind !== 'completed') return { ok: false, ms, reply: reply || undefined, usage, error: end.reason.message ?? `没有正常结束（${end.reason.kind}）` };
+      if (!reply) return { ok: false, ms, usage, error: '接口有回应，但没有回复文字' };
+      return { ok: true, ms, reply: reply.slice(0, 80), usage };
+    }
+    void c.cancel(sid).catch(() => {});
+    return { ok: false, ms: Math.round(now() - t0), error: `${Math.round(timeoutMs / 1000)} 秒内没有回复` };
+  } catch (e) {
+    return { ok: false, ms: Math.round(now() - t0), error: String((e as Error)?.message ?? e) };
+  } finally {
+    if (sid) void c.archiveSession(sid).catch(() => {});
+  }
 }

@@ -33,6 +33,8 @@ const think = (effort: string, text: string) => (effort === 'off' ? undefined : 
 export function pickScript(prompt: string, ctx: { effort: string; permission: string }): Script {
   const p = prompt.trim();
   const has = (...words: string[]) => words.some((w) => p.toLowerCase().includes(w));
+  // 账号管理 › 真实小额测试: a model that answers what it's asked
+  if (p.includes('连通性测试')) return { steps: [{ text: 'OK' }] };
 
   if (has('测试', 'test', '修复', 'bug', '修一下')) {
     return {

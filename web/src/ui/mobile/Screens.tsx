@@ -19,7 +19,7 @@ import {
   clearApiKey,
   confirm,
   currentId,
-  openPage,
+  openPopover,
   credential,
   deleteAll,
   errText,
@@ -41,7 +41,8 @@ import {
   webUpdateReady,
 } from '../../state/store';
 import { Protected } from '../Protected';
-import { inUse, readProviderStatus, type ProviderStatus } from '../../engine/providers';
+import { inUse, modelsOf, readProviderStatus, switchTo, type ProviderStatus } from '../../engine/providers';
+import { COST_NOTE, netLine, replyLine, useProbe } from '../probe';
 import { REGIONS } from '../regions';
 import { openFeature } from '../pages/registry';
 import { MIc } from './MobileApp';
@@ -398,10 +399,15 @@ function Account() {
   );
 }
 
-/** 模型提供方: what this conversation (or a new one) uses, and how each provider stands — DeepSeek and the ones added by hand. */
+/**
+ * 模型提供方: the providers that are connected (signed in / key set, the engine has no complaint),
+ * the one in use ticked; tap one to switch to it (its model, or a pick when it has several). Then
+ * 测试连接 for the one in use.
+ */
 function ProviderGroup() {
   const [list, setList] = useState<ProviderStatus[] | null>(null);
   const [err, setErr] = useState('');
+  const [switching, setSwitching] = useState<string | null>(null);
   const signed = accountView.value?.signedIn;
   const keyed = credential.value?.configured;
   const cat = catalog.value;
@@ -414,31 +420,82 @@ function ProviderGroup() {
     return () => void (live = false);
   }, [signed, keyed, cat]);
   const use = inUse();
+  const probe = useProbe();
+  const ready = (list ?? []).filter((p) => p.ok && modelsOf(p.id).length > 0);
+  const own = !!use && !!list?.find((p) => p.id === use.provider)?.own;
+  const what = use ? `${use.name} · ${use.model}` : '';
+  const go = async (p: ProviderStatus, model: string) => {
+    setSwitching(p.id);
+    try {
+      await switchTo(p.id, model);
+      showToast(`已切换到 ${p.name} · ${modelsOf(p.id).find((m) => m.id === model)?.name ?? model}`);
+    } catch (e) {
+      showToast(errText(e));
+    } finally {
+      setSwitching(null);
+    }
+  };
+  const tap = (p: ProviderStatus, el: Element) => {
+    const models = modelsOf(p.id);
+    if (models.length === 1) return void go(p, models[0].id);
+    openPopover(
+      el,
+      models.map((m) => ({ icon: use?.provider === p.id && use.modelId === m.id ? 'check' : 'model', label: m.name, run: () => void go(p, m.id) })),
+    );
+  };
   return (
-    <Group title="模型提供方" note="用哪个模型在输入框下方的模型按钮里换；新对话默认在「设置 › 模型」。">
-      {use && <Row icon="model" label={currentId.value ? '正在用' : '新对话用'} value={`${use.name} · ${use.model}`} chevron={false} />}
-      {err ? (
-        <Row label="读不到提供方" value={err.length > 24 ? '引擎没有回应' : err} chevron={false} />
-      ) : !list ? (
-        <Row label="正在读取…" chevron={false} />
-      ) : (
-        list.map((p) => (
+    <>
+      <Group title="模型提供方" note={currentId.value ? '点一个切换：这个对话和之后的新对话都用它。' : '点一个切换：之后的新对话都用它。'}>
+        {err ? (
+          <Row label="读不到提供方" value={err.length > 24 ? '引擎没有回应' : err} chevron={false} />
+        ) : !list ? (
+          <Row label="正在读取…" chevron={false} />
+        ) : !ready.length ? (
+          <Row label="还没有能用的提供方" value="登录 DeepSeek 或添加一个" chevron={false} />
+        ) : (
+          ready.map((p) => {
+            const on = use?.provider === p.id;
+            return (
+              <button class={`m-row m-prov ${on ? 'on' : ''}`} type="button" key={p.id} aria-pressed={on} disabled={!!switching} onClick={(e) => tap(p, e.currentTarget as Element)}>
+                <MIc n="model" />
+                <span class="m-row-t">{p.name}</span>
+                <span class="m-row-v">{switching === p.id ? '正在切换…' : on ? use!.model : `${modelsOf(p.id).length} 个模型`}</span>
+                {on ? (
+                  <span class="m-row-check">
+                    <MIc n="check" />
+                  </span>
+                ) : (
+                  <MIc n="chevron" />
+                )}
+              </button>
+            );
+          })
+        )}
+        <Row label="管理模型提供方" onClick={() => toPage('providers')} />
+      </Group>
+      {use && ready.some((p) => p.id === use.provider) && (
+        <Group title={`测试连接 · ${what}`} note={COST_NOTE}>
+          {own && (
+            <Row
+              icon="globe"
+              label={probe.running === 'net' ? '正在测试网络…' : '网络连通'}
+              value={probe.running === 'net' ? undefined : probe.net ? (probe.net.ok ? '通' : '不通') : '不花钱'}
+              right={probe.net && <span class={`m-prov-dot ${probe.net.ok ? 'dot-ok' : 'dot-warn'}`} />}
+              onClick={probe.running ? undefined : () => void probe.runNet(use.provider)}
+            />
+          )}
+          {probe.net && <div class="m-probe-res">{netLine(probe.net)}</div>}
           <Row
-            key={p.id}
-            label={p.name}
-            value={p.status}
-            right={
-              <>
-                <span class={`m-prov-dot ${p.ok ? 'dot-ok' : 'dot-warn'}`} aria-label={p.ok ? '可用' : '不可用'} />
-                {p.own && <MIc n="chevron" />}
-              </>
-            }
-            onClick={p.own ? () => ((screens.value = []), openPage(`provider:${p.id}`)) : undefined}
+            icon="send"
+            label={probe.running === 'reply' ? '正在发测试消息…' : '真实小额测试'}
+            value={probe.running === 'reply' ? undefined : probe.reply ? (probe.reply.ok ? '成功' : '失败') : '少量计费'}
+            right={probe.reply && <span class={`m-prov-dot ${probe.reply.ok ? 'dot-ok' : 'dot-warn'}`} />}
+            onClick={probe.running ? undefined : () => confirm('发一条测试消息？', `让「${what}」回复一个「OK」，按正常价格计费，一般不到一分钱。测试用的对话结束后自动删掉。`, '发送', () => void probe.runReply(use.provider, use.modelId))}
           />
-        ))
+          {probe.reply && <div class="m-probe-res">{replyLine(probe.reply)}</div>}
+        </Group>
       )}
-      <Row label="管理模型提供方" onClick={() => toPage('providers')} />
-    </Group>
+    </>
   );
 }
 

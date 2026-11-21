@@ -91,6 +91,16 @@ check(prof.displayName === '芯云' && prof.api === 'openai-completions' && prof
 check(prof.apiKeyEnv === 'CUSTOM_XINYUNTOKEN_API_KEY' && !('apiKey' in prof) && st.creds.CUSTOM_XINYUNTOKEN_API_KEY === 'sk-xinyun-123', 'key stored as a credential, named by apiKeyEnv');
 check(JSON.stringify(prof.models.map((m) => m.id)) === JSON.stringify(['model-large', 'model-small', 'deepseek-v4']) && prof.models[0].name === 'Model Large' && prof.models[0].contextWindow === 131072, `models as objects: ${JSON.stringify(prof.models)}`);
 
+// its detail page has 测试连接 too
+await page.click('.plg-row:has-text("芯云")');
+await page.waitForTimeout(600);
+await page.click('.prov-test .plg-row:has-text("网络连通") .plg-btn');
+await page.waitForTimeout(800);
+check((await page.textContent('.prov-test .plg-row:has-text("网络连通") .plg-row-s')).startsWith('通 · '), 'detail page: 网络连通');
+await shot('4b-detail-test');
+await page.click('[aria-label="返回"] >> nth=-1');
+await page.waitForTimeout(400);
+
 // 账号管理 shows the providers and which one is in use
 await page.click('[aria-label="返回"] >> nth=-1');
 await page.waitForTimeout(400);
@@ -100,16 +110,46 @@ await page.click('.m-me [aria-label="设置"]');
 await page.waitForTimeout(400);
 await page.click('.m-row:has-text("账号管理")');
 await page.waitForTimeout(800);
-const rowText = async (label) => (await page.textContent(`.m-row:has(.m-row-t:text-is("${label}"))`).catch(() => '')) ?? '';
-check((await rowText('新对话用')).includes('DeepSeek · V4 Pro'), `in use: ${await rowText('新对话用')}`);
-check((await rowText('芯云')).includes('密钥已设置 · 3 个模型') && (await page.isVisible('.m-row:has(.m-row-t:text-is("芯云")) .dot-ok')), `芯云: ${await rowText('芯云')}`);
-check((await rowText('DeepSeek')).length > 0, `DeepSeek: ${await rowText('DeepSeek')}`);
+const provRows = async () => page.$$eval('.m-prov .m-row-t', (e) => e.map((x) => x.textContent));
+check(JSON.stringify(await provRows()) === JSON.stringify(['芯云']), `only connected providers listed (DeepSeek isn't signed in here): ${(await provRows()).join(' ')}`);
+// switch: 芯云 has several models, so pick one
+await page.click('.m-prov:has-text("芯云")');
+await page.waitForTimeout(300);
+await page.click('.m-pop-row:has-text("model-small")');
+await page.waitForTimeout(800);
+check(await page.isVisible('.m-prov.on:has-text("芯云") .m-row-check'), '芯云 ticked as in use');
+check((await page.textContent('.m-prov.on .m-row-v')) === 'model-small', `shows the model: ${await page.textContent('.m-prov.on .m-row-v')}`);
+const dm = await page.evaluate(() => window.__mockEngine.host.defaultModel());
+check(dm.provider === 'custom-xinyuntoken' && dm.model === 'model-small', `new chats' default on the engine: ${JSON.stringify(dm)}`);
 await shot('5-account');
-await page.click('.m-row:has(.m-row-t:text-is("芯云"))');
-await page.waitForTimeout(600);
-check(await page.evaluate(() => [...document.querySelectorAll('.pg-body input')].some((i) => i.value === 'https://xinyuntoken.com/v1')), '芯云 opens its detail page');
+// 测试连接 for the one in use
+check((await page.textContent('.m-group-h:has-text("测试连接")')).includes('芯云 · model-small'), 'the test is for what is in use');
+await page.click('.m-row:has-text("网络连通")');
+await page.waitForSelector('.m-probe-res', { timeout: 5000 });
+check((await page.textContent('.m-probe-res >> nth=0')).startsWith('通 · ') && (await page.textContent('.m-probe-res >> nth=0')).includes('列出 3 个模型'), `network: ${await page.textContent('.m-probe-res >> nth=0')}`);
+const before = await page.evaluate(() => [...window.__mockEngine.sessions.keys()].length);
+await page.click('.m-row:has-text("真实小额测试")');
+await page.waitForSelector('.m-alert');
+check((await page.textContent('.m-alert')).includes('按正常价格计费'), 'asks first: it costs a little');
+await page.click('.m-alert-btns button:has-text("发送")');
+await page.waitForSelector('.m-probe-res >> nth=1', { timeout: 80000 });
+const res = await page.textContent('.m-probe-res >> nth=1');
+check(res.startsWith('成功 · ') && res.includes('回复「OK」') && res.includes('token'), `real test: ${res}`);
+const probeSid = await page.evaluate(() => [...window.__mockEngine.sessions.keys()].at(-1));
+const after = await page.evaluate(() => [...window.__mockEngine.sessions.keys()].length);
+const model = await page.evaluate((id) => window.__mockEngine.sessions.get(id)?.model, probeSid);
+check(after === before + 1 && model?.provider === 'custom-xinyuntoken' && model?.model === 'model-small', `it really asked 芯云 · model-small: ${JSON.stringify(model)}`);
+await page.waitForTimeout(500);
+await shot('5b-account-tested');
+check(await page.evaluate((id) => window.__mockEngine.sessions.get(id)?.archived === true, probeSid), 'the test conversation is deleted afterwards');
 await page.click('[aria-label="返回"] >> nth=-1');
+await page.waitForTimeout(300);
+await page.click('[aria-label="返回"] >> nth=-1').catch(() => {});
+await page.waitForTimeout(300);
+await page.click('[aria-label="打开边栏"]', { timeout: 1500 }).catch(() => {});
 await page.waitForTimeout(400);
+check(!(await page.textContent('.m-drawer')).includes('连通性测试'), 'and never shows in the sidebar');
+await page.keyboard.press('Escape');
 // the catalog has it now: pick one of its models in the picker, and 账号管理 says so
 const picked = await page.evaluate(async () => {
   const c = await window.__mockEngine.rpc.call('session/modelCatalog', {});

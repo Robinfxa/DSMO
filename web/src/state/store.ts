@@ -139,6 +139,8 @@ export const draft = signal('');
 export const attachments = signal<PickedFile[]>([]);
 export const optimistic = signal<Optimistic[]>([]);
 export const catalog = signal<ModelCatalog | null>(null);
+/** Throwaway conversations (a provider's 真实小额测试): no 「回复好了」 for them. */
+export const quietSessions = new Set<string>();
 /** Selection for the next new conversation (advanced mode picker without an open conversation). */
 export const nextSelection = signal<{ provider: string; model: string; effort: string } | null>(null);
 export const credential = signal<{ configured: boolean; source?: string; writable: boolean } | null>(null);
@@ -267,7 +269,7 @@ export async function boot() {
         break;
       case 'session-status': {
         const s = sessions.value.find((x) => x.sessionId === e.sessionId);
-        if (s && s.running && !e.running && prefs.value.notifyDone && (document.visibilityState !== 'visible' || e.sessionId !== currentId.value))
+        if (s && s.running && !e.running && prefs.value.notifyDone && !quietSessions.has(e.sessionId) && (document.visibilityState !== 'visible' || e.sessionId !== currentId.value))
           void native.notify('回复好了', s.title ?? '对话', s.sessionId);
         if (s) upsertSession({ ...s, running: e.running });
         if (e.sessionId === currentId.value && transcript) {

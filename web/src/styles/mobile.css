@@ -311,3 +311,4 @@ body.is-m .overlay[data-kind="sheet"] { align-items: flex-end; }
 .m-feat-rows { animation: m-feat-in .2s ease-out; }
 @keyframes m-feat-in { from { opacity: 0; transform: translateY(-4px); } }
 .m-prov-dot { flex-shrink: 0; margin-left: 8px; }
+.m-probe-res { padding: 0 18px 14px 56px; color: var(--m-sub); font-size: 13px; line-height: 19px; word-break: break-word; }

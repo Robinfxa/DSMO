@@ -69,6 +69,16 @@ function namespaces() {
       }),
     },
     {
+      ns: 'agent-default-model',
+      title: '新对话默认模型',
+      schema: S.obj({
+        provider: S.str({ description: t('提供方') }),
+        model: S.str({ description: t('模型') }),
+        reasoningEffort: S.str({ description: t('思考强度') }),
+        rememberLastSelection: S.bool({ description: t('新对话沿用上一次选的模型'), default: true }),
+      }),
+    },
+    {
       ns: 'llm-pi-ai',
       title: '模型提供方',
       schema: S.obj({
@@ -110,6 +120,7 @@ export class MockHost {
     ['cot-translation', { value: { targetLanguage: 'zh', provider: 'deepseek-official' }, revision: 1 }],
     ['shell', { value: { timeoutSeconds: 120, allowNetwork: true, blockedCommands: ['rm -rf /'], env: {} }, revision: 1 }],
     ['llm-pi-ai', { value: { providers: {} }, revision: 1 }],
+    ['agent-default-model', { value: {}, revision: 1 }],
   ]);
   /** dsh-plugin-memory-share's memories.json, as the prototype pretends it. */
   private memories = [
@@ -168,6 +179,11 @@ export class MockHost {
     this.accountWatchers.add(deliver);
     deliver(this.accountView());
     return () => void this.accountWatchers.delete(deliver);
+  }
+
+  /** 新对话默认模型 as set (agent-default-model). */
+  defaultModel(): Record<string, unknown> {
+    return obj(this.settings.get('agent-default-model')?.value);
   }
 
   /** 模型提供方 routes as stored (the engine's model catalog lists them). */

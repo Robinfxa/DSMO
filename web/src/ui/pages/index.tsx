@@ -37,6 +37,7 @@ import { dsBot } from '../../bots/store';
 import { FailureLogPage } from '../../setup/recovery';
 import { MIc } from '../mobile/MIc';
 import {
+  catalog,
   LOCATION_TAG,
   backPage,
   currentId,
@@ -183,7 +184,7 @@ function pageDef(id: string | undefined): PageDef | undefined {
     const arg = h[2];
     if (h[1] === 'schedule') return { title: '自动化任务', body: () => <ScheduleDetailPage id={arg} /> };
     if (h[1] === 'engine-settings') return { title: '引擎设置', body: () => <EngineSettingsNsPage ns={arg} /> };
-    return { title: arg, body: () => <ProviderDetailPage id={arg} /> };
+    return { title: catalog.value?.groups.find((g) => g.id === arg)?.name ?? arg, body: () => <ProviderDetailPage id={arg} /> };
   }
   const m = /^(plugin|plugin-manage|plugin-guide):(.+)$/.exec(id);
   if (!m) return PAGES[id];

@@ -707,7 +707,9 @@ export class MockEngine {
           name: str(obj(v).displayName) ?? id,
           models: list(obj(v).models).map((m) => ({ id: str(obj(m).id) ?? '', name: str(obj(m).name) ?? str(obj(m).id) ?? '' })),
         }));
-        return { ...MODEL_CATALOG, routableProviders: [...MODEL_CATALOG.routableProviders, ...own.map((g) => g.id)], groups: [...MODEL_CATALOG.groups, ...own] };
+        const d = this.host.defaultModel();
+        const def = str(d.provider) && str(d.model) ? { provider: str(d.provider), model: str(d.model), ...(str(d.reasoningEffort) ? { reasoningEffort: str(d.reasoningEffort) } : {}) } : MODEL_CATALOG.default;
+        return { ...MODEL_CATALOG, default: def, routableProviders: [...MODEL_CATALOG.routableProviders, ...own.map((g) => g.id)], groups: [...MODEL_CATALOG.groups, ...own] };
       }
       case 'session/selectModel': {
         const s = this.need(req.sessionId);
