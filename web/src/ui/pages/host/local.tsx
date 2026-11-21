@@ -419,7 +419,13 @@ export function EnginePage() {
             type="button"
             disabled={data.busy}
             onClick={() =>
-              confirm('重置本机运行时？', '重新解压运行时并重装引擎。对话、技能保留；装过的引擎插件和它们的设置会清掉。', '重置', () => void run('engine.reset', '已重置'))
+              confirm(
+                '重置本机运行时？',
+                // dsh-Go 的重置只留界面配置和技能（ResetKeep.UI_AND_SKILLS）：对话在 .dsh/sessions、插件数据在 .dsh/storages，都会删掉。
+                '会删掉这台手机上的所有对话、陪伴（MaiDSH）的记忆和状态、设定集的作品，以及装过的引擎插件和它们的设置，然后重新安装运行环境。只有技能会留下。删掉的找不回来。要留对话，先到「设置 › 数据管理 › 导出所有历史对话」导出一份。',
+                '删除并重置',
+                () => void run('engine.reset', '已重置'),
+              )
             }
           >
             <span>重置运行时</span>

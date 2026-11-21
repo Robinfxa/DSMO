@@ -183,7 +183,8 @@ class ApiDemoLocal {
         await ref.read(settingsProvider.notifier).setAutoStartLocal(p['value'] == true);
         return null;
       case 'engine.reset':
-        // Keeps the conversations; what else to keep comes from the page.
+        // Deletes the conversations (.dsh/sessions) and plugin data (.dsh/storages): dsh-Go's
+        // ResetKeep only offers ui+skills and plugins+settings. What else to keep comes from the page.
         await ref
             .read(localRuntimeProvider.notifier)
             .resetKeeping(ResetKeep(uiAndSkills: p['keepSkills'] != false, pluginsAndSettings: p['keepPlugins'] == true));
