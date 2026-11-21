@@ -269,6 +269,16 @@ export function LoreWorksPage() {
             </button>
           ))}
         </div>
+        <div class="plg-group lo-works-add">
+          <button class="plg-link" type="button" onClick={newWork}>
+            <span>新建作品</span>
+            <MIc n="plus" />
+          </button>
+          <button class="plg-link" type="button" onClick={() => openPage('lore-import')}>
+            <span>导入角色卡或世界书</span>
+            <MIc n="chevron" />
+          </button>
+        </div>
       </section>
       <details class="lo-adv" open={!!def && def !== 'off'}>
         <summary>高级</summary>
@@ -284,30 +294,6 @@ export function LoreWorksPage() {
         <p class="plg-note">一般不用设。整个工作区都写同一本时，可以在「设置 › 工作区」里给工作区选；单独的对话以它自己的选择为准。</p>
       </details>
     </div>
-  );
-}
-export function LoreWorksActions() {
-  return (
-    <>
-      <button class="ib xl" type="button" aria-label="导入" onClick={() => openPage('lore-import')}>
-        <MIc n="download" />
-      </button>
-      <button
-        class="ib xl"
-        type="button"
-        aria-label="新建作品"
-        onClick={() =>
-          askText(
-            '新建作品',
-            '',
-            (t) => void run(() => mutate<WorkSummary>('create-work', { title: t.trim() })).then((w) => w && (void refreshWorks(), (view.value = null), openPage(`lore:${w.id}`))),
-            { placeholder: '书名', ok: '新建' },
-          )
-        }
-      >
-        <MIc n="plus" />
-      </button>
-    </>
   );
 }
 
@@ -474,7 +460,10 @@ export function LoreWorkPage({ id }: { id: string }) {
 // ---------------------------------------------------------------- 第一次：三步
 
 const guideKey = (id: string) => `dsmo.lore.guide.${id}`;
+/** Bumped when a 三步开始 card is put away, so the empty 人物 tab can say its line instead. */
+const guideTick = signal(0);
 const guideHidden = (id: string) => {
+  void guideTick.value;
   try {
     return localStorage.getItem(guideKey(id)) === '1';
   } catch {
@@ -502,6 +491,7 @@ function GettingStarted({ w }: { w: Work }) {
       /* 只是这次不显示 */
     }
     setHidden(true);
+    guideTick.value++;
   };
   const step = (done: boolean, n: number, title: string, body: string, action?: [string, () => void]) => (
     <li class={`lo-guide-s ${done ? 'done' : ''}`}>
@@ -578,7 +568,8 @@ function People({ w, chapter }: { w: Work; chapter: number }) {
           <span>新人物</span>
         </button>
       </div>
-      {!w.characters.length && <p class="plg-note">先加几个人物。之后在人物里记下「第几章起受了伤、去了哪」，拖动上面的时间轴就能看到每一章时的样子。</p>}
+      {/* the 三步开始 card says this while it's showing; once it's put away, a line here does */}
+      {!w.characters.length && guideHidden(w.id) && <p class="plg-note">先加几个人物。之后在人物里记下「第几章起受了伤、去了哪」，拖动上面的时间轴就能看到每一章时的样子。</p>}
       {w.characters.length > 0 && !list.length && <div class="plg-empty-line">没找到。</div>}
     </>
   );

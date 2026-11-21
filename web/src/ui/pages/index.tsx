@@ -26,7 +26,7 @@ import { A11yRestorePage, AndroidShellPage, PhoneDndPage, PhoneLogPage } from '.
 import { PresetsPage, TeamPage } from './agents';
 import { CompanionPage } from './companion';
 import { LongMemoryEditPage, LongMemoryPage } from './memory';
-import { LoreCardPage, LoreCharacterPage, LoreEntryPage, LoreImportPage, LoreWorkActions, LoreWorkPage, LoreWorksActions, LoreWorksPage, loreWorkTitle } from './lore';
+import { LoreCardPage, LoreCharacterPage, LoreEntryPage, LoreImportPage, LoreWorkActions, LoreWorkPage, LoreWorksPage, loreWorkTitle } from './lore';
 import { PersonaDetailPage, PersonaEditPage, PersonaPage } from './persona';
 import { SkillEditPage, SkillInfoPage, SkillsPage } from './skills';
 import { imported } from '../../history/imported';
@@ -136,7 +136,7 @@ function pageDef(id: string | undefined): PageDef | undefined {
     const name = id.slice('skill:'.length);
     return { title: name === 'new' ? '新建技能' : name, body: () => <SkillEditPage name={name} /> };
   }
-  if (id === 'lore') return { title: '设定集', actions: () => <LoreWorksActions />, body: LoreWorksPage };
+  if (id === 'lore') return { title: '设定集', body: LoreWorksPage };
   if (id === 'lore-import' || id.startsWith('lore-import:')) {
     const w = id.slice('lore-import:'.length) || undefined;
     return { title: w ? `导入到${loreWorkTitle(w)}` : '导入角色卡或世界书', body: () => <LoreImportPage work={id === 'lore-import' ? undefined : w} /> };

@@ -59,7 +59,7 @@ export async function startWithLore(sessionId: string, title?: string) {
           const w = await mutate<WorkSummary>('create-work', { title: t.trim() });
           await bindConversation(sessionId, w.id);
           await Promise.all([refreshWorks(), refreshBinding(sessionId)]);
-          showToast(`这段对话开始用《${w.title}》了，先加几个人物吧`);
+          showToast(`这段对话开始用《${w.title}》了`); // what's next is on the page (三步开始)
           loreView.value = null;
           openPage(`lore:${w.id}`);
         } catch (e) {

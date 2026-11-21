@@ -752,10 +752,12 @@ body:not(.is-m) .plg-card { width: calc((100% - 24px) / 3); }
 .lo-tl-dot.past { background: var(--c-accent); }
 .lo-tl-cursor { position: absolute; top: 2px; width: 10px; height: 10px; margin-left: -5px; background: var(--c-fg); transform: rotate(45deg); border-radius: 2px; }
 .lo-tl-thumb { position: absolute; top: 20px; width: 22px; height: 22px; margin: -11px 0 0 -11px; border: 3px solid var(--c-accent); border-radius: 50%; background: var(--c-card); box-shadow: 0 1px 4px rgba(0, 0, 0, .18); transition: left .08s; }
-.lo-tl-scale { display: flex; justify-content: space-between; gap: 8px; margin: -4px 4px 0; color: var(--c-faint); font-size: 11px; }
+.lo-tl-scale { display: flex; justify-content: space-between; gap: 8px; margin: -4px 4px 0; color: var(--c-sub); font-size: 12px; line-height: 18px; }
 .lo-tl-legend { display: inline-flex; align-items: center; gap: 5px; }
 .lo-tl-legend i { width: 7px; height: 7px; background: var(--c-fg); border-radius: 1px; transform: rotate(45deg); }
-.lo-tl-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; min-height: 36px; margin-top: 8px; }
+.lo-tl-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
+.lo-tl-foot:empty { display: none; }
+.lo-tl-foot.away { min-height: 36px; }
 .lo-tl-hint { color: var(--c-sub); font-size: 12.5px; line-height: 18px; text-align: center; }
 .lo-tl-act { height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: var(--c-fill); color: var(--c-fg); font: inherit; font-size: 13.5px; cursor: pointer; }
 .lo-tl-act.pri { background: var(--c-accent); color: #fff; }
@@ -988,3 +990,5 @@ body:not(.is-m) .plg-faq-q { font-size: 15px; }
 .plg-faq-i.open .plg-faq-q svg { transform: rotate(180deg); }
 .plg-faq-a { padding: 0 16px 14px 18px; color: var(--c-sub); font-size: 14px; line-height: 22px; white-space: pre-line; }
 .plg-group > .plg-faq-i + .plg-faq-i { box-shadow: inset 0 1px 0 var(--c-line); }
+.lo-works-add { margin-top: 10px; }
+.lo-works-add .plg-link svg { width: 18px; height: 18px; }

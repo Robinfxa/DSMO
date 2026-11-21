@@ -3,6 +3,7 @@
 // at. Dragging only looks; 「写到这里」 moves the written-up-to chapter. Plus the small pieces the
 // pages share: a character's avatar and the chips of what's true at a chapter.
 
+import { signal } from '@preact/signals';
 import { useRef } from 'preact/hooks';
 import { chapterName, type Work } from '../../lore/api';
 import type { StateNow } from '../../lore/chapters';
@@ -29,6 +30,25 @@ export function marksOf(w: Work, only?: string): Mark[] {
   return [...at].map(([chapter, weight]) => ({ chapter, weight })).sort((a, b) => a.chapter - b.chapter);
 }
 
+/** The 「拖动时间轴」 hint shows until the person has moved the timeline once (then they know). */
+const LEARNED = 'api-demo:lore-timeline-learned';
+const learned = signal((() => {
+  try {
+    return localStorage.getItem(LEARNED) === '1';
+  } catch {
+    return false;
+  }
+})());
+const learn = () => {
+  if (learned.value) return;
+  learned.value = true;
+  try {
+    localStorage.setItem(LEARNED, '1');
+  } catch {
+    /* 只是这次 */
+  }
+};
+
 /** The track's length: a little past the furthest of the cursor and the marks, at least 10. */
 export const spanOf = (cursor: number, marks: Mark[]) => Math.max(10, Math.ceil((Math.max(cursor, ...marks.map((m) => m.chapter)) + 3) / 5) * 5);
 
@@ -53,6 +73,7 @@ export function Timeline({
   compact?: boolean;
 }) {
   const track = useRef<HTMLDivElement>(null);
+  const go = (n: number) => (learn(), onChange(n));
   const pos = (n: number) => `${(Math.min(n, max) / max) * 100}%`;
   const at = (x: number) => {
     const r = track.current!.getBoundingClientRect();
@@ -60,30 +81,30 @@ export function Timeline({
   };
   const down = (e: PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    onChange(at(e.clientX));
+    go(at(e.clientX));
   };
   const move = (e: PointerEvent) => {
-    if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) onChange(at(e.clientX));
+    if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) go(at(e.clientX));
   };
   const key = (e: KeyboardEvent) => {
     const d = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
     if (!d) return;
     e.preventDefault();
-    onChange(Math.max(0, value + d));
+    go(Math.max(0, value + d));
   };
   const away = value !== cursor;
   const heavy = Math.max(1, ...marks.map((m) => m.weight));
   return (
     <div class={`lo-tl ${compact ? 'compact' : ''}`}>
       <div class="lo-tl-top">
-        <button class="lo-tl-nudge" type="button" aria-label="往前一章" disabled={value <= 0} onClick={() => onChange(value - 1)}>
+        <button class="lo-tl-nudge" type="button" aria-label="往前一章" disabled={value <= 0} onClick={() => go(value - 1)}>
           <MIc n="chevLeft" />
         </button>
         <div class="lo-tl-now" aria-live="polite">
           <span class={`lo-tl-ch ${away ? 'away' : ''}`}>{chapterName(value)}</span>
           <span class="lo-tl-sub">{away ? (value < cursor ? '往回看' : '往后看') : '现在写到这里'}</span>
         </div>
-        <button class="lo-tl-nudge" type="button" aria-label="往后一章" onClick={() => onChange(value + 1)}>
+        <button class="lo-tl-nudge" type="button" aria-label="往后一章" onClick={() => go(value + 1)}>
           <MIc n="chevron" />
         </button>
       </div>
@@ -121,7 +142,7 @@ export function Timeline({
         <div class={`lo-tl-foot ${away ? 'away' : ''}`}>
           {away ? (
             <>
-              <button class="lo-tl-act" type="button" onClick={() => onChange(cursor)}>
+              <button class="lo-tl-act" type="button" onClick={() => go(cursor)}>
                 回到第 {cursor} 章
               </button>
               {onWriteHere && (
@@ -131,7 +152,7 @@ export function Timeline({
               )}
             </>
           ) : (
-            <span class="lo-tl-hint">AI 按这一章的样子写。拖动时间轴，看每一章时谁在哪、怎么样。</span>
+            !learned.value && <span class="lo-tl-hint">AI 按这一章的样子写。拖动时间轴，看每一章时谁在哪、怎么样。</span>
           )}
         </div>
       )}
