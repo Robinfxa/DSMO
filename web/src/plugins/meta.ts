@@ -48,6 +48,7 @@ export const PERM_INFO: Record<string, { title: string; desc: string; icon: MIco
   'engine.read': { title: '读取对话和文件', desc: '只读：对话列表、搜索、工作区文件。不能发消息、不能改设置', icon: 'eye' },
   'session.prompt': { title: '替你发消息', desc: '可以把文字作为你的消息发出去', icon: 'chat' },
   network: { title: '联网', desc: '可以访问 https 网址', icon: 'globe' },
+  background: { title: '聊天背景', desc: '可以换掉聊天页的背景图。图片由你从手机里选，只存在这台设备上，插件只看得到缩略图', icon: 'image' },
 };
 
 /** Skins, layouts and entries can be switched off; skills, automations and engine parts live on the host. */

@@ -661,7 +661,7 @@ function uninstall(p: ApiDemoManifest) {
 export function PluginManagePage({ id }: { id: string }) {
   const p = findPlugin(id);
   const [data, setData] = useState<{ items: number; bytes: number } | null>(null);
-  const hasStorage = !!p?.permissions.includes('storage');
+  const hasStorage = !!p?.permissions.some((x) => x === 'storage' || x === 'background');
   useEffect(() => {
     if (hasStorage) void pluginDataSize(id).then(setData);
   }, [id, hasStorage]);

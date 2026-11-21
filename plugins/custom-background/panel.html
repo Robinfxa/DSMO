@@ -1,0 +1,73 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; font: 14px/22px system-ui, -apple-system, "PingFang SC", sans-serif; color: var(--fg); }
+  .pv { position: relative; overflow: hidden; height: 168px; border-radius: 14px; border: 1px solid var(--border); background: var(--input); }
+  .pv-img { position: absolute; inset: 0; background: center / cover no-repeat; }
+  .pv-veil { position: absolute; inset: 0; }
+  .pv-chat { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding: 14px; }
+  .b { align-self: flex-end; max-width: 70%; padding: 7px 12px; border-radius: 16px; background: var(--hover); font-size: 13px; line-height: 19px; }
+  .t { max-width: 88%; font-size: 13px; line-height: 19px; }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  button { flex: 1; height: 38px; border: 0; border-radius: 19px; background: var(--hover); color: inherit; font: inherit; cursor: pointer; }
+  button.primary { background: var(--brand); color: #fff; }
+  button[hidden] { display: none; }
+  label { display: block; margin-top: 14px; }
+  .lt { display: flex; justify-content: space-between; color: var(--fg); }
+  .lt span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--brand); }
+  .hint { margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 18px; }
+  [hidden] { display: none !important; }
+</style>
+<div class="pv">
+  <div class="pv-img" id="img"></div>
+  <div class="pv-veil" id="veil"></div>
+  <div class="pv-chat" id="chat" hidden><div class="b">今晚吃什么？</div><div class="t">试试番茄牛腩，炖一个小时就好。</div></div>
+  <div class="empty" id="empty">还没有选图片</div>
+</div>
+<div class="row">
+  <button class="primary" id="pick">选一张图片</button>
+  <button id="clear" hidden>移除</button>
+</div>
+<div class="ctl" id="ctl" hidden>
+  <label><div class="lt"><span>遮罩</span><span id="dimv"></span></div><input type="range" id="dim" min="15" max="90" step="1" aria-label="遮罩"></label>
+  <label><div class="lt"><span>模糊</span><span id="blurv"></span></div><input type="range" id="blur" min="0" max="20" step="1" aria-label="模糊"></label>
+</div>
+<div class="hint">遮罩越深，字越清楚。图片缩小后只存在这台设备上。</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let dark = false, timer = 0;
+  const show = (s) => {
+    const has = !!(s && s.thumb);
+    $('img').style.backgroundImage = has ? 'url(' + s.thumb + ')' : '';
+    $('img').style.filter = has && s.blur ? 'blur(' + Math.round(s.blur / 3) + 'px)' : '';
+    $('veil').style.background = has ? (dark ? 'rgba(0,0,0,' : 'rgba(255,255,255,') + s.dim / 100 + ')' : '';
+    $('empty').hidden = has; $('chat').hidden = !has; $('ctl').hidden = !has; $('clear').hidden = !has;
+    $('pick').textContent = has ? '换一张' : '选一张图片';
+    if (window.apiDemo) requestAnimationFrame(() => apiDemo.resize(document.body.scrollHeight + 8));
+    if (has) { $('dim').value = s.dim; $('blur').value = s.blur; $('dimv').textContent = s.dim + '%'; $('blurv').textContent = s.blur ? s.blur + ' 像素' : '不模糊'; }
+  };
+  let cur = null;
+  const style = () => ({ dim: Number($('dim').value), blur: Number($('blur').value) });
+  apiDemo.ready().then(async (ctx) => {
+    dark = ctx && ctx.theme === 'dark';
+    cur = await apiDemo.background.get();
+    show(cur);
+    $('pick').onclick = async () => {
+      try {
+        const r = await apiDemo.background.pick();
+        if (!r) return;
+        cur = await apiDemo.background.get(); show(cur);
+        apiDemo.toast('背景换好了');
+      } catch (e) { apiDemo.toast(String(e.message || e).slice(0, 40)); }
+    };
+    $('clear').onclick = async () => { await apiDemo.background.clear(); cur = null; show(null); apiDemo.toast('已移除背景'); };
+    const live = () => {
+      cur = Object.assign({}, cur, style()); show(cur);
+      clearTimeout(timer); timer = setTimeout(() => apiDemo.background.set(style()), 150);
+    };
+    $('dim').oninput = live; $('blur').oninput = live;
+    apiDemo.resize(document.body.scrollHeight + 8);
+  });
+</script>

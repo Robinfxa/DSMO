@@ -2,14 +2,45 @@
   "v": 1,
   "about": "冲突标签：插件在清单的 affects 里写上标签，两个带同一个标签的插件同时开着，DSMO 就提示可能冲突（web/src/plugins/conflicts.ts）。新插件写进已有的同一类地方时用已有的标签，不用改代码；真有新的一类地方才在这里加一个。engines 是没上架、但用户可能在「引擎插件」里自己装的社区包，上架的包按清单里的 affects 认。",
   "tags": {
-    "prompt.persona": { "title": "人设", "what": "给 AI 定下身份、性格和说话方式，加进每一轮对话" },
-    "prompt.memory": { "title": "长期记忆", "what": "把记住的事加进每一轮对话" },
-    "prompt.mood": { "title": "情绪", "what": "给 AI 一个会变的心情，让它每一轮带着这个心情说话" },
-    "prompt.lore": { "title": "人物与设定", "what": "按对话里提到的人物和名词，把人物卡、当前状态和世界设定加进对话" }
+    "prompt.persona": {
+      "title": "人设",
+      "what": "给 AI 定下身份、性格和说话方式，加进每一轮对话"
+    },
+    "prompt.memory": {
+      "title": "长期记忆",
+      "what": "把记住的事加进每一轮对话"
+    },
+    "prompt.mood": {
+      "title": "情绪",
+      "what": "给 AI 一个会变的心情，让它每一轮带着这个心情说话"
+    },
+    "prompt.lore": {
+      "title": "人物与设定",
+      "what": "按对话里提到的人物和名词，把人物卡、当前状态和世界设定加进对话"
+    },
+    "ui.background": {
+      "title": "聊天背景",
+      "what": "换掉聊天页的背景"
+    }
   },
   "engines": {
-    "@7gzgn/dsh-emotion": { "title": "dsh-emotion", "affects": ["prompt.mood"] },
-    "dsh-agentmemory": { "title": "dsh-agentmemory", "affects": ["prompt.memory"] },
-    "dsh-novel-forge": { "title": "dsh-novel-forge", "affects": ["prompt.lore"] }
+    "@7gzgn/dsh-emotion": {
+      "title": "dsh-emotion",
+      "affects": [
+        "prompt.mood"
+      ]
+    },
+    "dsh-agentmemory": {
+      "title": "dsh-agentmemory",
+      "affects": [
+        "prompt.memory"
+      ]
+    },
+    "dsh-novel-forge": {
+      "title": "dsh-novel-forge",
+      "affects": [
+        "prompt.lore"
+      ]
+    }
   }
 }

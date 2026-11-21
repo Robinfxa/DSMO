@@ -2,6 +2,7 @@
 // conversation title, a push-aside drawer, full-screen settings pages and
 // long-press menus. Desktop keeps the chat-demo (web) layout.
 
+import { AppBackground } from '../AppBackground';
 import type { JSX } from 'preact';
 import { featOpen } from '../featFold';
 import { canSpeak } from '../../bridge/native';
@@ -80,6 +81,7 @@ export function MobileApp() {
     <div class={`m-root ${open ? 'drawer' : ''}`} style={{ '--fs': String(prefs.value.fontFollowSystem ? 1 : prefs.value.fontScale) }}>
       <Drawer onTouchStart={(e) => onTouchStart(e, 'drawer')} onTouchMove={onTouchMove} />
       <div class="m-stage" onTouchStart={(e) => onTouchStart(e, 'edge')} onTouchMove={onTouchMove}>
+        <AppBackground />
         <TopBar />
         <SafeBanner />
         {!welcome && <ChapterBar />}

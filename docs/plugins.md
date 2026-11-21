@@ -15,7 +15,7 @@
   "title": "夜航",                       // ≤ 24 字
   "summary": "深蓝底色的夜间皮肤",          // ≤ 200 字
   "kinds": ["skin"],                     // skin | layout | slot | panel | engine
-  "permissions": [],                     // storage | engine.read | session.prompt | network
+  "permissions": [],                     // storage | engine.read | session.prompt | network | background
 
   // 商店页（都可选）
   "category": "tools",                   // appearance 外观 | interface 界面 | tools 工具 | engine 引擎；不写就按 kinds 推断
@@ -128,6 +128,7 @@
 | `apiDemo.storage.get/set(key, value)` | `storage` | 按插件隔离，单项 ≤ 64 KiB；「管理」页能看到占用并清除 |
 | `apiDemo.engine.call(endpoint, args)` | `engine.read` | 只读白名单：`session/list`、`session/search`、`session/projections`、`session/modelCatalog`、`skills/list`、`workspaceFiles/list`、`workspaceFiles/read`、`goals/get` |
 | `apiDemo.prompt(text)` | `session.prompt` | 以用户身份在当前对话发一条消息 |
+| `apiDemo.background.pick()` / `get()` / `set({dim, blur})` / `clear()` | `background` | 聊天页背景。`pick` 由 App 打开系统的选图，把图片缩成 JPEG（长边 ≤ 1600，≤ 约 900 KB）存在这台设备上，面板只拿得到 240px 的缩略图；`get` 返回 `{thumb, dim, blur}`；遮罩 `dim` 15–90（%，越大字越清楚），模糊 `blur` 0–20（px）。图片放在聊天区最底层（`.app-bg`，`z-index:-1`），授权卡、登录框、输入框都在它上面；同时只有一个背景插件生效，停用、卸载或在「管理」里清除数据就恢复默认 |
 
 面板总是开在 App 的浮层里。当前对话来了授权请求时，插件面板会被自动关掉并提示，授权卡上面不会有任何插件的东西。
 
@@ -164,6 +165,7 @@
 | 代码审查 | 技能 | `/code-review`：按清单审查改动 |
 | 每日计划 | 自动化 | 每天 8:30 新开对话排今天的计划 |
 | 每周回顾 | 自动化 | 每周五 17:30 新开对话做周回顾 |
+| 自定义背景 | 入口 + 面板 | 用手机里的照片当聊天背景，调遮罩和模糊，`background` 权限（`web/src/plugins/background.ts`、`ui/AppBackground.tsx`）。基础模式下入口在「设置 › 外观 › 聊天背景」（插件启用后才出现）。e2e：`e2e/background.mjs` |
 | 今日用量 | 引擎 | 装到主机上的 dsh-Go 插件（`dsh-go-example-usage`）：输入框里右侧的用量状态（一行小字）和用量面板；卸载即消失 |
 
 ### 开发示例（不上架）

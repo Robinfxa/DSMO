@@ -1,4 +1,5 @@
 import { useEffect } from 'preact/hooks';
+import { AppBackground } from './AppBackground';
 import { onNative } from '../bridge/native';
 import { layoutHidden } from '../plugins/frontend';
 import { resumeAfterUpdate, startAutoWebUpdate } from '../state/autoUpdate';
@@ -139,6 +140,7 @@ export function App() {
         <button class="mask" type="button" aria-label="关闭边栏" tabIndex={-1} onClick={() => (drawerOpen.value = false)} />
         <Sider />
         <main class={`main ${welcome ? 'is-welcome' : ''}`} id="main">
+          <AppBackground />
           <div class="collapsed-group" id="collapsedGroup">
             <button class="ib m pri" type="button" aria-label="展开边栏" onClick={() => setPref('collapsed', false)}>
               <Ic n="IconPanelLeftOutline16" />

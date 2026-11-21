@@ -1,0 +1,49 @@
+{
+  "name": "@api-demo/custom-background",
+  "version": "1.0.0",
+  "description": "自定义背景：用你自己的图片做聊天页的背景",
+  "license": "MIT",
+  "keywords": [
+    "api-demo-plugin"
+  ],
+  "apiDemo": {
+    "v": 1,
+    "title": "自定义背景",
+    "summary": "从手机里选一张图片做聊天页的背景，调遮罩和模糊，字照样看得清。",
+    "kinds": [
+      "slot",
+      "panel"
+    ],
+    "permissions": [
+      "background"
+    ],
+    "affects": [
+      "ui.background"
+    ],
+    "category": "appearance",
+    "slots": [
+      {
+        "slot": "sider.features",
+        "id": "open",
+        "title": "聊天背景",
+        "icon": "FxImage",
+        "action": {
+          "panel": "main"
+        }
+      }
+    ],
+    "panels": {
+      "main": {
+        "title": "聊天背景",
+        "entry": "panel.html"
+      }
+    },
+    "description": "从手机相册或文件里选一张图片，放在聊天页的后面。\n\n图片上盖一层和主题同色的遮罩（浅色是白、深色是黑），可以调深浅，也可以加一点模糊，消息和输入框照样看得清。只换聊天页，设置和其他页面不变。\n\n图片缩小后只存在这台设备上，插件自己只看得到一张缩略图。「设置 → 外观 → 聊天背景」或边栏「功能」里都能打开；卸载或在「管理」里清除数据，背景就恢复原样。",
+    "highlights": [
+      "用自己的图片做聊天背景",
+      "遮罩深浅、模糊都能调",
+      "浅色深色自动配遮罩",
+      "图片只存在这台设备上"
+    ]
+  }
+}

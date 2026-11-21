@@ -13,6 +13,7 @@ import { afterUpdate } from './plugins/PluginsPage';
 import { watchConflicts } from './plugins/conflicts';
 import { watchMaidshScope } from './maidsh/scope';
 import { watchLore } from './ui/lore/pick';
+import { watchBackground } from './plugins/background';
 import { onNative } from './bridge/native';
 import { startGuard } from './plugins/guard';
 import { loadContributions, setDshGoTransport } from './plugins/dshgo';
@@ -27,6 +28,7 @@ async function main() {
   void watchConflicts();
   watchMaidshScope();
   watchLore();
+  watchBackground();
   await loadVersions();
   void loadImported();
   startGuard();

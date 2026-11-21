@@ -10,7 +10,7 @@ export const HIDEABLE = new Set([
 ]);
 export const SLOTS = new Set(['sider.features', 'composer.buttons']);
 export const KINDS = new Set(['skin', 'layout', 'slot', 'panel', 'engine', 'skill', 'schedule']);
-export const PERMISSIONS = new Set(['storage', 'engine.read', 'session.prompt', 'network']);
+export const PERMISSIONS = new Set(['storage', 'engine.read', 'session.prompt', 'network', 'background']);
 /** Clash tags (market/tags.json): plugins with the same tag write to the same place (web/src/plugins/conflicts.ts). */
 export const TAGS = TAGS_FILE;
 export const AFFECTS = new Set(Object.keys(TAGS.tags));
@@ -91,6 +91,7 @@ export function checkManifest(m, { panelHtml = {} } = {}) {
     if (/apiDemo\.engine\./.test(html) && !(m.permissions || []).includes('engine.read')) e(`面板 ${id} 读引擎，但没有声明 engine.read 权限`);
     if (/apiDemo\.storage\./.test(html) && !(m.permissions || []).includes('storage')) e(`面板 ${id} 用存储，但没有声明 storage 权限`);
     if (/apiDemo\.prompt\(/.test(html) && !(m.permissions || []).includes('session.prompt')) e(`面板 ${id} 会发消息，但没有声明 session.prompt 权限`);
+    if (/apiDemo\.background\./.test(html) && !(m.permissions || []).includes('background')) e(`面板 ${id} 换聊天背景，但没有声明 background 权限`);
   }
   // Skills: the same limits as dsh-Go share codes (≤ 12 small text files, SKILL.md required).
   const SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;

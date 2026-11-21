@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { closeOverlay, currentId, draft, getClient, prefs, send, showToast } from '../state/store';
+import { clearBackground, pickBackground, readBackground, setBackgroundStyle } from './background';
 import { findPlugin, pluginDataGet, pluginDataSet } from './frontend';
 
 /** Engine endpoints a panel with `engine.read` may call: reads only, no keys, no approvals, no permissions. */
@@ -44,6 +45,7 @@ const SDK = `
     resize: (height) => call('resize', { height }),
     storage: { get: (key) => call('storage.get', { key }), set: (key, value) => call('storage.set', { key, value }) },
     engine: { call: (endpoint, args) => call('engine.call', { endpoint, args }) },
+    background: { pick: () => call('background.pick'), get: () => call('background.get'), set: (style) => call('background.set', { style }), clear: () => call('background.clear') },
   };
 })();
 `;
@@ -131,6 +133,24 @@ export function PanelFrame({ pluginId, panel, preview = false, maxHeight = 640 }
             if (!PANEL_READ_ENDPOINTS.has(endpoint)) throw new Error(`插件不能调用 ${endpoint}`);
             return reply(true, await getClient().call(endpoint, (q.args as Record<string, unknown>) ?? {}));
           }
+          // the chat background: the app picks and keeps the picture; the panel sees a thumbnail
+          case 'background.get':
+            need('background');
+            return reply(true, await readBackground(pluginId));
+          case 'background.pick':
+            need('background');
+            if (preview) return held();
+            return reply(true, await pickBackground(pluginId));
+          case 'background.set':
+            need('background');
+            if (preview) return held();
+            await setBackgroundStyle(pluginId, q.style);
+            return reply(true, await readBackground(pluginId));
+          case 'background.clear':
+            need('background');
+            if (preview) return held();
+            await clearBackground(pluginId);
+            return reply(true);
           default:
             throw new Error(`未知方法 ${m.method}`);
         }

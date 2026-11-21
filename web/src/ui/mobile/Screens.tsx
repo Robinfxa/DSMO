@@ -12,7 +12,8 @@ import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { canSpeak, native } from '../../bridge/native';
-import { installed } from '../../plugins/frontend';
+import { findPlugin, installed } from '../../plugins/frontend';
+import { background, backgroundPlugin } from '../../plugins/background';
 import {
   clearApiKey,
   confirm,
@@ -113,6 +114,7 @@ function Body({ id }: { id: string }) {
       return <Radio value={prefs.value.lang} options={[['zh', '简体中文'], ['en', 'English']]} onPick={(v) => setPref('lang', v as 'zh' | 'en')} />;
     case 'appearance':
       return (
+        <>
         <Radio
           value={prefs.value.theme}
           options={[
@@ -122,6 +124,8 @@ function Body({ id }: { id: string }) {
           ]}
           onPick={(v) => setPref('theme', v as 'light' | 'dark' | 'system')}
         />
+        <BackgroundRow />
+        </>
       );
     case 'font':
       return <FontSize />;
@@ -508,6 +512,19 @@ function Data() {
         <Row label="删除所有历史对话" danger chevron={false} onClick={() => confirm('删除所有历史对话？', '所有对话都将从列表中移除。', '删除', () => void deleteAll())} />
       </Group>
     </>
+  );
+}
+
+/** Only once a background plugin is on: the plain build shows nothing extra. */
+function BackgroundRow() {
+  const id = backgroundPlugin.value;
+  const p = id ? findPlugin(id) : undefined;
+  if (!id || !p) return null;
+  const on = !!background.value;
+  return (
+    <Group title="聊天背景" note={`由「${p.title}」提供`}>
+      <Row icon="image" label="聊天背景" value={on ? '已设置' : '默认'} onClick={() => { screens.value = []; openOverlay({ kind: 'panel', pluginId: id, panel: 'main' }); }} />
+    </Group>
   );
 }
 

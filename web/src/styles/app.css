@@ -562,3 +562,11 @@ button.h-host:hover { color: var(--dsw-alias-label-primary); }
 .feat-fold .row-right svg { transition: transform .2s var(--ease); }
 .feat-fold[aria-expanded="true"] .row-right svg { transform: rotate(180deg); }
 .feat-rows { display: flex; flex-direction: column; animation: rise .2s var(--ease); }
+
+/* A plugin's chat background (ui/AppBackground.tsx): behind the chat, under a veil in the theme's color */
+.main, .m-stage { isolation: isolate; }
+.app-bg { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.app-bg-img { position: absolute; inset: calc(var(--bg-blur) * -2); background-position: center; background-size: cover; filter: blur(var(--bg-blur)); }
+.app-bg::after { content: ""; position: absolute; inset: 0; background: rgba(255, 255, 255, var(--bg-dim)); }
+[data-ds-dark-theme] .app-bg::after { background: rgba(0, 0, 0, var(--bg-dim)); }
+body.has-bg .m-dock { background: transparent; }

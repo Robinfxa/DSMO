@@ -17,7 +17,8 @@
     "@api-demo/maidsh-memory",
     "@api-demo/maidsh-expression",
     "@api-demo/maidsh-initiative",
-    "@api-demo/dsmo-lore"
+    "@api-demo/dsmo-lore",
+    "@api-demo/custom-background"
   ],
   "featured": [
     "@api-demo/persona-library",

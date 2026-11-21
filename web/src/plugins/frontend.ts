@@ -410,7 +410,10 @@ export async function pluginDataSet(id: string, key: string, value: string | nul
   const had = keys.has(key);
   value === null ? keys.delete(key) : keys.add(key);
   if (had !== keys.has(key)) await native.storageSet(indexKey(id), keys.size ? JSON.stringify([...keys]) : null);
+  dataChanged(id);
 }
+/** Tells whoever shows a plugin's data (the chat background) that it changed. */
+const dataChanged = (id: string) => window.dispatchEvent(new CustomEvent('api-demo:plugin-data', { detail: id }));
 
 /** Bytes this plugin keeps on the device (UTF-16 length of the stored strings). */
 export async function pluginDataSize(id: string): Promise<{ items: number; bytes: number }> {
@@ -423,6 +426,7 @@ export async function pluginDataSize(id: string): Promise<{ items: number; bytes
 export async function clearPluginData(id: string) {
   for (const k of await dataKeys(id)) await native.storageSet(dataKey(id, k), null);
   await native.storageSet(indexKey(id), null);
+  dataChanged(id);
 }
 
 export const madeBy = (id: string) => installed.value.find((x) => x.id === id)?.made;
