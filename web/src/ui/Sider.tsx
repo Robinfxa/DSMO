@@ -8,6 +8,7 @@ import { learnConversation } from './pages/companion';
 import { isScopeOff, toggleScope } from '../maidsh/scope';
 import { M } from './mobile/icons';
 import { openImportedPage } from '../history/ui';
+import { showDiagnostic } from '../history/diagnose';
 import { imported } from '../history/imported';
 import type { SessionSummary } from '../engine/events';
 import { slotItems } from '../plugins/frontend';
@@ -277,6 +278,7 @@ function openMenu(btn: HTMLElement, s: SessionSummary, ready = false) {
   if (lore) opt({ svg: M.book }, lore.label, false, lore.run);
   if (hasModule('core')) opt({ svg: M.sparkle }, '让 TA 深度学习这段对话', false, () => void learnConversation(s.sessionId, s.title).catch((e) => showToast(errText(e))));
   if (hasModule('core')) opt({ svg: M.sparkle }, isScopeOff(s.sessionId) ? '在这段对话里打开陪伴' : '在这段对话里关掉陪伴', false, () => void toggleScope(s.sessionId));
+  opt({ svg: M.info }, '复制排查信息', false, () => void showDiagnostic(s.sessionId, s.title));
   opt('IconTrashOutline16', '删除', true, () =>
     confirm('删除对话？', `「${s.title || '新对话'}」会被移出列表，可以在提示里撤销。`, '删除', () => deleteSession(s.sessionId)),
   );

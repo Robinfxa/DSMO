@@ -15,6 +15,7 @@ import { learnConversation } from '../pages/companion';
 import { isScopeOff, toggleScope } from '../../maidsh/scope';
 import { hasLore } from '../../lore/api';
 import { ChapterBar, conversationItem, loreReady } from '../lore/pick';
+import { showDiagnostic } from '../../history/diagnose';
 import { openImportedPage } from '../../history/ui';
 import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
@@ -410,6 +411,7 @@ function SessionRow({ s, picking, onPick, onMulti }: { s: SessionSummary; pickin
           ]
         : []),
       { icon: 'multi', label: '多选', run: onMulti },
+      { icon: 'info', label: '复制排查信息', run: () => ((drawerOpen.value = false), void showDiagnostic(s.sessionId, s.title)) },
       {
         icon: 'trash',
         label: '删除',
