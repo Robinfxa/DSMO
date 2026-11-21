@@ -365,12 +365,30 @@ const bump = () => (txVersion.value = txVersion.value + 1);
 
 // ------------------------------------------------------------------ conversations
 
+/**
+ * Unsent text and files belong to the conversation they were typed in ('' = the
+ * new-chat screen): switching parks them and brings back the other one's, so a
+ * draft (or the old chat 「接着聊」 put in the box) is never sent somewhere else.
+ * A half-done 修改 is dropped, not parked: it only makes sense on its own message.
+ */
+const parked = new Map<string, { text: string; files: PickedFile[] }>();
+function swapDraft(from: string | null, to: string | null) {
+  if (from === to) return;
+  if (!editing.value && (draft.value || attachments.value.length)) parked.set(from ?? '', { text: draft.value, files: attachments.value });
+  else parked.delete(from ?? '');
+  const next = parked.get(to ?? '');
+  parked.delete(to ?? '');
+  draft.value = next?.text ?? '';
+  attachments.value = next?.files ?? [];
+}
+
 export function openSession(id: string | null) {
   native.reportSession(id);
   watch?.stop();
   watch = null;
   transcript = null;
   batch(() => {
+    swapDraft(currentId.value, id);
     currentId.value = id;
     renaming.value = null;
     pages.value = [];

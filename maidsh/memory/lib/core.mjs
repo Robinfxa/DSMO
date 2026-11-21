@@ -33,7 +33,7 @@ export const LIMITS = Object.freeze({
 });
 
 export function emptyMemory() {
-  return { v: 1, facts: [], episodes: [], graph: { nodes: {}, edges: {} }, profile: { impression: '', short: '', fading: [], forgetNotes: [], learned: [] }, cue: '', turn: 0, recalled: {}, lastMaintTurn: 0, seq: 0 };
+  return { v: 1, facts: [], episodes: [], graph: { nodes: {}, edges: {} }, profile: { impression: '', short: '', fading: [], forgetNotes: [], learned: [] }, cues: {}, turn: 0, recalled: {}, lastMaintTurn: 0, seq: 0 };
 }
 
 const clip = (s, n) => {
@@ -242,7 +242,19 @@ export function forget(mem, phrases) {
 }
 
 /** 一轮分析的结果入库。result 是总控（或单独判断）给记忆面的那一份，可能为 null。 */
-export function applyAnalysis(mem, result, { now, user = '', feeling = null }) {
+/** 话题延续的「上一轮聊了什么」：每段对话各一份，别的对话的话题不会被拿来回忆。最多留 CUE_KEEP 段最近的。 */
+export const CUE_KEEP = 40;
+export function cueOf(mem, sessionId) {
+  return mem.cues?.[sessionId ?? '']?.cue || '';
+}
+function setCue(mem, sessionId, cue, now) {
+  const cues = { ...(mem.cues ?? {}), [sessionId]: { cue, at: now } };
+  const ids = Object.keys(cues).sort((a, b) => cues[b].at - cues[a].at);
+  for (const id of ids.slice(CUE_KEEP)) delete cues[id];
+  mem.cues = cues;
+}
+
+export function applyAnalysis(mem, result, { now, user = '', feeling = null, sessionId = '' }) {
   mem.turn += 1;
   const added = [];
   if (result && typeof result === 'object') {
@@ -254,7 +266,7 @@ export function applyAnalysis(mem, result, { now, user = '', feeling = null }) {
       const e = addEpisode(mem, result.event, { now, feeling });
       if (e) added.push(e);
     }
-    if (typeof result.cue === 'string') mem.cue = clip(result.cue, 30);
+    if (typeof result.cue === 'string') setCue(mem, sessionId, clip(result.cue, 30), now);
     forget(mem, result.forget);
   }
   const kws = [...new Set(added.flatMap((x) => x.kw))];

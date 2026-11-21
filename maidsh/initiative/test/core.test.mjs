@@ -103,7 +103,7 @@ test('startup: a moment missed by under 2h fires within minutes; longer is re-pl
 
 test('what she is told when speaking first; the time-gap line in normal turns', () => {
   const st = chatted(at(20, 10));
-  const text = initiativePrompt(st, at(20, 13, 20), { kind: 'random' }, { mood: '你现在的心情：快乐。', hooks: ['对方明天要面试'] });
+  const text = initiativePrompt(st, at(20, 13, 20), { kind: 'random', sessionId: 's1' }, { mood: '你现在的心情：快乐。', hooks: ['对方明天要面试'] });
   assert.match(text, /这不是对方发来的消息/);
   assert.match(text, /3 小时 20 分钟前，刚分开没多久，当时聊到：聊团子的糗事。现在是下午/);
   assert.match(text, /对方明天要面试/);
@@ -121,4 +121,18 @@ test('time of day words', async () => {
   const st = emptyInitiative();
   const word = (h) => initiativePrompt(st, at(20, h, 30), { kind: 'random' }).match(/现在是(.+?)。/)[1];
   assert.deepEqual([2, 7, 10, 12, 15, 18, 21, 23].map(word), ['凌晨', '早上', '上午', '中午', '下午', '傍晚', '晚上', '深夜']);
+});
+
+test('speaking first never brings up what was talked about in another conversation', () => {
+  const st = emptyInitiative();
+  onUserTurn(st, { now: at(20, 10), sessionId: 'A', topic: '聊团子的糗事', random: () => 0.5 });
+  onUserTurn(st, { now: at(20, 10, 5), sessionId: 'B', random: () => 0.5 });
+  assert.doesNotMatch(initiativePrompt(st, at(20, 13), { kind: 'random', sessionId: 'B' }), /团子/);
+  onUserTurn(st, { now: at(20, 10, 10), sessionId: 'B', topic: '写请假邮件', random: () => 0.5 });
+  assert.match(initiativePrompt(st, at(20, 13), { kind: 'random', sessionId: 'B' }), /当时聊到：写请假邮件/);
+  // A 里约好的回访过期了：它的由头不跟着下一次（发在 B 里的）主动
+  addFollowup(st, { afterMin: 30, reason: '团子看完医生' }, at(20, 10, 10));
+  st.followups[0].sessionId = 'A';
+  onStartup(st, at(21, 9), { random: () => 0.5 });
+  assert.doesNotMatch(initiativePrompt(st, at(21, 9), { kind: 'random', sessionId: 'B' }), /团子/);
 });

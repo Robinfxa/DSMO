@@ -25,7 +25,7 @@ export const DEFAULTS = Object.freeze({
 });
 
 export function emptyInitiative() {
-  return { v: 1, lastUserAt: 0, lastReplyAt: 0, sessionId: '', lastTopic: '', nextAt: 0, followups: [], day: '', count: 0, lastInitiativeAt: 0, ignored: 0, hours: Array(24).fill(0), pending: null };
+  return { v: 1, lastUserAt: 0, lastReplyAt: 0, sessionId: '', lastTopic: '', topicSession: '', nextAt: 0, followups: [], day: '', count: 0, lastInitiativeAt: 0, ignored: 0, hours: Array(24).fill(0), pending: null };
 }
 
 const hm = (s) => {
@@ -97,7 +97,10 @@ export function onUserTurn(st, { now, sessionId, followup, topic, random = Math.
   st.ignored = 0;
   st.pending = null;
   if (sessionId) st.sessionId = sessionId;
-  if (topic) st.lastTopic = String(topic).slice(0, 40);
+  if (topic) {
+    st.lastTopic = String(topic).slice(0, 40);
+    st.topicSession = st.sessionId;
+  }
   if (followup) addFollowup(st, followup, now);
   planNext(st, now, { random, o, daily });
 }
@@ -110,8 +113,16 @@ export function pruneFollowups(st, now, { o = DEFAULTS } = {}) {
   const stale = st.followups.filter((f) => now - f.at > o.graceHours * HOUR);
   if (!stale.length) return false;
   st.followups = st.followups.filter((f) => now - f.at <= o.graceHours * HOUR);
-  st.lastTopic = stale.map((f) => f.reason).filter(Boolean).join('、') || st.lastTopic;
+  adoptReasons(st, stale);
   return true;
+}
+
+/** 过期回访的由头并进下一次主动：下一次随机主动发在最近的对话里，所以只收那段对话自己的，别的对话的事不拿过来说。 */
+function adoptReasons(st, list) {
+  const reasons = list.filter((f) => (f.sessionId || st.sessionId) === st.sessionId).map((f) => f.reason).filter(Boolean);
+  if (!reasons.length) return;
+  st.lastTopic = reasons.join('、').slice(0, 40);
+  st.topicSession = st.sessionId;
 }
 
 /** 记一次约好的回访（总控分析出的 followup）。 */
@@ -127,7 +138,7 @@ export function onStartup(st, now, { random = Math.random, o = DEFAULTS, daily =
   const late = st.followups.filter((f) => f.at <= now);
   st.followups = st.followups.filter((f) => f.at > now || now - f.at <= o.graceHours * HOUR);
   const missed = late.filter((f) => now - f.at > o.graceHours * HOUR);
-  if (missed.length) st.lastTopic = missed.map((f) => f.reason).filter(Boolean).join('、') || st.lastTopic;
+  if (missed.length) adoptReasons(st, missed);
   if (st.nextAt && st.nextAt <= now) {
     if (now - st.nextAt <= o.graceHours * HOUR && !quiet(now, o)) st.nextAt = now + (1 + random() * 2) * MIN;
     else planNext(st, now, { random, o, daily });
@@ -203,9 +214,11 @@ const periodOf = (t) => {
  */
 export function initiativePrompt(st, now, plan, { mood = '', bond = '', hooks = [] } = {}) {
   const since = st.lastUserAt ? now - st.lastUserAt : 0;
+  // 只说要发去的这段对话里聊过的话题（别的对话的不提）
+  const topic = st.lastTopic && st.topicSession && st.topicSession === plan.sessionId ? st.lastTopic : '';
   const lines = [
     '（这不是对方发来的消息，对方现在没有说话。这是你自己想主动找对方说话的时刻。）',
-    since ? `你们上次聊天是 ${gapText(since)}前，${gapMood(since)}${st.lastTopic && plan.kind !== 'followup' ? `，当时聊到：${st.lastTopic}` : ''}。现在是${periodOf(now)}。` : `现在是${periodOf(now)}。`,
+    since ? `你们上次聊天是 ${gapText(since)}前，${gapMood(since)}${topic && plan.kind !== 'followup' ? `，当时聊到：${topic}` : ''}。现在是${periodOf(now)}。` : `现在是${periodOf(now)}。`,
   ];
   if (plan.kind === 'followup') lines.push(`对方之前说过「${plan.reason || '待会儿再聊'}」，时间差不多了，你想问问对方怎么样了。`);
   if (mood) lines.push(mood);

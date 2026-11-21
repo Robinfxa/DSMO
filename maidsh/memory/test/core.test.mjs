@@ -201,3 +201,13 @@ test('batch: about-me facts are pinned and need no quote; stories stay in the st
   assert.ok(JSON.stringify(MEMORY_BATCH_SCHEMA).length <= 4096);
   assert.equal(memoryBatchInstructions('session'), memoryBatchInstructions('chatlog'));
 });
+
+test('the last chat impression belongs to its own conversation: another one never recalls through it', async () => {
+  const { createMemory } = await import('../lib/aspect.mjs');
+  const m = createMemory({ store: { load: () => null, save: () => {} }, now: () => T0 });
+  m.afterTurn({ facts: [], event: { summary: '团子打翻了杯子，对方哭笑不得', at: '2026-11-20', kw: ['团子', '杯子'], salience: 4 }, cue: '聊团子的糗事' }, { user: '我家团子打翻了杯子', sessionId: 'A' });
+  m.afterTurn({ facts: [], cue: '聊团子的糗事' }, { user: '嗯嗯', sessionId: 'A' });
+  assert.match(m.compose('今天好累', 'A'), /团子打翻了杯子/, 'the same conversation carries on');
+  assert.doesNotMatch(m.compose('帮我写一封请假邮件', 'B'), /团子/, 'a different conversation does not');
+  assert.match(m.compose('团子又调皮了', 'B'), /团子打翻了杯子/, 'unless she brings it up herself');
+});

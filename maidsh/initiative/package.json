@@ -1,6 +1,6 @@
 {
   "name": "maidsh-initiative",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MaiDSH·主动：TA 会在随机的时刻、约好的时间主动找你，不打扰，单独可用",
   "license": "MIT",
   "type": "module",

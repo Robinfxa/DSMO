@@ -1,7 +1,7 @@
 // 记忆面：服务 companionMemory + 交给总控的面登记 + 单独模式的请求。DSH 相关由插件外壳传入。
 
 import {
-  LIMITS, MEMORY_BATCH_SCHEMA, MEMORY_INSTRUCTIONS, MEMORY_SCHEMA, addEpisode, addFact, applyAnalysis, applyBatch, applyConsolidation, consolidationDue, consolidationRequest,
+  LIMITS, MEMORY_BATCH_SCHEMA, MEMORY_INSTRUCTIONS, MEMORY_SCHEMA, addEpisode, addFact, applyAnalysis, applyBatch, cueOf, applyConsolidation, consolidationDue, consolidationRequest,
   emptyMemory, finishBatch, forget, maintain, markRecalled, memoryBatchInstructions, recall, render, residents, retention, undoBatch,
 } from './core.mjs';
 import { FEELING_INSTRUCTIONS, FEELING_SCHEMA, normalizeFeeling, todayLine } from './shared/feeling.mjs';
@@ -34,13 +34,14 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
   if (maintain(mem, now())) queueMicrotask(onConsolidate);
   save();
 
-  // 同一轮里提示会被组装多次：按（第几轮 + 对方的话）缓存，保证一致，也只把最后一次想起的算数
-  let cache = null;
+  // 同一轮里提示会被组装多次：按对话、（第几轮 + 对方的话）缓存，保证一致，也只把这段对话最后一次想起的算数
+  const caches = new Map();
   let pendingTaken = null;
   function compose(latest = '', sessionId = '') {
     const noWorld = !!safe(() => hideWorld(sessionId), false);
-    const key = `${mem.turn}\u0000${latest}\u0000${noWorld}`;
-    if (cache?.key === key) return cache.text;
+    const key = `${mem.turn}\u0000${latest}\u0000${noWorld}\u0000${sessionId}`;
+    const hit = caches.get(sessionId);
+    if (hit?.key === key) return hit.text;
     const t = now();
     const bond = num(safe(bondLevel, 2), 2);
     const keep = (f) => !(noWorld && f?.cat === 'world');
@@ -50,21 +51,25 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
     let rec = recall(mem, { ...opts, query: latest }).filter((r) => keep(r.item));
     // 话题延续想起的只是「萦绕」：不强化、不占 6 轮不重复的名额，等对方真提起时还能正式想起
     let lingering = false;
-    if (!rec.length && mem.cue) {
-      rec = recall(mem, { ...opts, query: mem.cue, limit: 1 }).filter((r) => keep(r.item));
+    const cue = cueOf(mem, sessionId);
+    if (!rec.length && cue) {
+      rec = recall(mem, { ...opts, query: cue, limit: 1 }).filter((r) => keep(r.item));
       lingering = true;
     }
     const out = render(mem, { residents: res, recalled: rec, now: t });
-    cache = { key, text: out.text, recalled: lingering ? [] : rec.filter((r) => out.recalledIds.includes(r.item.id)) };
+    caches.delete(sessionId);
+    caches.set(sessionId, { key, text: out.text, recalled: lingering ? [] : rec.filter((r) => out.recalledIds.includes(r.item.id)) });
+    if (caches.size > 20) caches.delete(caches.keys().next().value);
     return out.text;
   }
 
   /** 一轮结束：入库、强化这一轮想起的、带动心情、按时整理。 */
   function afterTurn(result, turn) {
     const t = now();
-    const recalled = cache?.recalled ?? [];
-    cache = null;
-    applyAnalysis(mem, result, { now: t, user: turn?.user ?? '', feeling: turn?.feeling ?? null });
+    const sid = turn?.sessionId ?? '';
+    const recalled = caches.get(sid)?.recalled ?? [];
+    caches.delete(sid);
+    applyAnalysis(mem, result, { now: t, user: turn?.user ?? '', feeling: turn?.feeling ?? null, sessionId: turn?.sessionId ?? '' });
     markRecalled(mem, recalled.map((r) => r.item.id), t);
     const moving = recalled.map((r) => r.item).filter((x) => x.feeling).sort((a, b) => b.feeling.intensity - a.feeling.intensity)[0];
     if (moving) safe(() => moodFeel(moving.feeling.label, moving.feeling.intensity * 0.3), undefined);
@@ -144,7 +149,7 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
       default:
         return { ok: false, error: '不认识的操作' };
     }
-    cache = null;
+    caches.clear();
     save();
     return { ok: true, value: snapshot() };
   }
@@ -164,7 +169,7 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
       instructions: memoryBatchInstructions,
       apply(result, chunk) {
         const n = applyBatch(mem, result, { now: now(), jobId: chunk.jobId, textType: chunk.textType, user: chunk.user ?? '' }).length;
-        cache = null;
+        caches.clear();
         save();
         return n;
       },
@@ -176,7 +181,7 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
       },
       undo(jobId) {
         undoBatch(mem, jobId);
-        cache = null;
+        caches.clear();
         save();
       },
     },
@@ -219,7 +224,7 @@ export function createMemory({ store, now = Date.now, log = () => {}, moodValenc
       const ok = applyConsolidation(mem, text, pendingTaken);
       pendingTaken = null;
       if (ok) {
-        cache = null;
+        caches.clear();
         save();
         // 调用期间又攒够了（比如刚导入完）：再压一次
         if (consolidationDue(mem)) queueMicrotask(onConsolidate);
