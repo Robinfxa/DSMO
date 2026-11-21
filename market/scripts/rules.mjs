@@ -20,6 +20,37 @@ const PROTECTED_WORDS = /approval|permission|login|api-?key|credential|protected
 const CATEGORIES = new Set(['appearance', 'interface', 'tools', 'skills', 'automation', 'engine']);
 const LIMITS = { description: 2000, manifestBytes: 64 * 1024, panelBytes: 256 * 1024, cssBytes: 16 * 1024, title: 24, summary: 200, slotTitle: 12 };
 
+export const GUIDE = { where: 100, steps: [2, 6], stepTitle: 20, stepText: 200, tips: 5, tip: 100, faq: 8, q: 40, a: 300, tryLabel: 10 };
+const str = (x, max) => typeof x === 'string' && x.trim().length > 0 && x.length <= max;
+
+function checkGuide(m, e, warn) {
+  const g = m.guide;
+  if (!g || typeof g !== 'object' || Array.isArray(g)) return e('guide 要是对象：{ where, steps, tips?, faq?, try? }');
+  for (const k of Object.keys(g)) if (!['where', 'steps', 'tips', 'faq', 'try'].includes(k)) e(`guide 不认识 ${k}`);
+  if (!str(g.where, GUIDE.where)) e(`guide.where 写装好后在哪里找到它，${GUIDE.where} 字以内`);
+  const steps = Array.isArray(g.steps) ? g.steps : [];
+  if (steps.length < GUIDE.steps[0] || steps.length > GUIDE.steps[1]) e(`guide.steps 要 ${GUIDE.steps[0]}–${GUIDE.steps[1]} 步`);
+  steps.forEach((x, i) => {
+    if (!str(x?.title, GUIDE.stepTitle)) e(`guide.steps 第 ${i + 1} 步的 title 要在 ${GUIDE.stepTitle} 字以内`);
+    if (!str(x?.text, GUIDE.stepText)) e(`guide.steps 第 ${i + 1} 步的 text 要在 ${GUIDE.stepText} 字以内`);
+  });
+  if (g.tips !== undefined && (!Array.isArray(g.tips) || g.tips.length > GUIDE.tips || g.tips.some((t) => !str(t, GUIDE.tip)))) e(`guide.tips 最多 ${GUIDE.tips} 条，每条 ${GUIDE.tip} 字以内`);
+  if (g.faq !== undefined && (!Array.isArray(g.faq) || g.faq.length > GUIDE.faq || g.faq.some((x) => !str(x?.q, GUIDE.q) || !str(x?.a, GUIDE.a)))) e(`guide.faq 最多 ${GUIDE.faq} 条，问题 ${GUIDE.q} 字、回答 ${GUIDE.a} 字以内`);
+  if (g.try !== undefined) {
+    const a = (g.try && g.try.action) || {};
+    if (!str(g.try && g.try.label, GUIDE.tryLabel)) e(`guide.try.label 要在 ${GUIDE.tryLabel} 字以内`);
+    if (['insert', 'open', 'panel'].filter((k) => k in a).length !== 1) e('guide.try.action 只能是 insert / open / panel 之一');
+    if (a.open && PROTECTED_WORDS.test(a.open)) e('guide.try 不能打开受保护的页面');
+    if (a.panel && !(m.panels && m.panels[a.panel])) e(`guide.try 指向不存在的面板 ${a.panel}`);
+    if (a.insert && String(a.insert).length > 2000) e('guide.try 的插入文字超过 2000 字');
+  }
+  // what people trip over: say it in the guide
+  const all = JSON.stringify(g);
+  if ((m.slots || []).length && !/高级模式/.test(all)) warn('边栏和输入框里的入口只在高级模式下显示，使用说明里最好提一句');
+  for (const sk of m.skills || []) if (!all.includes(`/${sk.name}`)) warn(`使用说明里没写怎么调用技能 /${sk.name}`);
+  if ((m.engine || (m.kinds || []).includes('engine')) && !/主机|引擎/.test(all)) warn('引擎插件装在主机上，使用说明里最好说一下（换主机、重启引擎）');
+}
+
 /** Tier decides how much human review an entry needs (docs/market.md). */
 export function tierOf(m) {
   if (m.engine || (m.kinds || []).includes('engine')) return 3;
@@ -30,7 +61,7 @@ export function tierOf(m) {
   return 1;
 }
 
-export function checkManifest(m, { panelHtml = {} } = {}) {
+export function checkManifest(m, { panelHtml = {}, listing = false } = {}) {
   const errors = [];
   const warn = [];
   const e = (s) => errors.push(s);
@@ -47,6 +78,11 @@ export function checkManifest(m, { panelHtml = {} } = {}) {
   if (m.description !== undefined && (typeof m.description !== 'string' || m.description.length > LIMITS.description)) e(`description 超过 ${LIMITS.description} 字`);
   if (m.affects !== undefined && (!Array.isArray(m.affects) || m.affects.some((a) => !AFFECTS.has(a)))) e(`affects 只能用 market/tags.json 里定义的标签：${[...AFFECTS].join(' / ')}`);
   if (m.highlights !== undefined && (!Array.isArray(m.highlights) || m.highlights.length > 5 || m.highlights.some((h) => typeof h !== 'string' || h.length > 40))) e('highlights 最多 5 条，每条 40 字以内');
+
+  // 使用说明 (docs/plugins.md): every listed plugin has one; the market check asks for it.
+  if (m.guide === undefined) {
+    if (listing) e('缺少使用说明 guide：上架的插件都要写（docs/plugins.md › 使用说明）');
+  } else checkGuide(m, e, (x) => warn.push(x));
 
   // Hard rule 1: skins only touch design tokens; custom CSS may not name protected zones.
   for (const mode of ['light', 'dark']) {

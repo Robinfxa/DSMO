@@ -18,7 +18,7 @@ for (const dir of process.argv.slice(2)) {
     if (f && existsSync(f)) panelHtml[id] = readFileSync(f, 'utf8');
   }
   if (pkg.license === undefined) console.warn(`! ${pkg.name}: 没有写 license`);
-  const { errors, warn } = checkManifest(m, { panelHtml });
+  const { errors, warn } = checkManifest(m, { panelHtml, listing: true });
   for (const w of warn) console.warn(`! ${pkg.name}: ${w}`);
   if (errors.length) { failed = true; for (const x of errors) console.error(`✗ ${pkg.name}: ${x}`); }
   else console.log(`✓ ${pkg.name}@${pkg.version}  第 ${tierOf(m)} 级`);

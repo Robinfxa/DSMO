@@ -31,6 +31,7 @@ market/
 - 硬规定：皮肤变量名和值；自定义 CSS 不能出现 `data-protected`、`approval`、`permission`、`login`、`:host`、`::part`、`shadow`，不能 `@import` / `url()`；布局只能隐藏白名单；入口不能指向受保护页面、`panel` 必须存在、`insert` ≤ 2000 字。
 - 面板：≤ 256 KiB；不能有外部脚本、外部样式、嵌套 iframe / object / embed；不能碰 `top` / `parent` 的 `document` / `location`、`document.cookie`、`localStorage`、`indexedDB`；用了网络 / 引擎 / 存储 / 发消息就必须声明对应权限；`eval` / `new Function` 给出警告。
 - 引擎部分：包名合法，版本必须是固定版本号。
+- 使用说明：上架必须有 `guide`（`where` + 2–6 步，长度上限见 docs/plugins.md › 使用说明）；有入口却没提高级模式、技能没写 `/名字`、引擎插件没提主机，给出警告。
 
 这些检查只是「明显不行」的过滤，安全边界在运行时（沙箱、CSP、白名单、巡检）。
 
@@ -38,7 +39,7 @@ market/
 
 1. 作者提 PR：在 `plugins/` 下放源码（或指向固定版本的 npm 包），在 `market/plugins/` 加条目。
 2. CI 跑 `check.mjs` 和 `build-index.mjs`，贴出级别。
-3. 按级别人工审核；通过后合并，`index.json` 随下一个 App 版本发布。
+3. 按级别人工审核，并照着使用说明在 App 里走一遍：每一步都能做到、叫法和界面一致；通过后合并，`index.json` 随下一个 App 版本发布。
 4. 下架：从 `market/plugins/` 删条目（想留作例子就挪到 `market/examples/`，列进 `policy.examples`），重建索引。只在页面里的插件（没有引擎部分、技能、任务）加进 `official.ts` 的 `RETIRED`，装过的手机会把它和它的数据清掉；有引擎部分的另说（第二版做）。
 
 ## 插件更新

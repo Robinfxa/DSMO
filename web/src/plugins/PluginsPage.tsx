@@ -19,6 +19,7 @@ import {
   installPlugin,
   pluginUpdates,
   updatePlugin,
+  runSlotAction,
   pluginJobs,
   type PluginJob,
   installed,
@@ -45,9 +46,12 @@ import { onLocalHost } from '../setup/state';
 import type { InstallOutcome } from './frontend';
 
 /** After an install: an engine plugin that loads only once the engine restarts says so (and offers it on this phone). */
-function afterInstall(title: string, outcome: InstallOutcome) {
-  if (!outcome.restart) return showToast(`已安装「${title}」`);
-  if (!onLocalHost.value) return showToast(`已安装「${title}」，在主机上重启 DSH 后生效`);
+function afterInstall(p: ApiDemoManifest, outcome: InstallOutcome) {
+  const title = p.title;
+  // the toast offers the guide: 怎么用 is the first question after 获取
+  const say = (text: string) => (p.guide ? showToast(text, '怎么用', () => openPluginGuide(p.id)) : showToast(text));
+  if (!outcome.restart) return say(`已安装「${title}」`);
+  if (!onLocalHost.value) return say(`已安装「${title}」，在主机上重启 DSH 后生效`);
   confirm(`「${title}」装好了`, '重启本机引擎后生效。正在生成的回复会中断。', '重启引擎', () => {
     void local('engine.restart')
       .then(() => showToast('引擎正在重启'))
@@ -125,6 +129,7 @@ const tab = signal<'discover' | 'installed'>('discover');
 
 export const openPlugin = (id: string) => openPage(`plugin:${id}`);
 export const openPluginManage = (id: string) => openPage(`plugin-manage:${id}`);
+export const openPluginGuide = (id: string) => openPage(`plugin-guide:${id}`);
 
 // ---------------------------------------------------------------- small parts
 
@@ -184,7 +189,7 @@ function GetButton({ p }: { p: ApiDemoManifest }) {
         e.stopPropagation();
         installChecked(p, () => {
           installPlugin(p.id)
-            .then((r) => afterInstall(p.title, r))
+            .then((r) => afterInstall(p, r))
             .catch((err) => showToast(errText(err)));
         });
       }}
@@ -499,7 +504,7 @@ export function PluginDetailPage({ id }: { id: string }) {
     try {
       const outcome = await installPlugin(id);
       if (trialSkin.value === id) setTrialSkin(null);
-      afterInstall(p.title, outcome);
+      afterInstall(p, outcome);
     } catch (e) {
       showToast(errText(e));
     }
@@ -581,6 +586,21 @@ export function PluginDetailPage({ id }: { id: string }) {
         ))}
       </div>
 
+      {p.guide && (
+        <section class="plg-sec">
+          <h2 class="plg-sec-t">怎么用</h2>
+          <GuideSteps p={p} />
+          {(p.guide.faq?.length || p.guide.tips?.length) && (
+            <div class="plg-group plg-guide-more">
+              <button class="plg-link" type="button" onClick={() => openPluginGuide(id)}>
+                <span>{p.guide.faq?.length ? `小贴士和常见问题` : '小贴士'}</span>
+                <MIc n="chevron" />
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
       <section class="plg-sec">
         <h2 class="plg-sec-t">{c === 'skills' ? '包含的技能' : c === 'automation' ? '包含的自动化任务' : `效果预览${c === 'interface' ? '（高级模式下生效）' : ''}`}</h2>
         {c === 'skills' && <SkillPreview p={p} />}
@@ -643,11 +663,116 @@ export function PluginDetailPage({ id }: { id: string }) {
   );
 }
 
+// ---------------------------------------------------------------- 使用说明
+
+/** Where it is, then the numbered steps: the tutorial part of a guide. */
+function GuideSteps({ p }: { p: ApiDemoManifest }) {
+  const g = p.guide!;
+  return (
+    <div class="plg-group plg-guide">
+      <div class="plg-guide-where">
+        <MIc n="pointer" />
+        <span>{g.where}</span>
+      </div>
+      <ol class="plg-steps">
+        {g.steps.map((x, i) => (
+          <li class="plg-step" key={i}>
+            <span class="plg-step-n">{i + 1}</span>
+            <div class="plg-step-m">
+              <div class="plg-step-t">{x.title}</div>
+              <div class="plg-step-s">{x.text}</div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** The whole guide: where, steps, a button that takes you there, tips and questions. */
+export function PluginGuidePage({ id }: { id: string }) {
+  const p = findPlugin(id);
+  const [open, setOpen] = useState<number | null>(null);
+  if (!p?.guide) return <div class="plg-empty-line">这个插件还没有使用说明。</div>;
+  const g = p.guide;
+  const inst = isInstalled(id);
+  const on = isEnabled(id);
+  const needsAdvanced = !!g.try && 'panel' in g.try.action && !prefs.value.advanced;
+  return (
+    <div class="plg plg-guide-page">
+      <div class="plg-hero">
+        <PluginTile p={p} size="lg" />
+        <div class="plg-hero-m">
+          <h2>{p.title}</h2>
+          <div class="plg-hero-s">{p.summary}</div>
+        </div>
+      </div>
+      <section class="plg-sec">
+        <h2 class="plg-sec-t">怎么用</h2>
+        <GuideSteps p={p} />
+        {g.try && inst && (
+          <div class="plg-guide-try">
+            <button
+              class="plg-btn pri wide"
+              type="button"
+              disabled={!on}
+              onClick={() => runSlotAction(p, g.try!.action)}
+            >
+              {g.try.label}
+            </button>
+            {!on ? <p class="plg-note">插件停用了，先在「管理」里打开。</p> : needsAdvanced ? <p class="plg-note">边栏里的入口在高级模式下才显示，从这里一样能打开。</p> : null}
+          </div>
+        )}
+      </section>
+      {!!g.tips?.length && (
+        <section class="plg-sec">
+          <h2 class="plg-sec-t">小贴士</h2>
+          <div class="plg-group">
+            {g.tips.map((t, i) => (
+              <div class="plg-row static" key={i}>
+                <div class="plg-row-m">
+                  <div class="plg-row-s wrap plg-tip">{t}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {!!g.faq?.length && (
+        <section class="plg-sec">
+          <h2 class="plg-sec-t">常见问题</h2>
+          <div class="plg-group plg-faq">
+            {g.faq.map((x, i) => (
+              <div class={`plg-faq-i ${open === i ? 'open' : ''}`} key={i}>
+                <button class="plg-faq-q" type="button" aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}>
+                  <span>{x.q}</span>
+                  <MIc n="chevronDown" />
+                </button>
+                {open === i && <div class="plg-faq-a">{x.a}</div>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {!inst && (
+        <section class="plg-sec">
+          <div class="plg-group">
+            <button class="plg-link" type="button" onClick={() => openPlugin(id)}>
+              <span>去安装</span>
+              <MIc n="chevron" />
+            </button>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function uninstall(p: ApiDemoManifest) {
   confirm(`卸载「${p.title}」？`, p.engine ? '前端部分和它在这台设备上的数据会删除，引擎部分也会从当前主机移除。' : '插件和它在这台设备上的数据都会删除，之后可以重新安装。', '卸载', async () => {
     await removePlugin(p.id);
     // Leave the detail / manage pages of the removed plugin.
-    while (pages.value.length && /^plugin(-manage)?:/.test(pages.value[pages.value.length - 1]) && pages.value[pages.value.length - 1].endsWith(p.id)) backPage();
+    while (pages.value.length && /^plugin(-manage|-guide)?:/.test(pages.value[pages.value.length - 1]) && pages.value[pages.value.length - 1].endsWith(p.id)) backPage();
     showToast(`已卸载「${p.title}」`);
   });
 }
@@ -677,6 +802,12 @@ export function PluginManagePage({ id }: { id: string }) {
           </div>
           {hasToggle(p) && <Switch on={isEnabled(id)} label="启用" onChange={(v) => void setPluginEnabled(id, v)} />}
         </div>
+        {p.guide && (
+          <button class="plg-link" type="button" onClick={() => openPluginGuide(id)}>
+            <span>使用说明</span>
+            <MIc n="chevron" />
+          </button>
+        )}
       </div>
 
       {opts.length > 0 && (

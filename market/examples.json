@@ -3,7 +3,7 @@
   "plugins": [
     {
       "tier": 1,
-      "integrity": "sha256-pRRPr/39bvHgOGFuWo+5gLmoTScFdN5SAsnTC760CAs=",
+      "integrity": "sha256-lIwkbX61EKFiHqL94/rMI4JY4rUvvPZ7YYuL0UDKhQ8=",
       "manifest": {
         "v": 1,
         "title": "专注布局",
@@ -25,6 +25,29 @@
           "可以逐项开关",
           "随时停用，界面马上恢复"
         ],
+        "guide": {
+          "where": "装好就生效（高级模式下）。藏哪些在「插件 › 已安装 › 专注布局 › 管理」里选。",
+          "steps": [
+            {
+              "title": "装好看看",
+              "text": "高级模式下，边栏的「手机操控」「自动化任务」和输入框的语音按钮被藏起来。"
+            },
+            {
+              "title": "逐项决定",
+              "text": "在「管理 › 要隐藏的地方」里开关每一项，想留哪个就关掉哪个。"
+            },
+            {
+              "title": "全部恢复",
+              "text": "在「管理」里关掉插件开关，或卸载。"
+            }
+          ],
+          "faq": [
+            {
+              "q": "授权卡会被藏吗？",
+              "a": "不会。授权卡、权限页和登录框不在能隐藏的范围里。"
+            }
+          ]
+        },
         "id": "@api-demo/layout-focus",
         "version": "1.0.0",
         "license": "MIT",
@@ -33,7 +56,7 @@
     },
     {
       "tier": 2,
-      "integrity": "sha256-V2LGifTRe8jG1LNXEZv9vYEhqxs9aggbq09giGzBhus=",
+      "integrity": "sha256-pfkFPP+cQWYPlKdyPVhTr5oPS/ylu1m5bwjfFpCl8YY=",
       "manifest": {
         "v": 1,
         "title": "随手记",
@@ -68,6 +91,35 @@
           "一键把便签放进输入框",
           "可在管理页清除数据"
         ],
+        "guide": {
+          "where": "边栏「功能 › 随手记」（高级模式）。",
+          "steps": [
+            {
+              "title": "打开随手记",
+              "text": "打开边栏，展开「功能」，点「随手记」。入口在高级模式下才显示。"
+            },
+            {
+              "title": "记下来",
+              "text": "想到什么先写进便签，自动保存在这台设备上；「清空」一键清掉。"
+            },
+            {
+              "title": "放进输入框",
+              "text": "需要时点「放进输入框」，便签的内容就放进输入框，不会自动发送。"
+            }
+          ],
+          "faq": [
+            {
+              "q": "存在哪？",
+              "a": "只在这台设备上。「管理」里能看到占了多少空间，也能清除。"
+            }
+          ],
+          "try": {
+            "label": "打开随手记",
+            "action": {
+              "panel": "main"
+            }
+          }
+        },
         "id": "@api-demo/notes-panel",
         "version": "1.0.0",
         "license": "MIT",
@@ -76,7 +128,7 @@
     },
     {
       "tier": 2,
-      "integrity": "sha256-vyBofCdop/iiACDvv3xMPoTKBinuXq6FaYaAzEAZ0yg=",
+      "integrity": "sha256-YpJrOyXwwLcuVucVp51/oeBhRj4aMpXr2HSSjdHk6fQ=",
       "manifest": {
         "v": 1,
         "title": "对话统计",
@@ -111,6 +163,31 @@
           "显示正在运行的对话",
           "只读，不能发消息或改设置"
         ],
+        "guide": {
+          "where": "边栏「功能 › 对话统计」（高级模式）。",
+          "steps": [
+            {
+              "title": "打开对话统计",
+              "text": "打开边栏，展开「功能」，点「对话统计」。入口在高级模式下才显示。"
+            },
+            {
+              "title": "看数字",
+              "text": "最近的对话数量、正在运行的对话，数据来自当前主机。"
+            }
+          ],
+          "faq": [
+            {
+              "q": "它能改我的东西吗？",
+              "a": "不能。它只能通过受限接口读对话列表这类信息，不能发消息、不能改设置。"
+            }
+          ],
+          "try": {
+            "label": "打开对话统计",
+            "action": {
+              "panel": "main"
+            }
+          }
+        },
         "id": "@api-demo/session-stats",
         "version": "1.0.0",
         "license": "MIT",
@@ -119,7 +196,7 @@
     },
     {
       "tier": 2,
-      "integrity": "sha256-x44iZ2+ue9pT6pd3Bq0EDY3X9sGfL2GpxAtxg6aBfy8=",
+      "integrity": "sha256-pwvgMOYSdJ+iR1J0TVtuJIcNz5npYjGdxqNUWj9cvTg=",
       "manifest": {
         "v": 1,
         "title": "纸张",
@@ -153,6 +230,29 @@
           "浅色、深色各一套",
           "自定义样式受保护规则约束"
         ],
+        "guide": {
+          "where": "装好就换上，不用找入口。浅色、深色跟着「设置 › 外观」切换。",
+          "steps": [
+            {
+              "title": "先试用",
+              "text": "在详情页点「试用」，离开这一页就恢复。"
+            },
+            {
+              "title": "安装",
+              "text": "装好立刻生效，原来的皮肤自动停用。回答正文换成衬线字体。"
+            },
+            {
+              "title": "换回默认",
+              "text": "在「管理」里关掉开关，或卸载。"
+            }
+          ],
+          "faq": [
+            {
+              "q": "被自动停用了？",
+              "a": "它带一小段自定义样式。万一遮住授权卡或登录框，App 会暂停它；停用别的皮肤后重新启用就恢复。"
+            }
+          ]
+        },
         "id": "@api-demo/skin-paper",
         "version": "1.0.0",
         "license": "MIT",

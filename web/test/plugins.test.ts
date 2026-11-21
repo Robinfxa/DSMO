@@ -157,6 +157,23 @@ describe('plugin store pages', async () => {
     expect(checkManifest({ ...base, category: 'games' }).errors.length).toBe(1);
     expect(checkManifest({ ...base, highlights: ['1', '2', '3', '4', '5', '6'] }).errors.length).toBe(1);
   });
+
+  it('a listed plugin needs a 使用说明, and the guide follows the standard', () => {
+    const guide = { where: '边栏「功能 › 随手记」（高级模式）', steps: [{ title: '打开', text: '展开「功能」点它' }, { title: '用', text: '写下来' }] };
+    expect(checkManifest(base, { listing: true }).errors.join()).toContain('缺少使用说明');
+    expect(checkManifest(base).errors).toEqual([]); // the rules alone (runtime, tests) don't ask for one
+    expect(checkManifest({ ...base, guide }, { listing: true }).errors).toEqual([]);
+    expect(checkManifest({ ...base, guide: { ...guide, steps: guide.steps.slice(0, 1) } }).errors.join()).toContain('2–6 步');
+    expect(checkManifest({ ...base, guide: { ...guide, where: '' } }).errors.join()).toContain('guide.where');
+    expect(checkManifest({ ...base, guide: { ...guide, faq: [{ q: '问', a: '' }] } }).errors.join()).toContain('guide.faq');
+    expect(checkManifest({ ...base, guide: { ...guide, try: { label: '去', action: { open: 'approval' } } } }).errors.join()).toContain('受保护');
+    expect(checkManifest({ ...base, guide: { ...guide, try: { label: '去', action: { panel: 'nope' } } } }).errors.join()).toContain('不存在的面板');
+    expect(checkManifest({ ...base, guide: { ...guide, extra: 1 } }).errors.join()).toContain('不认识 extra');
+    // the usual stumbling blocks get a nudge
+    const slot = { ...base, kinds: ['slot'], slots: [{ slot: 'sider.features', id: 'a', title: 'A', action: { insert: 'x' } }] };
+    expect(checkManifest({ ...slot, guide: { ...guide, where: '边栏' } }).warn.join()).toContain('高级模式');
+    expect(checkManifest({ ...slot, guide }).warn).toEqual([]);
+  });
 });
 
 describe('engine plugins: setup call', () => {

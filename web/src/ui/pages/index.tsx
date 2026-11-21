@@ -4,7 +4,7 @@ import { native } from '../../bridge/native';
 import type { JobInfo } from '../../engine/client';
 import type { LogEvent } from '../../engine/events';
 import { dshGoPanels } from '../../plugins/dshgo';
-import { PluginDetailPage, PluginManagePage, PluginsPage } from '../../plugins/PluginsPage';
+import { PluginDetailPage, PluginGuidePage, PluginManagePage, PluginsPage } from '../../plugins/PluginsPage';
 import { findPlugin } from '../../plugins/frontend';
 import { ImportRunPage, ImportedChatPage, ImportedListPage } from '../../history/ui';
 import {
@@ -111,7 +111,7 @@ export const PAGES: Record<string, PageDef> = {
   'room-new': { title: '新建群聊', body: NewRoomPage },
 };
 
-/** Pages with a parameter: `plugin:<id>` (detail) and `plugin-manage:<id>` (its 管理 page). */
+/** Pages with a parameter: `plugin:<id>` (detail), `plugin-manage:<id>` (its 管理 page), `plugin-guide:<id>` (使用说明). */
 function pageDef(id: string | undefined): PageDef | undefined {
   if (!id) return undefined;
   if (id.startsWith('memory:')) {
@@ -183,10 +183,11 @@ function pageDef(id: string | undefined): PageDef | undefined {
     if (h[1] === 'engine-settings') return { title: '引擎设置', body: () => <EngineSettingsNsPage ns={arg} /> };
     return { title: arg, body: () => <ProviderDetailPage id={arg} /> };
   }
-  const m = /^(plugin|plugin-manage):(.+)$/.exec(id);
+  const m = /^(plugin|plugin-manage|plugin-guide):(.+)$/.exec(id);
   if (!m) return PAGES[id];
   const pid = m[2];
   if (m[1] === 'plugin') return { title: '插件详情', body: () => <PluginDetailPage id={pid} /> };
+  if (m[1] === 'plugin-guide') return { title: '使用说明', body: () => <PluginGuidePage id={pid} /> };
   return { title: findPlugin(pid) ? `管理「${findPlugin(pid)!.title}」` : '管理插件', body: () => <PluginManagePage id={pid} /> };
 }
 

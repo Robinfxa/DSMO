@@ -35,6 +35,8 @@ export interface ApiDemoManifest {
   description?: string;
   /** Up to five short selling points. */
   highlights?: string[];
+  /** 使用说明: where it shows up, how to use it step by step, tips, questions (docs/plugins.md). */
+  guide?: PluginGuide;
   kinds: ('skin' | 'layout' | 'slot' | 'panel' | 'engine' | 'skill' | 'schedule')[];
   /** Skills written into the local engine (`/root/.dsh/skills/<name>/`). */
   skills?: { name: string; files: Record<string, string> }[];
@@ -57,6 +59,16 @@ export interface ApiDemoManifest {
      */
     setup?: { path: string; body: Record<string, unknown> };
   };
+}
+export interface PluginGuide {
+  /** Where it is once installed, in the app's own words: 「设置 › 陪伴 › 人设」. */
+  where: string;
+  /** The tutorial: 2–6 steps, each a short title and what to do. */
+  steps: { title: string; text: string }[];
+  tips?: string[];
+  faq?: { q: string; a: string }[];
+  /** A button on the guide that takes you there (same as a slot's action). */
+  try?: { label: string; action: SlotAction };
 }
 export interface ManifestSchedule {
   id: string;
@@ -132,7 +144,7 @@ export function slotItems(slot: SlotName): { key: string; title: string; icon: I
   return out;
 }
 
-function runSlotAction(p: ApiDemoManifest, a: SlotAction) {
+export function runSlotAction(p: ApiDemoManifest, a: SlotAction) {
   if ('insert' in a) {
     draft.value = (draft.value ? draft.value + '\n' : '') + a.insert.slice(0, 2000);
     document.getElementById('input')?.focus();
@@ -485,6 +497,8 @@ export function validateManifest(p: ApiDemoManifest) {
   for (const k of p.layout?.hide ?? []) if (!HIDEABLE.has(k)) throw new Error(`插件想隐藏「${k}」，这是不允许的`);
   for (const mode of ['light', 'dark'] as const) for (const [k, v] of Object.entries(p.skin?.[mode] ?? {})) checkToken(k, v);
   for (const s of p.slots ?? []) if ('open' in s.action && PROTECTED_WORDS.test(s.action.open)) throw new Error('插件入口不能指向受保护的页面');
+  const t = p.guide?.try?.action;
+  if (t && 'open' in t && PROTECTED_WORDS.test(t.open)) throw new Error('插件入口不能指向受保护的页面');
   checkEngineSetup(p);
 }
 

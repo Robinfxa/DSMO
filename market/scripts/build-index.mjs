@@ -29,7 +29,7 @@ function build(dir, isOfficial) {
       manifest.panels[id] = { title: p.title, html: readFileSync(file, 'utf8') };
     }
     if (manifest.skills) manifest.skills = inlineSkills(manifest.skills, src);
-    const { errors } = checkManifest(manifest);
+    const { errors } = checkManifest(manifest, { listing: true });
     if (errors.length) { bad = true; errors.forEach((x) => console.error(`✗ ${pkg.name}: ${x}`)); continue; }
     const integrity = 'sha256-' + createHash('sha256').update(JSON.stringify(manifest)).digest('base64');
     out.push({ tier: tierOf(manifest), integrity, manifest });
