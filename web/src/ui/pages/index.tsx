@@ -53,7 +53,8 @@ import {
   txVersion,
 } from '../../state/store';
 import { describeTool } from '../Chat';
-import { Empty, Ic, Lrow, fmtSize, fmtTime, useAsync } from '../common';
+import { Empty, Ic, Lrow, Switch, fmtSize, fmtTime, useAsync } from '../common';
+import { hiddenByPlugin, setSiderShown, siderHidden, siderRows, siderShown } from '../siderFeats';
 import { Protected } from '../Protected';
 import { CATALOG, catalogItem, nativePlaceholder, openFeature, type PageDef } from './registry';
 
@@ -61,6 +62,7 @@ const sid = () => currentId.value;
 
 export const PAGES: Record<string, PageDef> = {
   features: { title: '全部功能', body: FeaturesPage },
+  'sider-feats': { title: '边栏功能区', body: SiderFeatsPage },
   native: { title: '原生页面', body: NativePage },
   plugins: { title: '插件', body: PluginsPage },
   'session-detail': { title: '对话详情', session: true, body: DetailPage },
@@ -244,8 +246,18 @@ export function PageHost() {
 
 function FeaturesPage() {
   const panels = dshGoPanels.value;
+  const off = siderRows.value.filter((r) => siderHidden.value.has(r.key)).length;
   return (
     <>
+      <div>
+        <div class="group-h">边栏</div>
+        <Lrow
+          title="管理边栏功能区"
+          sub={off ? `${off} 个按钮没有显示` : '选哪些按钮显示在边栏「功能」里'}
+          onClick={() => openPage('sider-feats')}
+          end={<span class="lrow-end"><Ic n="IconChevronRightOutline14" /></span>}
+        />
+      </div>
       {CATALOG.map(([group, items]) => (
         <div key={group}>
           <div class="group-h">{group}</div>
@@ -268,6 +280,29 @@ function FeaturesPage() {
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+/** 全部功能 › 管理边栏功能区: a switch per row of the sidebar's 「功能」. */
+function SiderFeatsPage() {
+  const rows = siderRows.value;
+  return (
+    <>
+      <div class="group-h">显示在边栏「功能」里</div>
+      {rows.map((r) => {
+        const by = hiddenByPlugin(r.key);
+        return (
+          <Lrow
+            key={r.key}
+            title={r.title}
+            sub={by ? `被插件「${by}」藏起来了，在它的「管理」里改` : r.sub}
+            end={<Switch on={!by && siderShown(r.key)} disabled={!!by} label={`在边栏显示${r.title}`} onChange={(v) => setSiderShown(r.key, v)} />}
+          />
+        );
+      })}
+      <Lrow title="全部功能" sub="一直显示：不常用的功能都能从这里找到" end={<Switch on disabled label="在边栏显示全部功能" onChange={() => {}} />} />
+      <div class="note" style="margin-top:12px">关掉的按钮只是不在边栏显示，功能本身还在，随时能从「全部功能」打开。</div>
     </>
   );
 }

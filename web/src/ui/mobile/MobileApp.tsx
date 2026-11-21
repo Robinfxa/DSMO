@@ -20,7 +20,7 @@ import { imported } from '../../history/imported';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { SessionSummary } from '../../engine/events';
-import { layoutHidden, slotItems } from '../../plugins/frontend';
+import { slotItems } from '../../plugins/frontend';
 import {
   conn,
   confirm,
@@ -53,6 +53,7 @@ import { Chat } from '../Chat';
 import { Composer } from '../Composer';
 import { PageHost } from '../pages';
 import { openFeature } from '../pages/registry';
+import { siderHidden } from '../siderFeats';
 import { type MIconName } from './icons';
 import { MIc } from './MIc';
 import { Screens } from './Screens';
@@ -198,7 +199,7 @@ function FeatureList({ extra, hidden, host }: { extra: ReturnType<typeof slotIte
   const feat = ([icon, label, id]: [MIconName, string, string]): Feat => ({ key: id, icon, label, on: pages.value[0] === id, run: () => openFeature(id, true) });
   const items: Feat[] = [
     ...FEATURES.filter(([, , id]) => id !== 'features' && !hidden.has(`sider.features.${id}`)).map(feat),
-    ...(st.team
+    ...(st.team && !hidden.has('sider.features.bots')
       ? [
           {
             key: 'bots',
@@ -210,7 +211,7 @@ function FeatureList({ extra, hidden, host }: { extra: ReturnType<typeof slotIte
           },
         ]
       : []),
-    ...extra.map((x) => ({ key: x.key, icon: 'sparkle' as const, label: x.title, run: () => ((drawerOpen.value = false), x.run()) })),
+    ...extra.filter((x) => !hidden.has(`slot:${x.key}`)).map((x) => ({ key: x.key, icon: 'sparkle' as const, label: x.title, run: () => ((drawerOpen.value = false), x.run()) })),
     ...FEATURES.filter(([, , id]) => id === 'features' && !hidden.has(`sider.features.${id}`)).map(feat),
   ];
   const showHost = !!host && !hidden.has('sider.host');
@@ -267,7 +268,6 @@ function Drawer({ onTouchStart, onTouchMove }: { onTouchStart: (e: TouchEvent) =
     else groups.push([g, [s]]);
   }
   const adv = prefs.value.advanced;
-  const hidden = layoutHidden.value;
   const host = nativeInfo.value?.hosts.find((h) => h.current);
   const extra = slotItems('sider.features');
   const acc = credential.value;
@@ -324,7 +324,7 @@ function Drawer({ onTouchStart, onTouchMove }: { onTouchStart: (e: TouchEvent) =
       <div class="m-list">
         {adv && (
           <div class={`m-feat ${picking ? 'dim' : ''}`} inert={picking ? true : undefined}>
-            <FeatureList extra={extra} hidden={hidden} host={host} />
+            <FeatureList extra={extra} hidden={siderHidden.value} host={host} />
           </div>
         )}
         {pinnedList.length > 0 && (

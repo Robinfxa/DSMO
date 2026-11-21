@@ -6,26 +6,16 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import http from 'node:http';
+import { serveProto } from './serve.mjs';
 import { openFeats } from './feats.mjs';
 const require = createRequire('/opt/npm-tools/node_modules/');
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'shots', 'background');
 mkdirSync(shots, { recursive: true });
-// served over http, not file://: localStorage under file:// now and then comes back empty after a reload
-const dist = join(here, '..', 'dist-proto');
-const server = http.createServer((req, res) => {
-  try {
-    const body = readFileSync(join(dist, decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/$/, '/index.html').replace(/\.\./g, '')));
-    res.writeHead(200, { 'content-type': req.url.endsWith('.js') ? 'text/javascript' : req.url.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8' });
-    res.end(body);
-  } catch {
-    res.writeHead(404).end();
-  }
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const url = `http://127.0.0.1:${server.address().port}/index.html`;
+// served over http, not file:// (e2e/serve.mjs)
+const server = await serveProto();
+const url = server.url;
 const errors = [];
 const check = (ok, what) => {
   console.log((ok ? 'ok   ' : 'FAIL ') + what);

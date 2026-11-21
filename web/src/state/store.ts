@@ -40,6 +40,8 @@ export interface Prefs {
   /** Top-bar speaker: read finished replies aloud. */
   autoRead: boolean;
   nickname: string;
+  /** 全部功能 › 边栏功能区: rows the person took out of the sidebar's 功能 (ui/siderFeats.ts). */
+  siderHidden: string[];
 }
 const DEFAULT_PREFS: Prefs = {
   theme: 'system',
@@ -60,12 +62,13 @@ const DEFAULT_PREFS: Prefs = {
   fontFollowSystem: true,
   autoRead: false,
   nickname: '',
+  siderHidden: [],
 };
 function loadPrefs(): Prefs {
   try {
     const saved = JSON.parse(localStorage.getItem('api-demo:prefs') || '{}');
     const out = { ...DEFAULT_PREFS };
-    for (const k of Object.keys(out) as (keyof Prefs)[]) if (k in saved && typeof saved[k] === typeof out[k]) (out as any)[k] = saved[k];
+    for (const k of Object.keys(out) as (keyof Prefs)[]) if (k in saved && typeof saved[k] === typeof out[k] && Array.isArray(saved[k]) === Array.isArray(out[k])) (out as any)[k] = saved[k];
     return out;
   } catch {
     return { ...DEFAULT_PREFS };

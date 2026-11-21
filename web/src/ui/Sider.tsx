@@ -10,7 +10,7 @@ import { M } from './mobile/icons';
 import { openImportedPage } from '../history/ui';
 import { imported } from '../history/imported';
 import type { SessionSummary } from '../engine/events';
-import { slotItems, layoutHidden } from '../plugins/frontend';
+import { slotItems } from '../plugins/frontend';
 import {
   credential,
   currentId,
@@ -31,6 +31,7 @@ import {
 import { Ic } from './common';
 import { I, type IconName } from './icons';
 import { openFeature } from './pages/registry';
+import { siderHidden } from './siderFeats';
 
 const FEATURES: [IconName, string, string][] = [
   ['FxPlugin', '插件', 'plugins'],
@@ -44,7 +45,7 @@ const FEATURES: [IconName, string, string][] = [
 function FeatureList({ extra, hidden, host }: { extra: ReturnType<typeof slotItems>; hidden: Set<string>; host?: { label: string; status: string } }) {
   const items = [
     ...FEATURES.filter(([, , id]) => id !== 'features' && !hidden.has(`sider.features.${id}`)).map(([icon, label, id]) => ({ key: id, icon, label, on: pages.value[0] === id, more: false, run: () => openFeature(id, true) })),
-    ...extra.map((x) => ({ key: x.key, icon: x.icon, label: x.title, on: false, more: false, run: x.run })),
+    ...extra.filter((x) => !hidden.has(`slot:${x.key}`)).map((x) => ({ key: x.key, icon: x.icon, label: x.title, on: false, more: false, run: x.run })),
     ...FEATURES.filter(([, , id]) => id === 'features' && !hidden.has(`sider.features.${id}`)).map(([icon, label, id]) => ({ key: id, icon, label, on: pages.value[0] === id, more: true, run: () => openFeature(id, true) })),
   ];
   if (!items.length && !(host && !hidden.has('sider.host'))) return null;
@@ -126,7 +127,6 @@ export function Sider() {
     }
     prevAdv.current = adv;
   }, [adv]);
-  const hidden = layoutHidden.value;
   const extra = slotItems('sider.features');
   const account = credential.value;
 
@@ -152,7 +152,7 @@ export function Sider() {
       <div class="s-list">
         {adv && (
           <div class={`feat ${enter ? 'enter' : ''}`}>
-            <FeatureList extra={extra} hidden={hidden} host={host} />
+            <FeatureList extra={extra} hidden={siderHidden.value} host={host} />
           </div>
         )}
         {groups.map(([g, items]) => (
