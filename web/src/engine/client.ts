@@ -423,7 +423,7 @@ export class DshClient {
   async listConfigurableProviders() {
     return list(await this.call('llm/listConfigurableProviders', {})).map(obj);
   }
-  async discoverModels(request: Record<string, unknown>, settingsNs = 'pi-ai') {
+  async discoverModels(request: Record<string, unknown>, settingsNs = 'llm-pi-ai') {
     return list(await this.call('llm/discoverModels', { settingsNs, request })).map(obj);
   }
 

@@ -69,15 +69,16 @@ function namespaces() {
       }),
     },
     {
-      ns: 'pi-ai',
+      ns: 'llm-pi-ai',
       title: '模型提供方',
       schema: S.obj({
         providers: S.dict(
           S.obj({
+            displayName: S.str({ description: t('名称') }),
             baseURL: S.str({ description: t('接口地址'), role: 'url' }),
             api: S.oneOf([['openai-completions', 'OpenAI 兼容'], ['anthropic-messages', 'Anthropic'], ['openai-responses', 'OpenAI Responses']], { description: t('接口协议'), default: 'openai-completions' }),
-            apiKey: S.str({ description: t('密钥'), role: 'secret' }),
-            models: S.arr(S.str(), { description: t('模型 ID') }),
+            apiKeyEnv: S.str({ description: t('密钥的引用名（密钥本身存在凭据里）') }),
+            models: S.arr(S.obj({ id: S.str({ description: t('模型 ID') }), name: S.str({ description: t('显示名') }) }), { description: t('模型') }),
           }),
           { description: t('自己加的提供方'), collapse: false },
         ),
@@ -108,7 +109,7 @@ export class MockHost {
     ['subagent', { value: { maxDepth: 2, maxParallel: 4, inheritPermission: true }, revision: 1 }],
     ['cot-translation', { value: { targetLanguage: 'zh', provider: 'deepseek-official' }, revision: 1 }],
     ['shell', { value: { timeoutSeconds: 120, allowNetwork: true, blockedCommands: ['rm -rf /'], env: {} }, revision: 1 }],
-    ['pi-ai', { value: { providers: {} }, revision: 1 }],
+    ['llm-pi-ai', { value: { providers: {} }, revision: 1 }],
   ]);
   /** dsh-plugin-memory-share's memories.json, as the prototype pretends it. */
   private memories = [
@@ -170,9 +171,9 @@ export class MockHost {
   }
 
   /** Where a credential is set (the Host never returns the value itself). */
-  private secretSlots(ns: string) {
-    if (ns !== 'pi-ai') return [];
-    return Object.entries(obj(this.settings.get(ns)!.value.providers)).filter(([, v]) => !!obj(v).apiKey).map(([k]) => ({ path: ['providers', k, 'apiKey'], set: true }));
+  private secretSlots(_ns: string): { path: string[]; set: boolean }[] {
+    // pi-ai routes name their key by reference (apiKeyEnv); the key itself is a credential
+    return [];
   }
 
   // ------------------------------------------------------------ streams
@@ -301,16 +302,20 @@ export class MockHost {
         return { ns, title: def.title, schema: def.schema, value, revision: cur.revision, user: value };
       }
       case 'llm/listConfigurableProviders': {
-        const own = Object.keys(obj(this.settings.get('pi-ai')!.value.providers));
+        const routes = obj(this.settings.get('llm-pi-ai')!.value.providers);
+        const own = Object.keys(routes);
         return [
           { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'deepseek', settingsPath: [], declared: true, defaultBaseURL: 'https://api.deepseek.com', registered: true },
-          ...own.map((id) => ({ provider: id, displayName: id, settingsNs: 'pi-ai', settingsPath: ['providers', id], declared: true, registered: true })),
+          ...own.map((id) => ({ provider: id, displayName: str(obj(routes[id]).displayName) ?? id, settingsNs: 'llm-pi-ai', settingsPath: ['providers', id], declared: true, registered: true })),
         ];
       }
       case 'llm/discoverModels': {
         const url = str(req.baseURL) ?? '';
         if (!/^https?:\/\//.test(url) && !req.provider) throw new DshRemoteError('llm/discover-failed', `${url || '（没填地址）'}/models：地址无效`);
-        return [{ id: 'model-large' }, { id: 'model-small' }, { id: 'model-coder' }];
+        if (args.settingsNs !== 'llm-pi-ai') throw new DshRemoteError('settings/unknown-namespace', `Unknown settings namespace ${String(args.settingsNs)}`);
+        // like most gateways: the bare domain has no /models, /v1 does
+        if (str(req.api) !== 'anthropic-messages' && /^https?:\/\/[^/]+$/.test(url)) throw new DshRemoteError('llm/discover-failed', `GET ${url}/models answered 404`);
+        return [{ id: 'model-large', name: 'Model Large', contextWindow: 131072 }, { id: 'model-small' }, { id: 'model-coder' }];
       }
 
       // dsh-plugin-memory-share's Remote namespace (长期记忆), once the package is installed

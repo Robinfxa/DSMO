@@ -3,6 +3,7 @@
 // DSH Host directly, like every other page here; the same lists-and-rows idiom
 // as 设置 and 插件.
 
+import { PI_AI_NS, baseUrlError, createProvider, discoverModels, isPiAiNs, keyError, normalizeBaseUrl, normalizeKey, removeProvider, type DiscoveredModel, type ProviderApi } from '../../../engine/providers';
 import { hasLore, readBindings, refreshWorks, workTitle } from '../../../lore/api';
 import { chooseWork } from '../../lore/pick';
 import { useEffect, useState } from 'preact/hooks';
@@ -646,7 +647,7 @@ interface NsView {
   revision: number;
 }
 const toView = (n: Record<string, unknown>): NsView => ({ ns: String(n.ns ?? ''), title: s(n.title), schema: parseSchema(n.schema), value: o(n.value), revision: Number(n.revision ?? 0) });
-const NS_NAME: Record<string, string> = { subagent: '子代理', 'cot-translation': '思考过程翻译', shell: '命令执行', 'pi-ai': '模型提供方' };
+const NS_NAME: Record<string, string> = { subagent: '子代理', 'cot-translation': '思考过程翻译', shell: '命令执行', 'pi-ai': '模型提供方', 'llm-pi-ai': '模型提供方' };
 const nsTitle = (v: NsView) => v.title || text(v.schema.meta.title) || NS_NAME[v.ns] || v.ns;
 
 export function EngineSettingsPage() {
@@ -729,7 +730,7 @@ export function ProvidersPage() {
     <div class="plg">
       <div class="plg-group">
         {data.map((p) => {
-          const own = s(p.settingsNs) === 'pi-ai' && Array.isArray(p.settingsPath) && p.settingsPath.length > 0;
+          const own = isPiAiNs(s(p.settingsNs)) && Array.isArray(p.settingsPath) && p.settingsPath.length > 0;
           return (
             <div class={`plg-row ${own ? '' : 'static'}`} key={String(p.provider)} onClick={() => own && openPage(`provider:${p.provider}`)}>
               <span class="plg-tile">
@@ -756,7 +757,7 @@ export function ProvidersPage() {
 export function ProviderDetailPage({ id }: { id: string }) {
   return (
     <>
-      <EngineSettingsNsPage ns="pi-ai" path={['providers', id]} />
+      <EngineSettingsNsPage ns={PI_AI_NS} path={['providers', id]} />
       <div class="plg">
         <div class="plg-group sf-reset">
           <button
@@ -765,9 +766,7 @@ export function ProviderDetailPage({ id }: { id: string }) {
             onClick={() =>
               confirm(`删除提供方「${id}」？`, '用它的对话会换回默认模型。', '删除', async () => {
                 try {
-                  const d = await getClient().describeSettings();
-                  const n = (Array.isArray(d.namespaces) ? d.namespaces : []).map(o).find((x) => x.ns === 'pi-ai');
-                  await getClient().mutateSettings('pi-ai', [{ op: 'unset', path: ['providers', id] }], Number(n?.revision ?? 0));
+                  await removeProvider(id);
                   back();
                   showToast('已删除');
                 } catch (e) {
@@ -785,89 +784,127 @@ export function ProviderDetailPage({ id }: { id: string }) {
 }
 
 export function ProviderNewPage() {
-  const [id, setId] = useState('');
+  const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  const [api, setApi] = useState('openai-completions');
+  const [api, setApi] = useState<ProviderApi>('openai-completions');
   const [key, setKey] = useState('');
-  const [models, setModels] = useState<string[] | null>(null);
+  const [models, setModels] = useState<DiscoveredModel[] | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const busy = discovering || saving;
+  // a model added by hand joins the list, picked
+  const addByHand = () =>
+    askText('手动添加模型', '', (t) => {
+      const id = t.trim();
+      if (!id || /\s/.test(id)) return showToast('模型 ID 里不能有空格');
+      if (models?.some((m) => m.id === id)) return showToast('已经在列表里了');
+      setModels([...(models ?? []), { id }]);
+      setPicked([...picked, id]);
+      setProblem(null);
+    }, { placeholder: '例如 gpt-4o-mini', ok: '添加' });
   const discover = async () => {
-    setBusy(true);
+    const k = normalizeKey(key);
+    const bad = baseUrlError(url) ?? keyError(k, true);
+    if (bad) return setProblem(bad);
+    setProblem(null);
+    setNote(null);
+    setDiscovering(true);
     try {
-      const list = (await getClient().discoverModels({ baseURL: url.trim(), api, apiKey: key.trim() })).map((m) => String(m.id ?? '')).filter(Boolean);
-      setModels(list);
-      setPicked(list.slice(0, 3));
+      const r = await discoverModels(api, url, k);
+      if (r.baseUrl !== normalizeBaseUrl(url, api)) {
+        setUrl(r.baseUrl);
+        setNote(`地址已补全为 ${r.baseUrl}`);
+      }
+      setModels(r.models);
+      setPicked(r.models.slice(0, 3).map((m) => m.id));
+      if (!r.models.length) setProblem('接口没有列出模型。可以手动添加模型 ID。');
     } catch (e) {
-      showToast(errText(e));
+      setProblem(`没能获取模型列表：${errText(e)}`);
     } finally {
-      setBusy(false);
+      setDiscovering(false);
     }
   };
   const save = async () => {
-    const route = id.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    if (!route || !url.trim()) return showToast('名称和接口地址都要填');
-    setBusy(true);
+    const k = normalizeKey(key);
+    const bad = baseUrlError(url) ?? keyError(k, true) ?? (picked.length ? null : '至少选一个模型：先获取模型列表，或手动添加');
+    if (bad) return setProblem(bad);
+    setProblem(null);
+    setSaving(true);
     try {
-      const d = await getClient().describeSettings();
-      const n = (Array.isArray(d.namespaces) ? d.namespaces : []).map(o).find((x) => x.ns === 'pi-ai');
-      await getClient().mutateSettings('pi-ai', [{ op: 'set', path: ['providers', route], value: { baseURL: url.trim(), api, ...(key.trim() ? { apiKey: key.trim() } : {}), models: picked } }], Number(n?.revision ?? 0));
-      showToast('已添加');
+      const chosen = (models ?? []).filter((m) => picked.includes(m.id));
+      await createProvider({ name, api, baseUrl: url, apiKey: k, models: chosen });
+      showToast('已添加，在模型选择里就能看到');
       back();
     } catch (e) {
-      showToast(errText(e));
+      setProblem(errText(e));
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
+  const field = (label: string, v: string, set: (x: string) => void, ph: string, type: string) => (
+    <div class="plg-row static" key={label}>
+      <div class="plg-row-m">
+        <div class="plg-row-t">{label}</div>
+      </div>
+      <input
+        class="sf-input"
+        type={type}
+        autoComplete="off"
+        autoCapitalize="off"
+        spellcheck={false}
+        value={v}
+        placeholder={ph}
+        onInput={(e) => (set((e.target as HTMLInputElement).value), setProblem(null))}
+      />
+    </div>
+  );
   return (
     <div class="plg">
       <div class="plg-group">
-        {(
-          [
-            ['名称', id, setId, '例如 moonshot', 'text'],
-            ['接口地址', url, setUrl, 'https://…/v1', 'url'],
-            ['密钥', key, setKey, '只保存在主机上', 'password'],
-          ] as const
-        ).map(([label, v, set, ph, type]) => (
-          <div class="plg-row static" key={label}>
-            <div class="plg-row-m">
-              <div class="plg-row-t">{label}</div>
-            </div>
-            <input class="sf-input" type={type} autoComplete="off" autoCapitalize="off" value={v} placeholder={ph} onInput={(e) => set((e.target as HTMLInputElement).value)} />
-          </div>
-        ))}
+        {field('名称', name, setName, '例如 芯云', 'text')}
+        {field('接口地址', url, (x) => (setUrl(x), setNote(null)), 'https://api.example.com/v1', 'url')}
+        {field('密钥', key, setKey, '只保存在主机上', 'password')}
         <div class="plg-row static">
           <div class="plg-row-m">
             <div class="plg-row-t">接口协议</div>
           </div>
-          <select class="sf-select" value={api} onChange={(e) => setApi((e.target as HTMLSelectElement).value)}>
+          <select class="sf-select" value={api} onChange={(e) => setApi((e.target as HTMLSelectElement).value as ProviderApi)}>
             <option value="openai-completions">OpenAI 兼容</option>
             <option value="anthropic-messages">Anthropic</option>
             <option value="openai-responses">OpenAI Responses</option>
           </select>
         </div>
       </div>
+      {note && <p class="plg-note">{note}</p>}
       <section class="plg-sec">
-        <h2 class="plg-sec-t">模型</h2>
+        <h2 class="plg-sec-t">模型{models?.length ? ` · 已选 ${picked.length}` : ''}</h2>
         <div class="plg-group">
           {models?.map((m) => (
-            <div class="plg-row static" key={m}>
+            <div class="plg-row static" key={m.id}>
               <div class="plg-row-m">
-                <div class="plg-row-t mono">{m}</div>
+                <div class="plg-row-t mono">{m.id}</div>
+                {m.name && <div class="plg-row-s">{m.name}</div>}
               </div>
-              <Switch on={picked.includes(m)} label={m} onChange={(v) => setPicked(v ? [...picked, m] : picked.filter((x) => x !== m))} />
+              <Switch on={picked.includes(m.id)} label={m.id} onChange={(v) => (setPicked(v ? [...picked, m.id] : picked.filter((x) => x !== m.id)), setProblem(null))} />
             </div>
           ))}
-          <button class="plg-link" type="button" disabled={busy || !url.trim()} onClick={discover}>
-            <span>{models ? '重新获取模型列表' : '从接口获取模型列表'}</span>
+          <button class="plg-link" type="button" disabled={busy || !url.trim()} onClick={() => void discover()}>
+            <span>{discovering ? '正在获取…' : models ? '重新获取模型列表' : '从接口获取模型列表'}</span>
             <MIc n="refresh" />
           </button>
+          <button class="plg-link" type="button" disabled={busy} onClick={addByHand}>
+            <span>手动添加模型</span>
+            <MIc n="plus" />
+          </button>
         </div>
+        {problem ? <p class="plg-note warn prov-problem">{problem}</p> : !models && <p class="plg-note">填好地址和密钥后获取。地址一般以 /v1 结尾；只填域名也行，获取时会自动试 /v1。</p>}
       </section>
       <div class="plg-actions">
-        <button class="plg-btn pri wide" type="button" disabled={busy} onClick={save}>
-          添加
+        <button class="plg-btn pri wide" type="button" disabled={busy} onClick={() => void save()}>
+          {saving ? '正在添加…' : '添加'}
         </button>
       </div>
     </div>
