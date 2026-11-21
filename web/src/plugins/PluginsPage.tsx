@@ -5,7 +5,7 @@
 
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
-import { backPage, confirm, errText, openPage, pages, prefs, showToast } from '../state/store';
+import { backPage, confirm, errText, openPage, pages, prefs, showToast, toast } from '../state/store';
 import { Switch } from '../ui/common';
 import { MIc } from '../ui/mobile/MIc';
 import type { MIconName } from '../ui/mobile/icons';
@@ -761,12 +761,33 @@ export function PluginGuidePage({ id }: { id: string }) {
 }
 
 function uninstall(p: ApiDemoManifest) {
-  confirm(`卸载「${p.title}」？`, p.engine ? '前端部分和它在这台设备上的数据会删除，引擎部分也会从当前主机移除。' : '插件和它在这台设备上的数据都会删除，之后可以重新安装。', '卸载', async () => {
-    await removePlugin(p.id);
+  const go = async (force = false) => {
+    if (p.engine && !force) showToast(`正在卸载「${p.title}」…`);
+    let out: { restart: boolean };
+    try {
+      out = await removePlugin(p.id, { force });
+    } catch (e) {
+      // the engine kept it: say why, and let the person still take it out of DSMO
+      toast.value = null;
+      return confirm(
+        `引擎里没卸掉「${p.title}」`,
+        `${errText(e).replace(/[。.]?$/, '。')}插件还装在引擎里，每轮对话还会运行。也可以只从 DSMO 里移除，之后到「设置 › 引擎插件」里再卸载引擎那部分。`,
+        '只从 DSMO 移除',
+        () => void go(true),
+      );
+    }
     // Leave the detail / manage pages of the removed plugin.
     while (pages.value.length && /^plugin(-manage|-guide)?:/.test(pages.value[pages.value.length - 1]) && pages.value[pages.value.length - 1].endsWith(p.id)) backPage();
-    showToast(`已卸载「${p.title}」`);
-  });
+    showToast(force ? `已从 DSMO 移除「${p.title}」，引擎里的还在` : out.restart ? `已卸载「${p.title}」，重启引擎后才完全停下` : `已卸载「${p.title}」`);
+  };
+  confirm(
+    `卸载「${p.title}」？`,
+    p.engine
+      ? '插件会从 DSMO 和引擎里删掉，它在 DSMO 里的设置和数据也会删除。它在引擎里存的东西（比如记忆、作品）会留着，重新安装后还能接着用。'
+      : '插件和它在这台设备上的数据都会删除，之后可以重新安装。',
+    '卸载',
+    () => void go(),
+  );
 }
 
 // ---------------------------------------------------------------- 管理 (second level)

@@ -412,10 +412,45 @@ export function retryAutoUpdates() {
   return autoUpdatePlugins();
 }
 
-export async function removePlugin(id: string) {
+/**
+ * DSH's answer to `pluginManager/removeBundle` (ChangeResult): failures arrive as an ok RPC with
+ * `application: 'failed'` and `error.code` (ManagementFailure). Throws with a reason the person can
+ * act on; an unreachable engine throws from the call itself.
+ */
+async function removeEngineBundle(pkg: string): Promise<{ restart: boolean }> {
+  const r = await getClient().removeBundle(pkg);
+  const application = typeof r.application === 'string' ? r.application : 'applied';
+  if (application === 'failed' || application === 'cancelled') {
+    const err = (r.error && typeof r.error === 'object' ? r.error : {}) as Record<string, unknown>;
+    const code = String(err.code ?? '');
+    // not-removable is also the answer for a package the engine doesn't have: then it's gone already
+    if (code === 'not-removable' && !(await getClient().listBundles()).some((b) => b.name === pkg)) return { restart: false };
+    const why: Record<string, string> = {
+      'not-removable': '引擎不让卸载这个插件包',
+      'stop-profile': '插件正在引擎里运行，这次没能停下：重启引擎后再卸载',
+      'bundle-in-use': '插件正在被使用：等这一轮对话结束，或重启引擎后再卸载',
+    };
+    const diag = typeof err.diagnostic === 'string' ? err.diagnostic.trim().slice(0, 300) : '';
+    throw new Error(application === 'cancelled' ? '卸载被取消了' : (why[code] ?? (diag || `引擎没能卸载（${code || '原因不明'}）`)));
+  }
+  return { restart: application === 'restart-required' };
+}
+
+/**
+ * Uninstall. The engine half goes first: when the engine can't remove it, nothing here changes and
+ * the reason is thrown, unless [force] (the person chose to remove it from DSMO anyway; the engine
+ * keeps running it). `restart`: the engine removed it but keeps it loaded until it restarts.
+ * What the engine half stored under the engine's data folder stays (DSH removes only the package).
+ */
+export async function removePlugin(id: string, { force = false } = {}): Promise<{ restart: boolean }> {
   const p = findPlugin(id);
+  let restart = false;
   if (p?.engine) {
-    await getClient().removeBundle(p.engine.package).catch(() => {});
+    try {
+      restart = (await removeEngineBundle(p.engine.package)).restart;
+    } catch (e) {
+      if (!force) throw e;
+    }
     void loadContributions();
   }
   const made = installed.value.find((x) => x.id === id)?.made;
@@ -425,6 +460,7 @@ export async function removePlugin(id: string) {
   if (trialSkin.value === id) setTrialSkin(null);
   await clearPluginData(id);
   await save();
+  return { restart };
 }
 
 export async function setPluginOption(id: string, key: string, on: boolean) {

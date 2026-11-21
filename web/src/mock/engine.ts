@@ -141,6 +141,9 @@ export class MockEngine {
       // a host takes a while to install a package; tests set window.__mockInstallMs to see the queue
       const slow = /^pluginManager\/(installBundle|updateBundle)$/.test(endpoint) ? Number((globalThis as { __mockInstallMs?: number }).__mockInstallMs) || 0 : 0;
       if (slow) await new Promise((r) => setTimeout(r, slow));
+      // tests set window.__mockRemoveFail to a ManagementFailure code to see a refused uninstall
+      const fail = endpoint === 'pluginManager/removeBundle' ? (globalThis as { __mockRemoveFail?: string }).__mockRemoveFail : undefined;
+      if (fail) return { application: 'failed', changed: false, error: { code: fail } };
       return this.handle(endpoint, args);
     },
   };
