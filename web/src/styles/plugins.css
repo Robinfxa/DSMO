@@ -979,7 +979,6 @@ body:not(.is-m) .plg-card { width: calc((100% - 24px) / 3); }
 .plg-step-t { font-size: 16px; line-height: 24px; }
 body:not(.is-m) .plg-step-t { font-size: 15px; }
 .plg-step-s { margin-top: 2px; color: var(--c-sub); font-size: 14px; line-height: 21px; }
-.plg-guide + .plg-guide-more { margin-top: 10px; }
 .plg-guide-try { margin: 12px 0 0; }
 .plg-guide-try .plg-btn.wide { width: 100%; }
 .plg-tip { color: var(--c-fg) !important; font-size: 14px !important; line-height: 21px !important; }

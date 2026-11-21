@@ -46,10 +46,10 @@ import { onLocalHost } from '../setup/state';
 import type { InstallOutcome } from './frontend';
 
 /** After an install: an engine plugin that loads only once the engine restarts says so (and offers it on this phone). */
-function afterInstall(p: ApiDemoManifest, outcome: InstallOutcome) {
+function afterInstall(p: ApiDemoManifest, outcome: InstallOutcome, offerGuide = true) {
   const title = p.title;
-  // the toast offers the guide: 怎么用 is the first question after 获取
-  const say = (text: string) => (p.guide ? showToast(text, '怎么用', () => openPluginGuide(p.id)) : showToast(text));
+  // the toast offers the guide: 怎么用 is the first question after 获取 (on the detail page it's already there)
+  const say = (text: string) => (p.guide && offerGuide ? showToast(text, '怎么用', () => openPluginGuide(p.id)) : showToast(text));
   if (!outcome.restart) return say(`已安装「${title}」`);
   if (!onLocalHost.value) return say(`已安装「${title}」，在主机上重启 DSH 后生效`);
   confirm(`「${title}」装好了`, '重启本机引擎后生效。正在生成的回复会中断。', '重启引擎', () => {
@@ -504,7 +504,7 @@ export function PluginDetailPage({ id }: { id: string }) {
     try {
       const outcome = await installPlugin(id);
       if (trialSkin.value === id) setTrialSkin(null);
-      afterInstall(p, outcome);
+      afterInstall(p, outcome, false);
     } catch (e) {
       showToast(errText(e));
     }
@@ -578,6 +578,8 @@ export function PluginDetailPage({ id }: { id: string }) {
       {trying && <p class="plg-note">正在试用，离开这一页后恢复。</p>}
       {c === 'skills' && !inst && !skillsInstallable() && <p class="plg-note">技能只能装到这台手机上的引擎，先在边栏切回本机。</p>}
 
+      {p.guide && <GuideSections p={p} />}
+
       <ClashCard p={p} />
 
       <div class="plg-text">
@@ -585,21 +587,6 @@ export function PluginDetailPage({ id }: { id: string }) {
           <p key={i}>{x}</p>
         ))}
       </div>
-
-      {p.guide && (
-        <section class="plg-sec">
-          <h2 class="plg-sec-t">怎么用</h2>
-          <GuideSteps p={p} />
-          {(p.guide.faq?.length || p.guide.tips?.length) && (
-            <div class="plg-group plg-guide-more">
-              <button class="plg-link" type="button" onClick={() => openPluginGuide(id)}>
-                <span>{p.guide.faq?.length ? `小贴士和常见问题` : '小贴士'}</span>
-                <MIc n="chevron" />
-              </button>
-            </div>
-          )}
-        </section>
-      )}
 
       <section class="plg-sec">
         <h2 class="plg-sec-t">{c === 'skills' ? '包含的技能' : c === 'automation' ? '包含的自动化任务' : `效果预览${c === 'interface' ? '（高级模式下生效）' : ''}`}</h2>
@@ -690,34 +677,21 @@ function GuideSteps({ p }: { p: ApiDemoManifest }) {
 }
 
 /** The whole guide: where, steps, a button that takes you there, tips and questions. */
-export function PluginGuidePage({ id }: { id: string }) {
-  const p = findPlugin(id);
+/** 使用说明 (steps, the button that takes you there), 小贴士, 常见问题: under 已安装 on the detail page, and its own page. */
+function GuideSections({ p }: { p: ApiDemoManifest }) {
   const [open, setOpen] = useState<number | null>(null);
-  if (!p?.guide) return <div class="plg-empty-line">这个插件还没有使用说明。</div>;
-  const g = p.guide;
-  const inst = isInstalled(id);
-  const on = isEnabled(id);
+  const g = p.guide!;
+  const inst = isInstalled(p.id);
+  const on = isEnabled(p.id);
   const needsAdvanced = !!g.try && 'panel' in g.try.action && !prefs.value.advanced;
   return (
-    <div class="plg plg-guide-page">
-      <div class="plg-hero">
-        <PluginTile p={p} size="lg" />
-        <div class="plg-hero-m">
-          <h2>{p.title}</h2>
-          <div class="plg-hero-s">{p.summary}</div>
-        </div>
-      </div>
-      <section class="plg-sec">
-        <h2 class="plg-sec-t">怎么用</h2>
+    <>
+      <section class="plg-sec plg-guide-sec">
+        <h2 class="plg-sec-t">使用说明</h2>
         <GuideSteps p={p} />
         {g.try && inst && (
           <div class="plg-guide-try">
-            <button
-              class="plg-btn pri wide"
-              type="button"
-              disabled={!on}
-              onClick={() => runSlotAction(p, g.try!.action)}
-            >
+            <button class="plg-btn pri wide" type="button" disabled={!on} onClick={() => runSlotAction(p, g.try!.action)}>
               {g.try.label}
             </button>
             {!on ? <p class="plg-note">插件停用了，先在「管理」里打开。</p> : needsAdvanced ? <p class="plg-note">边栏里的入口在高级模式下才显示，从这里一样能打开。</p> : null}
@@ -754,7 +728,25 @@ export function PluginGuidePage({ id }: { id: string }) {
           </div>
         </section>
       )}
-      {!inst && (
+    </>
+  );
+}
+
+/** The guide on its own (from the 已安装 toast and 管理). */
+export function PluginGuidePage({ id }: { id: string }) {
+  const p = findPlugin(id);
+  if (!p?.guide) return <div class="plg-empty-line">这个插件还没有使用说明。</div>;
+  return (
+    <div class="plg plg-guide-page">
+      <div class="plg-hero">
+        <PluginTile p={p} size="lg" />
+        <div class="plg-hero-m">
+          <h2>{p.title}</h2>
+          <div class="plg-hero-s">{p.summary}</div>
+        </div>
+      </div>
+      <GuideSections p={p} />
+      {!isInstalled(id) && (
         <section class="plg-sec">
           <div class="plg-group">
             <button class="plg-link" type="button" onClick={() => openPlugin(id)}>

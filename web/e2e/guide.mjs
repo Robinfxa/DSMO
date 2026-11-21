@@ -39,31 +39,28 @@ await page.waitForTimeout(300);
 await page.click('.m-row:has-text("插件") >> nth=-1');
 await page.waitForTimeout(700);
 
-// detail page: 怎么用 with where + numbered steps, and the way to the rest
+// detail page: 使用说明 right under the 安装 / 已安装 row, the whole guide inline
 await find('人设库');
 await page.click('.plg-row:has-text("人设库")');
 await page.waitForTimeout(500);
 const persona = market.find((m) => m.title === '人设库').guide;
+const order = await page.$$eval('.plg-detail > *', (els) => els.map((e) => e.className));
+const ai = order.findIndex((c) => c.includes('plg-actions'));
+const gi = order.findIndex((c) => c.includes('plg-guide-sec'));
+check(ai >= 0 && gi > ai && order.slice(ai + 1, gi).every((c) => c.includes('plg-note')), `detail: 使用说明 directly under the actions (${order.slice(ai, gi + 1).join(' | ')})`);
+check((await page.textContent('.plg-guide-sec .plg-sec-t')) === '使用说明', 'detail: titled 使用说明');
 check((await page.textContent('.plg-guide-where')).includes('设置 › 陪伴 › 人设'), 'detail: where it is');
 check((await page.$$('.plg-guide .plg-step')).length === persona.steps.length, `detail: ${persona.steps.length} steps`);
 check((await page.textContent('.plg-step-t >> nth=0')) === persona.steps[0].title, 'detail: step titles in order');
-await page.locator('.plg-guide').scrollIntoViewIfNeeded();
-await shot('1-detail');
-
-// the full guide: not installed yet → no 打开 button, a way to install
-await page.click('.plg-guide-more .plg-link');
-await page.waitForTimeout(400);
-check((await page.textContent('.pg-title, h1, .m-page-title').catch(() => '')).includes('使用说明') || (await page.isVisible('text=使用说明')), 'guide page opens');
 check(!(await page.isVisible('.plg-guide-try')), 'not installed: no 打开 button');
-check(await page.isVisible('.plg-link:has-text("去安装")'), 'not installed: 去安装');
-check((await page.$$('.plg-faq-i')).length === persona.faq.length, 'all questions listed');
+check((await page.$$('.plg-faq-i')).length === persona.faq.length, 'detail: questions inline');
 check(!(await page.isVisible('.plg-faq-a')), 'answers folded');
 await page.click('.plg-faq-q:has-text("DS Bot")');
 await page.waitForTimeout(200);
 check((await page.textContent('.plg-faq-a')).includes('Bot 的对话里不用人设'), 'a question opens its answer');
+await shot('1-detail');
 await page.locator('.plg-faq').scrollIntoViewIfNeeded();
-await shot('2-guide');
-await back();
+await shot('2-detail-faq');
 await back();
 
 // install from the list: the toast offers 怎么用
