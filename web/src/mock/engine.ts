@@ -138,6 +138,9 @@ export class MockEngine {
   readonly rpc: RpcTransport = {
     call: async (endpoint, args = {}) => {
       await new Promise((r) => setTimeout(r, this.speed * (60 + Math.random() * 80)));
+      // a host takes a while to install a package; tests set window.__mockInstallMs to see the queue
+      const slow = /^pluginManager\/(installBundle|updateBundle)$/.test(endpoint) ? Number((globalThis as { __mockInstallMs?: number }).__mockInstallMs) || 0 : 0;
+      if (slow) await new Promise((r) => setTimeout(r, slow));
       return this.handle(endpoint, args);
     },
   };

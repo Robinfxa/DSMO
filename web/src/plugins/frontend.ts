@@ -226,7 +226,47 @@ export async function settleEngineSetups() {
   }
 }
 
-export async function installPlugin(id: string): Promise<InstallOutcome> {
+// ------------------------------------------------------------------ install / update queue
+
+export type PluginJob = { kind: 'install' | 'update'; running: boolean };
+/**
+ * Installs and updates waiting or under way, by plugin id. They run one at a time (the host
+ * installs one bundle at a time, and each one rewrites the installed list) and outlive the page
+ * that started them: leave the market and come back, and the button still says 等待中 / 安装中.
+ */
+export const pluginJobs = signal<Record<string, PluginJob>>({});
+const jobRuns = new Map<string, Promise<InstallOutcome>>();
+let jobChain: Promise<unknown> = Promise.resolve();
+const setJob = (id: string, job: PluginJob | null) => {
+  const next = { ...pluginJobs.value };
+  if (job) next[id] = job;
+  else delete next[id];
+  pluginJobs.value = next;
+};
+function enqueue(id: string, kind: PluginJob['kind'], run: () => Promise<InstallOutcome>): Promise<InstallOutcome> {
+  // a second tap on the same plugin joins the first instead of queueing it again
+  const same = jobRuns.get(id);
+  if (same) return same;
+  setJob(id, { kind, running: false });
+  const p = jobChain
+    .then(() => {
+      setJob(id, { kind, running: true });
+      return run();
+    })
+    .finally(() => {
+      jobRuns.delete(id);
+      setJob(id, null);
+    });
+  jobChain = p.catch(() => {});
+  jobRuns.set(id, p);
+  return p;
+}
+export const pluginBusy = (id: string) => pluginJobs.value[id];
+
+export const installPlugin = (id: string): Promise<InstallOutcome> => enqueue(id, 'install', () => installNow(id));
+export const updatePlugin = (id: string): Promise<InstallOutcome> => enqueue(id, 'update', () => updateNow(id));
+
+async function installNow(id: string): Promise<InstallOutcome> {
   const p = findPlugin(id);
   if (!p) throw new Error('找不到这个插件');
   validateManifest(p);
@@ -287,7 +327,7 @@ export const hasUpdate = (id: string) => pluginUpdates.value.includes(id);
  * (its data on the host stays), the skills it brings rewritten. Options, on/off, schedules and
  * the one-time engine setup stay as they are.
  */
-export async function updatePlugin(id: string): Promise<InstallOutcome> {
+async function updateNow(id: string): Promise<InstallOutcome> {
   const p = findPlugin(id);
   const x = installed.value.find((i) => i.id === id);
   if (!p || !x) throw new Error('找不到这个插件');

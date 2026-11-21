@@ -19,6 +19,8 @@ import {
   installPlugin,
   pluginUpdates,
   updatePlugin,
+  pluginJobs,
+  type PluginJob,
   installed,
   isEnabled,
   isInstalled,
@@ -142,24 +144,30 @@ export function PluginTile({ p, size = 'md' }: { p: ApiDemoManifest; size?: 'md'
   );
 }
 
+/** 等待中 / 安装中 / 更新中 for a plugin in the install queue (frontend.ts pluginJobs). */
+const jobLabel = (j: PluginJob, long = false) => (j.running ? (j.kind === 'install' ? (long ? '正在安装…' : '安装中') : long ? '正在更新…' : '更新中') : long ? '等待中…' : '等待中');
+
 function GetButton({ p }: { p: ApiDemoManifest }) {
-  const [busy, setBusy] = useState(false);
+  const job = pluginJobs.value[p.id];
+  if (job)
+    return (
+      <button class="plg-get" type="button" disabled onClick={(e) => e.stopPropagation()}>
+        {jobLabel(job)}
+      </button>
+    );
   if (isInstalled(p.id) && hasUpdate(p.id))
     return (
       <button
         class="plg-get"
         type="button"
-        disabled={busy}
         onClick={(e) => {
           e.stopPropagation();
-          setBusy(true);
           updatePlugin(p.id)
             .then((r) => afterUpdate([p.title], r.restart))
-            .catch((err) => showToast(errText(err)))
-            .finally(() => setBusy(false));
+            .catch((err) => showToast(errText(err)));
         }}
       >
-        {busy ? '更新中' : '更新'}
+        更新
       </button>
     );
   if (isInstalled(p.id))
@@ -172,22 +180,16 @@ function GetButton({ p }: { p: ApiDemoManifest }) {
     <button
       class="plg-get"
       type="button"
-      disabled={busy}
       onClick={(e) => {
         e.stopPropagation();
-        installChecked(p, async () => {
-          setBusy(true);
-          try {
-            afterInstall(p.title, await installPlugin(p.id));
-          } catch (err) {
-            showToast(errText(err));
-          } finally {
-            setBusy(false);
-          }
+        installChecked(p, () => {
+          installPlugin(p.id)
+            .then((r) => afterInstall(p.title, r))
+            .catch((err) => showToast(errText(err)));
         });
       }}
     >
-      {busy ? '安装中' : '获取'}
+      获取
     </button>
   );
 }
@@ -445,23 +447,21 @@ function Installed() {
 
 /** 「N 个插件有更新 · 全部更新」 on 已安装. */
 function UpdateAll() {
-  const [busy, setBusy] = useState(false);
   const ids = pluginUpdates.value;
+  const busy = ids.some((id) => pluginJobs.value[id]);
   const run = async () => {
-    setBusy(true);
+    // all queued at once (they still run one after another): leaving the page doesn't stop them
+    const list = ids.map((id) => ({ id, title: findPlugin(id)?.title ?? id }));
+    const done = await Promise.allSettled(list.map((x) => updatePlugin(x.id)));
     const titles: string[] = [];
-    let restart = false;
     const failed: string[] = [];
-    for (const id of ids) {
-      const p = findPlugin(id);
-      try {
-        restart = (await updatePlugin(id)).restart || restart;
-        if (p) titles.push(p.title);
-      } catch (e) {
-        failed.push(`${p?.title ?? id}：${errText(e)}`);
-      }
-    }
-    setBusy(false);
+    let restart = false;
+    done.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        titles.push(list[i].title);
+        restart = r.value.restart || restart;
+      } else failed.push(`${list[i].title}：${errText(r.reason)}`);
+    });
     if (failed.length) showToast(`没能更新 ${failed.join('；')}`);
     afterUpdate(titles, restart);
   };
@@ -484,7 +484,8 @@ function UpdateAll() {
 
 export function PluginDetailPage({ id }: { id: string }) {
   const p = findPlugin(id);
-  const [busy, setBusy] = useState(false);
+  const job = pluginJobs.value[id];
+  const busy = !!job;
   const trying = trialSkin.value === id;
   useEffect(() => () => void (trialSkin.value === id && setTrialSkin(null)), [id]);
   useEffect(() => void loadHostBundles(), [id]);
@@ -495,15 +496,12 @@ export function PluginDetailPage({ id }: { id: string }) {
   const paras = (p.description ?? p.summary).split(/\n\s*\n/);
   const install = () => installChecked(p, () => void doInstall());
   const doInstall = async () => {
-    setBusy(true);
     try {
       const outcome = await installPlugin(id);
-      if (trying) setTrialSkin(null);
+      if (trialSkin.value === id) setTrialSkin(null);
       afterInstall(p.title, outcome);
     } catch (e) {
       showToast(errText(e));
-    } finally {
-      setBusy(false);
     }
   };
   const kv: [string, string, boolean?][] = [
@@ -547,14 +545,12 @@ export function PluginDetailPage({ id }: { id: string }) {
                 type="button"
                 disabled={busy}
                 onClick={() => {
-                  setBusy(true);
                   updatePlugin(id)
                     .then((r) => afterUpdate([p.title], r.restart))
-                    .catch((e) => showToast(errText(e)))
-                    .finally(() => setBusy(false));
+                    .catch((e) => showToast(errText(e)));
                 }}
               >
-                {busy ? '正在更新…' : `更新到 v${p.version}`}
+                {job ? jobLabel(job, true) : `更新到 v${p.version}`}
               </button>
             )}
             <button class="plg-btn" type="button" onClick={() => openPluginManage(id)}>
@@ -564,7 +560,7 @@ export function PluginDetailPage({ id }: { id: string }) {
         ) : (
           <>
             <button class="plg-btn pri wide" type="button" disabled={busy || (c === 'skills' && !skillsInstallable())} onClick={install}>
-              {busy ? '正在安装…' : '安装'}
+              {job ? jobLabel(job, true) : '安装'}
             </button>
             {c === 'appearance' && (
               <button class="plg-btn" type="button" onClick={() => setTrialSkin(trying ? null : id)}>

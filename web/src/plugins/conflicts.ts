@@ -20,7 +20,7 @@ import tagsFile from '../../../market/tags.json';
 import { native } from '../bridge/native';
 import { dsBot } from '../bots/store';
 import { getClient } from '../state/store';
-import { catalogPlugins, findPlugin, installed, type ApiDemoManifest } from './frontend';
+import { catalogPlugins, findPlugin, installed, pluginJobs, type ApiDemoManifest } from './frontend';
 
 /** A clash tag (market/tags.json), e.g. `prompt.persona`. */
 export type Tag = string;
@@ -90,9 +90,11 @@ export function clashesOf(p: ApiDemoManifest): Clash[] {
   const mine = affectsOf(p);
   if (!mine.length) return [];
   const out: Clash[] = [];
-  const others = installed.value
-    .filter((x) => x.enabled && x.id !== p.id)
-    .map((x) => findPlugin(x.id))
+  // what's on, and what's already waiting to be installed (tapped 获取 on two at once)
+  const queued = Object.entries(pluginJobs.value).filter(([, j]) => j.kind === 'install').map(([id]) => id);
+  const others = [...new Set([...installed.value.filter((x) => x.enabled).map((x) => x.id), ...queued])]
+    .filter((x) => x !== p.id)
+    .map((x) => findPlugin(x))
     .filter((x): x is ApiDemoManifest => !!x);
   // a package DSMO installed shows up as its plugin, not again as an engine package; the same
   // package installed by hand (its plugin not installed here) counts as an engine package
