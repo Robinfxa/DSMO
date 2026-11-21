@@ -71,4 +71,5 @@ export const pairHistory = (work: Work, a: string, b: string): Relation[] => {
 export const OP_MARK: Record<Op, string> = { replace: '=', add: '+', remove: '−' };
 export const span = (x: { from?: number; until?: number }) =>
   x.until !== undefined && x.until !== null ? `第 ${x.from ?? 0}–${x.until} 章` : (x.from ?? 0) > 0 ? `第 ${x.from} 章起` : '开写前起';
-export const byAi = (source: string | undefined) => source === 'tool';
+/** Recorded by the AI: through its tool, or sorted out after a turn (auto:<turn>). */
+export const byAi = (source: string | undefined) => source === 'tool' || !!source?.startsWith('auto:');

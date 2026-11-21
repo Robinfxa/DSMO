@@ -173,7 +173,7 @@ import * as memory from '../memory/lib/index.mjs';
 const memoryAnswer = {
   memory: {
     facts: [{ text: '对方养了一只猫叫团子', cat: 'stable', kw: ['团子', '猫'], quote: '我家团子' }],
-    event: { title: '团子', summary: '团子打翻了杯子，对方哭笑不得', at: '2026-11-20', kw: ['团子', '杯子'], salience: 4 },
+    event: { title: '团子', summary: '团子打翻了杯子，对方哭笑不得', at: new Date().toLocaleDateString('sv'), kw: ['团子', '杯子'], salience: 4 },
     cue: '聊团子的糗事，气氛轻松',
   },
 };

@@ -85,7 +85,14 @@ writeFileSync(files.same2, JSON.stringify(sameCard('另一个版本的沈砚。'
 writeFileSync(files.same3, JSON.stringify(sameCard('第三个版本。', { character_book: { entries: [{ keys: ['琴馆'], content: '青州城东的琴馆。' }] } })));
 
 // ---- the host and the page
-const host = await startMaidshHost({ modules: ['lore'] });
+// The model behind 设定集's sorting-out after a turn (LORE-DESIGN §14): 沈砚 moves, 苏九 is new.
+const AUTO_ANSWER = {
+  changes: [{ subject: '沈砚', key: '位置', value: '北境军营', op: 'replace', quote: '沈砚策马进了北境军营' }],
+  relations: [],
+  newCharacters: [{ name: '苏九', summary: '军营里的伙夫，消息灵通。', quote: '伙夫苏九端着一碗热汤' }],
+  newEntries: [],
+};
+const host = await startMaidshHost({ modules: ['lore'], model: (system) => (/小说设定整理员/.test(system) ? JSON.stringify(AUTO_ANSWER) : '{}') });
 const origin = new URL(host.url).origin;
 const api = async (p, body) =>
   (await fetch(new URL(`/api/dsmo-lore${p}`, host.url), body ? { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body) } : {})).json();
@@ -378,6 +385,56 @@ await page.click('.m-pop-row:has-text("用设定集写这段对话")');
 await sheetPick('跟随工作区');
 await page.waitForTimeout(500);
 check(await page.isVisible('.lo-bar:has-text("《长夜》")'), 'following the workspace again: bar back');
+
+// ---- sorting out after a turn: a finished turn in this conversation reaches the plugin
+const sidAuto = await page.evaluate(() => [...window.__mockEngine.sessions.values()].find((s) => s.title.includes('第十五章'))?.id);
+const prose = '夜色渐深，沈砚策马进了北境军营，营火映着他疲惫的脸。伙夫苏九端着一碗热汤迎上来，低声说起这几日营里的传闻。'.repeat(8);
+host.ctx.emit(
+  'session/event',
+  {
+    id: sidAuto,
+    header: {},
+    requestHeader: () => ({ config: { provider: 'deepseek', model: 'deepseek-chat' } }),
+    deriveMessages: () => [
+      { id: 'u-auto', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '继续写，沈砚到军营' }] },
+      { id: 'a-auto', role: 'assistant', content: [{ type: 'text', text: prose }] },
+    ],
+  },
+  { type: 'turn/end', data: { reason: { kind: 'completed' } } },
+);
+await host.ctx.get('lore').idle();
+await openChat('SSH 隧道是什么');
+await openChat('第十五章');
+await page.waitForTimeout(600);
+t = await page.textContent('.lo-bar');
+check(t.includes('刚记下 1 条') && t.includes('1 条待确认'), `chapter bar after a turn: 刚记下 1 条 · 1 条待确认 (${t.trim()})`);
+await page.click('.lo-bar-t');
+await page.waitForSelector('.m-bsheet .lo-pend');
+t = await page.textContent('.m-bsheet');
+check(t.includes('这一轮记下 1 条') && t.includes('沈砚·位置 = 北境军营'), 'sheet: what this turn recorded');
+check(t.includes('新人物：苏九') && t.includes('原文：伙夫苏九端着一碗热汤'), 'sheet: 苏九 waits, with the quote');
+check(t.includes('自动模式') && t.includes('先放进「待确认」'), 'sheet: 自动模式 switch, off by default');
+await page.screenshot({ path: join(shots, `${scheme}-05c-auto-sheet.png`) });
+await page.click('.m-bsheet .lo-pend .plg-btn.pri');
+check(await toastHas('收下了：苏九'), '收下: 苏九 accepted');
+await page.waitForTimeout(500);
+check((await full()).characters.some((c) => c.name === '苏九' && c.tier === 'side'), '苏九 is in, as a side character');
+await page.click('.m-bsheet [aria-label="自动模式"]');
+check(await toastHas('自动模式'), '自动模式 on');
+check((await full()).settings.autoAccept === true, 'saved in the work');
+await page.click('.m-bsheet .lo-auto-seg button:text-is("每一轮")');
+await page.waitForTimeout(400);
+check((await full()).settings.autoRecord === 'every', '整理档位: 每一轮');
+await page.click('.m-bsheet .plg-text-btn:has-text("撤销这一轮")');
+await page.click('.m-alert-btns button.danger, .m-alert-btns button.primary');
+check(await toastHas('撤销了'), '撤销这一轮');
+await page.waitForTimeout(500);
+let after = await full();
+check(!after.characters.some((c) => c.name === '苏九') && !after.states.some((x) => x.value === '北境军营'), 'undone: 苏九 (accepted from that turn) and the move are gone');
+// back to the defaults for the rest of the run
+await api('/mutate', { action: 'settings', work: after.id, autoAccept: false, autoRecord: 'long' });
+await page.mouse.click(200, 80);
+await page.waitForTimeout(400);
 
 // the work page follows the chapter; dragging back only looks; 「改成写到」 moves it
 if (await page.$('.m-root.drawer')) await page.click('.m-stage-scrim');

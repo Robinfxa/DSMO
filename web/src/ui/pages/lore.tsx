@@ -47,6 +47,7 @@ import { askText, closeOverlay, confirm, errText, openOverlay, openPage, pages, 
 import { Switch } from '../common';
 import { chooseWork } from '../lore/pick';
 import { Avatar, StateChips, Timeline, marksOf, spanOf } from '../lore/timeline';
+import { AutoSettings, PendingList } from '../lore/auto';
 import { MIc } from '../mobile/MIc';
 
 // ---------------------------------------------------------------- helpers
@@ -447,6 +448,7 @@ export function LoreWorkPage({ id }: { id: string }) {
         <Timeline max={spanOf(w.cursor.chapter, marks)} marks={marks} cursor={w.cursor.chapter} value={ch} onChange={setCh} onWriteHere={() => void writeHere(w, ch, () => void reload())} />
       </div>
       <GettingStarted w={w} />
+      <PendingList work={w} onChanged={() => void reload()} />
       <div class="plg-seg lo-tabs" role="tablist">
         {(
           [
@@ -1336,6 +1338,7 @@ function More({ w, reload }: { w: Work; reload: () => void }) {
       <section class="plg-sec">
         <h2 class="plg-sec-t">设置</h2>
         <div class="plg-group">
+          <AutoSettings work={w} onChanged={reload} />
           <button
             class="plg-row"
             type="button"

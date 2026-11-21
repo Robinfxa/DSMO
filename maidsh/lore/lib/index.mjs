@@ -1,12 +1,14 @@
 // dsmo-lore：设定集（LORE-DESIGN.md）。写小说、跑团、长篇扮演时，让 AI 记得人物是谁、写到第几章时处在什么状态、世界有哪些规矩。
-// 和陪伴无关、单独可用：自己管「对话 › 工作区 › 默认」用哪部作品（默认关）。每轮不调模型：
+// 和陪伴无关、单独可用：自己管「对话 › 工作区 › 默认」用哪部作品（默认关）。注入不调模型：
 // 常驻一份人物名单（≤ 200 字），按对话里提到的名字挑设定注入（默认 ≤ 600 字），三个工具让 AI 查、记、检查。
+// 每轮写完在后台整理一次这一轮的变化（§14，auto.mjs）：状态和关系直接记，新人物、新设定进待确认（自动模式时直接收下）。
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { LIMITS, addCharacter, addEntry, checkFacts, checkReport, checkRequest, compose, emptyWork, entryOf, lookup, nextSticky, normalizeWork, recordStates, roster, toWorldbook, updateCharacter, verifyCheck } from './core.mjs';
+import { acceptPending, applyAuto, autoRequest, chapterFromText, dismissPending, shouldRecord, undoAutoTurn, vanishedTurns } from './auto.mjs';
 import { applyImport, importReport, readImport, undoImport } from './import.mjs';
-import { completeText, configSchema, jsonStore, loggerOf, promptContext, readJsonBody, rejectRead, rejectWrite, sendJson, storageDir, textOf, trackLatest } from './shared/dsh.mjs';
+import { completeText, configSchema, jsonStore, loggerOf, promptContext, readJsonBody, rejectRead, rejectWrite, sendJson, storageDir, textOf, trackLatest, turnOf } from './shared/dsh.mjs';
 import { OFF, createLayers, validId, workspaceFinder } from './shared/layers.mjs';
 
 export const name = 'dsmo-lore';
@@ -110,6 +112,10 @@ export function apply(ctx, config = {}) {
   const latestOf = trackLatest(ctx);
   /** 每段对话：这一轮的输入（对方的话 + 上一条回复结尾）、这一轮用的粘性、下一轮的粘性、缓存的文字。 */
   const turns = new Map();
+  let alive = true;
+  ctx.effect(() => () => {
+    alive = false;
+  });
   const lastReply = (s) => {
     try {
       return textOf(s.deriveMessages().findLast((m) => m?.role === 'assistant'));
@@ -278,10 +284,82 @@ export function apply(ctx, config = {}) {
       const w = workFor(sessionId);
       return w ? lookup(w, names, { chapter }) : '';
     },
+    /** 等后台的自动整理做完（测试用）。 */
+    idle: async () => {
+      while (autoRuns.size) await Promise.all([...autoRuns]);
+    },
   });
 
   // ---- 接口（给 DSMO 的「设定集」页）----
-  const summary = (w) => ({ id: w.id, title: w.title, chapter: w.cursor.chapter, characters: w.characters.length, entries: w.lore.length, states: w.states.length, updatedAt: w.updatedAt });
+  const summary = (w) => ({ id: w.id, title: w.title, chapter: w.cursor.chapter, characters: w.characters.length, entries: w.lore.length, states: w.states.length, updatedAt: w.updatedAt, pending: w.pending.length, lastAuto: w.lastAuto });
+
+  // ---- 聊天时自动整理（§14）：每部作品一次只整理一轮，整理中又来的只留最新一轮 ----
+  const autoQ = new Map();
+  const autoRuns = new Set();
+  async function runAuto(workId, j) {
+    const w = works.get(workId);
+    if (!w) return;
+    const named = chapterFromText(j.user);
+    const chapter = named !== null && named > w.cursor.chapter ? named : w.cursor.chapter;
+    const { req } = autoRequest(w, { user: j.user, reply: j.reply, chapter });
+    const answer = await completeText(ctx, req, { session: j.session, provider: c.provider, model: c.model, maxTokens: 800, timeoutMs: 90_000 });
+    if (!alive || !works.has(workId)) return;
+    mutateWork(workId, (x) => {
+      if (named !== null && named > x.cursor.chapter) x.cursor.chapter = named;
+      const r = applyAuto(x, answer, { user: j.user, reply: j.reply, chapter, turnId: j.turnId, sessionId: j.sessionId });
+      if (!r.ok) log('自动整理设定：模型的回答读不出来，这一轮跳过');
+    });
+  }
+  function queueAuto(workId, job) {
+    const q = autoQ.get(workId);
+    if (q) {
+      q.next = job;
+      return;
+    }
+    const state = { next: null };
+    autoQ.set(workId, state);
+    const run = (async () => {
+      await null;
+      let j = job;
+      try {
+        while (j && alive) {
+          await runAuto(workId, j).catch((e) => log(`自动整理设定失败：${e?.message ?? e}`));
+          j = state.next;
+          state.next = null;
+        }
+      } finally {
+        autoQ.delete(workId);
+      }
+    })();
+    autoRuns.add(run);
+    void run.finally(() => autoRuns.delete(run));
+  }
+  ctx.on('session/event', (a, b) => {
+    const turn = turnOf(a, b);
+    if (!turn || !alive) return;
+    const w = workFor(turn.sessionId);
+    if (!w) return;
+    let msgs;
+    try {
+      msgs = turn.session.deriveMessages();
+    } catch {
+      return;
+    }
+    // 重新生成 / 回退掉的回复：那一轮自动记的东西撤掉
+    const gone = vanishedTurns(w, turn.sessionId, msgs.map((m) => m?.id).filter(Boolean));
+    if (gone.length) {
+      try {
+        mutateWork(w.id, (x) => {
+          for (const t of gone) undoAutoTurn(x, t);
+        });
+      } catch (e) {
+        log(`撤销重新生成前的自动整理失败：${e?.message ?? e}`);
+      }
+    }
+    const turnId = msgs.findLast((m) => m?.role === 'assistant')?.id;
+    if (!turnId || !shouldRecord(works.get(w.id), turn.reply)) return;
+    queueAuto(w.id, { sessionId: turn.sessionId, user: turn.user, reply: turn.reply, turnId, session: turn.session });
+  });
   function createWork(title) {
     if (works.size >= LIMITS.works) throw new Error(`最多 ${LIMITS.works} 部作品`);
     const t = String(title ?? '').trim();
@@ -325,6 +403,11 @@ export function apply(ctx, config = {}) {
       mutateWork(b.work, (w) => {
         if (b.userName !== undefined) w.settings.userName = String(b.userName).trim().slice(0, 20) || '主角';
         if (b.scanTail !== undefined) w.settings.scanTail = Math.min(4000, Math.max(0, Number(b.scanTail) || 0));
+        if (b.autoRecord !== undefined) {
+          if (!['long', 'every', 'off'].includes(b.autoRecord)) throw new Error('autoRecord 只能是 long / every / off');
+          w.settings.autoRecord = b.autoRecord;
+        }
+        if (b.autoAccept !== undefined) w.settings.autoAccept = !!b.autoAccept;
         w.updatedAt = Date.now();
         return w.settings;
       }),
@@ -362,6 +445,13 @@ export function apply(ctx, config = {}) {
         for (const s of w.states) if (s.supersededBy === b.id) delete s.supersededBy;
         w.updatedAt = Date.now();
         return { id: b.id };
+      }),
+    'accept-pending': (b) => mutateWork(b.work, (w) => acceptPending(w, b.id === 'all' ? 'all' : String(b.id ?? ''))),
+    'dismiss-pending': (b) => mutateWork(b.work, (w) => dismissPending(w, b.id === 'all' ? 'all' : String(b.id ?? ''))),
+    'undo-auto': (b) =>
+      mutateWork(b.work, (w) => {
+        if (!w.autoTurns.some((t) => t.turnId === b.turnId)) throw new Error('找不到这一轮自动整理（可能已经撤销了）');
+        return undoAutoTurn(w, b.turnId);
       }),
     'delete-relation': (b) =>
       mutateWork(b.work, (w) => {

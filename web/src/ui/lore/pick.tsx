@@ -16,14 +16,17 @@ import {
   mutate,
   readBinding,
   readBindings,
+  readWork,
   refreshBinding,
   refreshWorks,
   workTitle,
   works,
   type Binding,
   type Bindings,
+  type Work,
   type WorkSummary,
 } from '../../lore/api';
+import { AutoSettings, LastTurn, PendingList, recentAuto } from './auto';
 import { askText, closeOverlay, currentId, errText, openOverlay, openPage, running, showToast } from '../../state/store';
 import { MIc } from '../mobile/MIc';
 
@@ -255,12 +258,16 @@ export function Stepper({ shown, step, onTapNumber, label = '章节' }: { shown:
 
 // ---------------------------------------------------------------- the chapter bar over the chat
 
-/** 「《长夜》 · 第 12 章」 while the open conversation uses a work; nothing at all otherwise. Tap: the sheet. */
+/**
+ * 「《长夜》 · 第 12 章 · 刚记下 2 条 · 3 条待确认」 while the open conversation uses a work; nothing at all
+ * otherwise. Tap: the sheet.
+ */
 export function ChapterBar() {
   const sid = currentId.value;
   const b = sid && hasLore() ? bindings.value[sid] : null;
   const w = b?.work ? works.value?.find((x) => x.id === b.work) : undefined;
   if (!sid || !w) return null;
+  const last = recentAuto(w.lastAuto, sid);
   const open = () => openOverlay({ kind: 'sheet', title: `《${w.title}》`, body: () => <ChapterSheet workId={w.id} sessionId={sid} /> });
   return (
     <div class="lo-bar" role="group" aria-label="设定集">
@@ -268,6 +275,8 @@ export function ChapterBar() {
         <MIc n="book" />
         <span>
           《{w.title}》 · {chapterName(w.chapter)}
+          {last && <em class="lo-bar-new"> · 刚记下 {last.recorded} 条</em>}
+          {!!w.pending && <em class="lo-bar-pend"> · {w.pending} 条待确认</em>}
         </span>
         <MIc n="chevron" />
       </button>
@@ -275,18 +284,29 @@ export function ChapterBar() {
   );
 }
 
-/** The chapter bar's sheet: the chapter (AI moves it forward as it records; change it here when you go back), the work, another work. */
+/** The chapter bar's sheet: the chapter, what the last turn recorded, what's waiting, 自动模式, the work, another work. */
 function ChapterSheet({ workId, sessionId }: { workId: string; sessionId: string }) {
   const w = works.value?.find((x) => x.id === workId);
   const { shown, step, to } = useCursor(workId, w?.chapter ?? 0);
+  const [full, setFull] = useState<Work | null>(null);
+  const reload = () => void readWork(workId).then(setFull, (e) => showToast(errText(e)));
+  useEffect(reload, [workId, w?.updatedAt]);
   if (!w) return null;
+  const last = recentAuto(full?.lastAuto ?? w.lastAuto, sessionId);
   return (
     <div class="lo-pick">
       <div class="lo-opt static">
         <span class="lo-opt-t">现在写到</span>
         <Stepper shown={shown} step={step} onTapNumber={() => askChapter(shown, to)} />
       </div>
-      <p class="lo-pick-note">AI 记下变化时会自己把章节往前推；回头改旧章节时在这里调回去。</p>
+      <p class="lo-pick-note">AI 记下变化时会自己把章节往前推；你说「写第 N 章」时也会跟上。回头改旧章节时在这里调回去。</p>
+      {last && <LastTurn workId={workId} last={last} onChanged={reload} />}
+      {full && <PendingList work={full} onChanged={reload} />}
+      {full && (
+        <div class="lo-sheet-set">
+          <AutoSettings work={full} onChanged={reload} />
+        </div>
+      )}
       <button class="lo-opt" type="button" onClick={() => (closeOverlay(), ((loreView.value = null), openPage(`lore:${w.id}`)))}>
         <MIc n="book" />
         <span class="lo-opt-t">打开《{w.title}》：人物和设定</span>
@@ -313,7 +333,10 @@ export function watchLore() {
       lastSid = sid;
       if (!sid) return;
       void refreshBinding(sid).then((b) => {
-        if (b?.work) void refreshWorks().catch(() => {});
+        if (!b?.work) return;
+        void refreshWorks().catch(() => {});
+        // The sorting-out after a turn runs in the background for a few seconds: look again
+        if (ended) for (const ms of [6000, 15000, 40000]) setTimeout(() => void refreshWorks().catch(() => {}), ms);
       });
     }
   });

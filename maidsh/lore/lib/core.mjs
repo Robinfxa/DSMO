@@ -51,7 +51,10 @@ export function emptyWork({ title, now = Date.now(), id } = {}) {
     lore: [],
     relations: [],
     imports: [],
-    settings: { userName: '主角', scanTail: LIMITS.scanTail },
+    settings: { userName: '主角', scanTail: LIMITS.scanTail, autoRecord: 'long', autoAccept: false },
+    pending: [],
+    autoTurns: [],
+    lastAuto: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -61,7 +64,7 @@ export function emptyWork({ title, now = Date.now(), id } = {}) {
 export function normalizeWork(w) {
   if (!w || typeof w !== 'object' || w.v !== 1 || typeof w.id !== 'string') return null;
   const base = emptyWork({ title: w.title, id: w.id, now: w.createdAt ?? Date.now() });
-  return { ...base, ...w, cursor: { chapter: int(w.cursor?.chapter) }, settings: { ...base.settings, ...(w.settings ?? {}) }, characters: arr(w.characters), states: arr(w.states), lore: arr(w.lore), relations: arr(w.relations), imports: arr(w.imports) };
+  return { ...base, ...w, cursor: { chapter: int(w.cursor?.chapter) }, settings: { ...base.settings, ...(w.settings ?? {}) }, characters: arr(w.characters), states: arr(w.states), lore: arr(w.lore), relations: arr(w.relations), imports: arr(w.imports), pending: arr(w.pending), autoTurns: arr(w.autoTurns), lastAuto: w.lastAuto ?? null };
 }
 const arr = (x) => (Array.isArray(x) ? x : []);
 
@@ -540,7 +543,7 @@ function stateLines(work, subject, ch, history) {
 
 // ---------------- 一致性检查 ----------------
 
-const normQuote = (s) =>
+export const normQuote = (s) =>
   String(s ?? '')
     .replace(/\s+/g, '')
     .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))

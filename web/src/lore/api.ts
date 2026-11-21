@@ -45,7 +45,31 @@ export interface WorkSummary {
   entries: number;
   states: number;
   updatedAt: number;
+  /** New people / entries the chat brought up, waiting for 收下 (LORE-DESIGN §14). */
+  pending?: number;
+  lastAuto?: LastAuto | null;
 }
+/** The latest sorting-out after a turn: what it recorded (and in which conversation). */
+export interface LastAuto {
+  sessionId: string;
+  turnId: string;
+  at: number;
+  recorded: number;
+  pending: number;
+  chapter: number;
+  items?: { id: string; text: string }[];
+  undone?: boolean;
+}
+export interface Pending {
+  id: string;
+  kind: 'character' | 'entry';
+  data: { name?: string; title?: string; aliases?: string[]; card?: { summary?: string }; keys?: string[]; content?: string };
+  quote: string;
+  turnId: string;
+  sessionId: string;
+  at: number;
+}
+export type AutoRecord = 'long' | 'every' | 'off';
 export type CardField = 'summary' | 'appearance' | 'personality' | 'background' | 'voice' | 'extra';
 export interface Character {
   id: string;
@@ -119,7 +143,10 @@ export interface Work {
   id: string;
   title: string;
   cursor: { chapter: number };
-  settings: { userName: string; scanTail: number };
+  settings: { userName: string; scanTail: number; autoRecord?: AutoRecord; autoAccept?: boolean };
+  pending?: Pending[];
+  autoTurns?: { turnId: string; sessionId: string; at: number; ids: string[]; pending: string[] }[];
+  lastAuto?: LastAuto | null;
   updatedAt: number;
   characters: Character[];
   lore: Entry[];

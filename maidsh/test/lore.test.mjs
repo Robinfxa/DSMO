@@ -208,3 +208,78 @@ test('import a card through the route (dry run first), undo it; delete the work;
   assert.equal((await h2.call(`${lore.API}/binding?sessionId=novel-1`)).value.work, null);
   assert.equal((await h2.call(`${lore.API}/work?id=${w.id}`)).ok, false);
 });
+
+// ---------- 聊天时自动整理（LORE-DESIGN §14） ----------
+
+const REPLY = '夜里，沈砚被刀锋划过左臂，血顺着袖口往下淌。他咬着牙把林晚的玉佩塞进怀里，翻身出了青州城。城外的苏九牵着马等他，'.repeat(6) + '北境的规矩是见血不追。';
+const talk = (id, msgs) => ({
+  id,
+  header: {},
+  requestHeader: () => ({ config: { provider: 'deepseek-official', model: 'deepseek-flash' } }),
+  deriveMessages: () => msgs.map(([role, mid, text]) => ({ id: mid, role, ...(role === 'user' ? { source: { kind: 'user' } } : {}), content: [{ type: 'text', text }] })),
+});
+const turnDone = { type: 'turn/end', data: { reason: { kind: 'completed' } } };
+
+test('auto: a finished turn is sorted into the work; new names wait; short replies and other conversations cost nothing; a regenerated reply is undone', async () => {
+  const h = host({
+    answer: (opts) =>
+      /小说设定整理员/.test(opts.system)
+        ? JSON.stringify(
+            opts.messages[0].content[0].text.includes('翻身出了青州城')
+              ? {
+                  changes: [{ subject: '阿砚', key: '伤势', value: '左臂刀伤', op: 'replace', quote: '沈砚被刀锋划过左臂' }],
+                  relations: [{ a: '沈砚', b: '林晚', key: '关系', value: '托付信物', quote: '把林晚的玉佩塞进怀里' }],
+                  newCharacters: [{ name: '苏九', summary: '城外接应的人。', quote: '城外的苏九牵着马等他' }],
+                  newEntries: [],
+                }
+              : { changes: [], relations: [], newCharacters: [], newEntries: [] },
+          )
+        : '{}',
+  });
+  const dir = tmp();
+  const w = await setup(h, dir);
+  await h.call(`${lore.API}/binding`, { action: 'set-workspace', workspaceId: 'w-novel', work: w.id });
+  const lo = h.root.get('lore');
+  h.root.emit('session/event', talk('novel-1', [['user', 'u1', '写第十二章：阿砚出城'], ['assistant', 'a1', REPLY]]), turnDone);
+  await settle();
+  await lo.idle();
+  let full = (await h.call(`${lore.API}/work?id=${w.id}`)).value;
+  assert.equal(full.cursor.chapter, 12, 'the author said 第十二章');
+  assert.deepEqual(full.states.map((s) => [s.key, s.value, s.from, s.source]), [['伤势', '左臂刀伤', 12, 'auto:a1']]);
+  assert.equal(full.relations[0].value, '托付信物');
+  assert.deepEqual(full.pending.map((p) => p.data.name), ['苏九']);
+  const sum = (await h.call(`${lore.API}/works`)).value[0];
+  assert.equal(sum.pending, 1);
+  assert.deepEqual([sum.lastAuto.sessionId, sum.lastAuto.recorded, sum.lastAuto.pending], ['novel-1', 2, 1]);
+  assert.equal(h.llmCalls.length, 1);
+  // 闲聊（回复太短）和没用作品的对话：不调模型
+  h.root.emit('session/event', talk('novel-1', [['user', 'u1', '写第十二章'], ['assistant', 'a1', REPLY], ['user', 'u2', '好'], ['assistant', 'a2', '嗯嗯']]), turnDone);
+  h.root.emit('session/event', talk('chat-1', [['user', 'u9', '写'], ['assistant', 'a9', REPLY]]), turnDone);
+  await settle();
+  await lo.idle();
+  assert.equal(h.llmCalls.length, 1);
+  // 收下待确认（走接口）
+  assert.equal((await h.call(`${lore.API}/mutate`, { action: 'accept-pending', work: w.id, id: 'all' })).value.accepted, 1);
+  // 重新生成：a1 不在了 → 那一轮自动记的（连同收下的苏九）都撤掉
+  h.root.emit('session/event', talk('novel-1', [['user', 'u1', '写第十二章：阿砚出城'], ['assistant', 'a1b', '另一个版本。'.repeat(60)]]), turnDone);
+  await settle();
+  await lo.idle();
+  full = (await h.call(`${lore.API}/work?id=${w.id}`)).value;
+  assert.equal(full.states.length, 0, 'the regenerated reply’s records are gone');
+  assert.equal(full.relations.length, 0);
+  assert.ok(!full.characters.some((c) => c.name === '苏九'));
+  // 档位和自动模式（走接口）；自动模式下新人物直接收下
+  assert.equal((await h.call(`${lore.API}/mutate`, { action: 'settings', work: w.id, autoAccept: true, autoRecord: 'every' })).value.autoAccept, true);
+  assert.equal((await h.call(`${lore.API}/mutate`, { action: 'settings', work: w.id, autoRecord: 'sometimes' })).ok, false);
+  h.root.emit('session/event', talk('novel-2', [['user', 'u5', '继续'], ['assistant', 'a5', REPLY]]), turnDone);
+  await settle();
+  await lo.idle();
+  full = (await h.call(`${lore.API}/work?id=${w.id}`)).value;
+  assert.ok(full.characters.some((c) => c.name === '苏九' && c.source === 'auto:a5'));
+  assert.equal(full.pending.length, 0);
+  // 撤销这一轮（走接口）
+  assert.equal((await h.call(`${lore.API}/mutate`, { action: 'undo-auto', work: w.id, turnId: 'a5' })).ok, true);
+  full = (await h.call(`${lore.API}/work?id=${w.id}`)).value;
+  assert.ok(!full.characters.some((c) => c.name === '苏九') && !full.states.length);
+  assert.equal((await h.call(`${lore.API}/mutate`, { action: 'undo-auto', work: w.id, turnId: 'a5' })).ok, false);
+});
