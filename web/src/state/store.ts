@@ -348,14 +348,40 @@ function upsertSession(s: SessionSummary) {
   sessions.value = [s, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/**
+ * Re-reads the list. A just-started engine can answer with only the conversations it has
+ * open (users saw one left, the rest back a while later), so an answer that leaves out
+ * conversations we knew is not believed at once: those stay listed and the engine is asked
+ * again a few times; only an answer still short after ~40 s drops them (and is saved).
+ * Deleting goes through `archived`, so it never waits on this.
+ */
+const RELIST_MS = [3_000, 10_000, 30_000];
+let listRound = 0;
 export async function refreshSessions() {
-  try {
-    const list = await client.listSessions();
-    sessions.value = list.sort((a, b) => b.updatedAt - a.updatedAt);
+  const round = ++listRound;
+  const known = sessions.value;
+  for (let i = 0; i <= RELIST_MS.length; i++) {
+    if (i) await new Promise((r) => setTimeout(r, RELIST_MS[i - 1]));
+    if (round !== listRound) return;
+    let list: SessionSummary[];
+    try {
+      list = await client.listSessions();
+    } catch (e) {
+      connError.value = (e as Error).message;
+      continue;
+    }
+    if (round !== listRound) return;
+    const ids = new Set(list.map((s) => s.sessionId));
+    // Ones that came in since (session-added) are in `list` or still in sessions.value.
+    const now = new Map(sessions.value.map((s) => [s.sessionId, s]));
+    const missing = known.filter((s) => !ids.has(s.sessionId) && now.has(s.sessionId));
+    const last = i === RELIST_MS.length;
+    sessions.value = (last ? list : [...list, ...missing]).sort((a, b) => b.updatedAt - a.updatedAt);
     sessionsLive.value = true;
-    saveSessionCache(sessions.value);
-  } catch (e) {
-    connError.value = (e as Error).message;
+    if (!missing.length || last) {
+      saveSessionCache(sessions.value);
+      return;
+    }
   }
 }
 
