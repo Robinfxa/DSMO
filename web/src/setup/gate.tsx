@@ -3,6 +3,7 @@
 // engine that isn't up — not installed, unpacking, starting, stopped, failed.
 // Pages (远程主机, 系统权限, 日志…) open over it.
 
+import { joinGroup } from '../community';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { local } from '../bridge/native';
 import { errText, openPage, prefs, setPref, showToast } from '../state/store';
@@ -70,6 +71,9 @@ function EngineScreen() {
       </button>
       <button class="plg-link" type="button" onClick={() => openPage('engine')}>
         <span>引擎设置与日志</span>
+      </button>
+      <button class="plg-link" type="button" onClick={joinGroup}>
+        <span>点击链接加入群聊</span>
       </button>
     </div>
   );

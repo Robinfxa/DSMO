@@ -1,6 +1,7 @@
 // Phone layout: full-screen pages (设置 and its sub-pages, 搜索, 账号管理),
 // grouped cards with icons and chevrons like a native settings app.
 
+import { joinGroup } from '../../community';
 import { hasLore, refreshWorks } from '../../lore/api';
 import { worksValue } from '../pages/lore';
 import { importHistory, openImportedPage } from '../../history/ui';
@@ -312,6 +313,7 @@ function SettingsHome() {
         <Row icon="info" label="版本" value={`${nativeInfo.value?.appVersion && nativeInfo.value.appVersion !== 'web' ? nativeInfo.value.appVersion : '0.1.0'} · ${__BUILD__}`} />
         {nativeInfo.value?.inApp && <WebUpdateRows />}
         <Row icon="download" label={nativeInfo.value?.inApp ? '检查 App 更新' : '检查更新'} onClick={() => toPage('update')} />
+        <Row icon="group" label="加入 QQ 群" value="交流和反馈" onClick={joinGroup} />
         <Row icon="doc" label="开源许可" onClick={() => pushScreen('licenses')} />
       </Group>
       {acc?.configured && acc.writable && (

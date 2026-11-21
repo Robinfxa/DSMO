@@ -99,8 +99,21 @@ await tap('.m-alert-btns button >> nth=-1', 1600);
 await page.click('.pg-head [aria-label="返回"] >> nth=-1').catch(() => {});
 await page.waitForTimeout(500);
 await shot('30-stopped');
+// the QQ group under 启动引擎
+await page.evaluate(() => (window.open = (u) => ((window.__opened = u), null)));
+await tap('.eg .eg-links .plg-link:has-text("点击链接加入群聊")', 300);
+if ((await page.evaluate(() => window.__opened)) !== 'https://qm.qq.com/q/21annsvqgw') errors.push('点击链接加入群聊 under 启动引擎 did not open the group link');
 await tap('.eg .plg-btn.pri:has-text("启动引擎")', 1800);
 if (await page.$('.eg')) errors.push('start engine did not clear the gate');
+await page.click('[aria-label="打开边栏"]');
+await page.waitForTimeout(400);
+await page.click('.m-me [aria-label="设置"]');
+await page.waitForTimeout(400);
+await page.evaluate(() => ((window.__opened = ''), (window.open = (u) => ((window.__opened = u), null))));
+await tap('.m-row:has-text("加入 QQ 群")', 300);
+if ((await page.evaluate(() => window.__opened)) !== 'https://qm.qq.com/q/21annsvqgw') errors.push('设置 › 关于 › 加入 QQ 群 did not open the group link');
+await shot('31-settings-group');
+for (let i = 0; i < 3 && (await page.isVisible('[aria-label="返回"] >> nth=-1')); i++) await tap('[aria-label="返回"] >> nth=-1', 300);
 
 // ---- DeepSeek account sign-in is hidden (ACCOUNT_SIGN_IN)
 await page.click('[aria-label="打开边栏"]');
