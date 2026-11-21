@@ -961,7 +961,7 @@ body:not(.is-m) .plg-card { width: calc((100% - 24px) / 3); }
 .lo-pend { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0 2px; border-top: 1px solid var(--c-line); margin-top: 8px; }
 .lo-pend-m { flex: 1; min-width: 0; }
 .lo-pend-t { font-size: 15px; line-height: 22px; }
-.lo-pend-s { color: var(--c-sub); font-size: 13.5px; line-height: 20px; }
+.lo-pend-s { color: var(--c-sub); font-size: 13.5px; line-height: 20px; white-space: pre-line; }
 .lo-pend-q { color: var(--c-faint); font-size: 12.5px; line-height: 18px; margin-top: 2px; }
 .lo-pend-b { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
 .plg-btn.small { height: 30px; padding: 0 14px; font-size: 13.5px; }

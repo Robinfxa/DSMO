@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LIMITS, addCharacter, addEntry, checkFacts, checkReport, checkRequest, compose, emptyWork, entryOf, lookup, nextSticky, normalizeWork, recordStates, roster, toWorldbook, updateCharacter, verifyCheck } from './core.mjs';
 import { acceptPending, applyAuto, autoRequest, chapterFromText, dismissPending, shouldRecord, undoAutoTurn, vanishedTurns } from './auto.mjs';
+import { applyEdits, planEdits, reviewDetail, startPlan, undoEdits } from './edit.mjs';
 import { applyImport, importReport, readImport, undoImport } from './import.mjs';
 import { completeText, configSchema, jsonStore, loggerOf, promptContext, readJsonBody, rejectRead, rejectWrite, sendJson, storageDir, textOf, trackLatest, turnOf } from './shared/dsh.mjs';
 import { OFF, createLayers, validId, workspaceFinder } from './shared/layers.mjs';
@@ -17,6 +18,8 @@ export const inject = ['systemPrompt', 'llm'];
 const DEFAULTS = {
   /** 每轮注入的设定最多多少字。 */
   budgetChars: LIMITS.budget,
+  /** 还没用作品的对话里也给 AI 一个 lore_start（约 80 字），让用户在聊天里开始一本（§15.1）。 */
+  chatStart: true,
   /** 一致性检查用的模型；provider 和 model 要成对给，不给就用会话当前的模型。 */
   provider: '',
   model: '',
@@ -158,7 +161,7 @@ export function apply(ctx, config = {}) {
   const tools = [
     {
       name: 'lore_lookup',
-      description: '查设定集：人物的完整卡片、某一章时的状态和关系、相关设定。回溯旧章节时给 chapter（默认是现在写到的章节）。',
+      description: '查设定集：人物的完整卡片、某一章时的状态和关系、相关设定；names 写「第 N 章」查那一章的情节。回溯旧章节时给 chapter（默认是现在写到的章节）。',
       parameters: {
         type: 'object',
         properties: {
@@ -211,6 +214,8 @@ export function apply(ctx, config = {}) {
         const ch = intArg(args?.chapter);
         if (Number.isNaN(ch)) return { text: 'chapter 要是 0 或正整数' };
         if (!Array.isArray(args?.changes) || !args.changes.length) return { text: 'changes 至少要有一条' };
+        // 改早于现在章节的状态是重要改动：先复核（§15.4）
+        if (ch !== undefined && ch < w.cursor.chapter) return edit(exec, w, [{ kind: 'state', chapter: ch, create: !!args.create, changes: args.changes }]);
         let r;
         try {
           r = mutateWork(w.id, (x) => recordStates(x, args.changes, { chapter: ch, create: !!args.create, source: 'tool' }));
@@ -263,11 +268,254 @@ export function apply(ctx, config = {}) {
       },
     },
   ];
+
+  // ---- 在聊天里建设定、记情节（§15）：小改直接生效，重要改动先复核 ----
+  /** 这段对话里你说过几句（复核退回「下一轮确认」时，用来防止 AI 在同一轮里自己确认）。 */
+  const userTurns = (session) => {
+    try {
+      return session.deriveMessages().filter((m) => m?.role === 'user' && (m.source?.kind ?? 'user') === 'user').length;
+    } catch {
+      return 0;
+    }
+  };
+  /** 弹复核卡片（DSH 的「问用户」，DSMO 的聊天里能显示）；返回 'yes' | 'no' | 'pending'（弹不出卡片）。 */
+  async function review(exec, title, lines) {
+    const uq = ctx.get('userQuestions');
+    if (typeof uq?.ask !== 'function' || !exec?.agent) return 'pending';
+    try {
+      const r = await uq.ask({
+        agent: exec.agent,
+        signal: exec.signal,
+        questions: [
+          {
+            id: 'lore-review',
+            header: '设定集',
+            question: title,
+            detail: lines,
+            multiSelect: false,
+            options: [
+              { label: '确认', description: '照这样改' },
+              { label: '不要', description: '什么都不改' },
+            ],
+            intent: { kind: 'approval', approve: '确认', reject: '不要' },
+          },
+        ],
+      });
+      return (r?.answers?.[0]?.selected ?? []).includes('确认') ? 'yes' : 'no';
+    } catch (e) {
+      if (exec.signal?.aborted) return 'no';
+      log(`复核卡片弹不出来，改成下一轮确认：${e?.message ?? e}`);
+      return 'pending';
+    }
+  }
+  /** 等「下一轮确认」的：作品里的（work.pending，kind 'edit'）和还没有作品的开头（startPending）。 */
+  const startPending = new Map();
+  const pendingNote = (id, texts) =>
+    `这些改动要用户确认（${id}）：\n${texts.map((x) => `- ${x}`).join('\n')}\n把它们原样告诉用户，问要不要这样改；用户在下一句里同意了再调 lore_confirm（id: ${id}）。同一轮里不能确认。`;
+
+  /** 一批改动：小改直接生效，重要的先复核。 */
+  async function edit(exec, w, changes) {
+    const plan = planEdits(w, changes);
+    const out = [];
+    const minor = plan.items.filter((i) => !i.important);
+    const major = plan.items.filter((i) => i.important);
+    const sid = rootId(exec?.agent?.session);
+    if (minor.length) {
+      const r = mutateWork(w.id, (x) => applyEdits(x, minor, { sessionId: sid, source: 'chat' }));
+      if (r.done.length) out.push(`已经改好（第 ${r.batchId} 批，可以用 lore_edit 的 undo 撤销）：\n${r.done.map((x) => `- ${x}`).join('\n')}`);
+      if (r.failed.length) out.push(`没改成：\n${r.failed.map((x) => `- ${x}`).join('\n')}`);
+    }
+    if (major.length) {
+      const verdict = await review(exec, '设定集：要这样改吗？', reviewDetail(major));
+      if (verdict === 'yes') {
+        // 用户点的那一刻作品可能又变了：按原话重新排一次再改
+        const again = planEdits(works.get(w.id), major.map((i) => i.raw));
+        const r = mutateWork(w.id, (x) => applyEdits(x, again.items, { sessionId: sid, source: 'chat-reviewed' }));
+        if (r.done.length) out.push(`用户确认了，已经改好（第 ${r.batchId} 批）：\n${r.done.map((x) => `- ${x}`).join('\n')}`);
+        if (r.failed.length || again.errors.length) out.push(`没改成：\n${[...r.failed, ...again.errors].map((x) => `- ${x}`).join('\n')}`);
+      } else if (verdict === 'no') out.push(`用户没同意，这些没改：\n${major.map((i) => `- ${i.text}`).join('\n')}`);
+      else {
+        const id = `p-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+        mutateWork(w.id, (x) => {
+          x.pending = [...x.pending, { id, kind: 'edit', data: { changes: major.map((i) => i.raw), texts: major.map((i) => i.text) }, quote: '', turnId: '', sessionId: sid, userTurns: userTurns(exec?.agent?.session), at: Date.now() }].slice(-50);
+          x.updatedAt = Date.now();
+        });
+        out.push(pendingNote(id, major.map((i) => i.text)));
+      }
+    }
+    if (plan.errors.length) out.push(`看不懂的改动：\n${plan.errors.map((x) => `- ${x}`).join('\n')}`);
+    return { text: out.join('\n\n') || '没有要改的。' };
+  }
+
+  /** 新建作品并让这段对话用它（总是复核）。 */
+  function startWork(sid, plan) {
+    const w = createWork(plan.title);
+    layers.setConversation(sid, w.id);
+    const p = planEdits(w, plan.changes);
+    const r = mutateWork(w.id, (x) => applyEdits(x, p.items, { sessionId: sid, source: 'chat-start' }));
+    return { w, r, errors: p.errors };
+  }
+  const startText = ({ w, r, errors }) =>
+    [`建好了《${w.title}》，这段对话从现在起用它。`, r.done.length ? `一起建好的：\n${r.done.map((x) => `- ${x}`).join('\n')}` : '', [...r.failed, ...errors].length ? `没建成：\n${[...r.failed, ...errors].map((x) => `- ${x}`).join('\n')}` : ''].filter(Boolean).join('\n');
+
+  const CHANGE = {
+    type: 'object',
+    properties: {
+      kind: { type: 'string', enum: ['character', 'entry', 'plot', 'remove', 'rename', 'chapter'] },
+      name: { type: 'string', description: 'character：人物名（已有的就是改它）' },
+      newName: { type: 'string' },
+      aliases: { type: 'array', items: { type: 'string' } },
+      summary: { type: 'string', description: 'character：一句话简介；plot：这一章的梗概（≤300 字）' },
+      appearance: { type: 'string' },
+      personality: { type: 'string' },
+      background: { type: 'string' },
+      voice: { type: 'string', description: '说话方式 / 台词样本' },
+      main: { type: 'boolean', description: '主要人物' },
+      secret: { type: 'boolean', description: '隐藏人物（揭晓前不进名单）' },
+      debut: { type: 'integer', description: '第几章登场' },
+      title: { type: 'string', description: 'entry：设定标题；rename：新书名；plot：这一章的小标题' },
+      newTitle: { type: 'string' },
+      keys: { type: 'array', items: { type: 'string' }, description: 'entry：对话里出现就带上这条的关键词' },
+      content: { type: 'string', description: 'entry：设定内容' },
+      constant: { type: 'boolean', description: 'entry：每轮都带' },
+      from: { type: 'integer', description: 'plot / entry：从第几章' },
+      to: { type: 'integer', description: 'plot：到第几章（几章合一条时）' },
+      until: { type: 'integer', description: 'entry：到第几章为止' },
+      target: { type: 'string', description: 'remove：人物名、设定标题或「第 N 章」' },
+      chapter: { type: 'integer', description: 'chapter：现在写到第几章' },
+    },
+    required: ['kind'],
+  };
+  const editTools = [
+    {
+      tool: {
+        name: 'lore_start',
+        description: '用户想写小说、想建人物设定时：新建一本作品并让这段对话用它，可顺带建人物、设定、已有情节。会先请用户确认。',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: '书名' },
+            characters: { type: 'array', items: CHANGE },
+            entries: { type: 'array', items: CHANGE },
+            plot: { type: 'array', items: CHANGE, description: '已有情节：每章一条（from / to / summary）' },
+            chapter: { type: 'integer', description: '现在写到第几章' },
+          },
+          required: ['title'],
+        },
+        output: textOut,
+        async execute(args, exec) {
+          const session = exec?.agent?.session;
+          const sid = rootId(session);
+          if (workFor(sid)) return { text: '这段对话已经在用一本作品了，用 lore_edit 改它。' };
+          let plan;
+          try {
+            plan = startPlan(args ?? {});
+          } catch (e) {
+            return { text: e.message };
+          }
+          const p = planEdits({ ...emptyWork({ title: plan.title }) }, plan.changes);
+          const lines = [`· 新建作品《${plan.title}》，这段对话用它`, ...p.items.map((i) => `· ${i.text}`)].join('\n');
+          const verdict = await review(exec, '设定集：建这本作品吗？', lines);
+          if (verdict === 'no') return { text: '用户没同意，没有建。' };
+          if (verdict === 'yes') {
+            try {
+              return { text: startText(startWork(sid, plan)) };
+            } catch (e) {
+              return { text: `没建成：${e.message}` };
+            }
+          }
+          const id = `s-${Date.now().toString(36)}`;
+          startPending.set(sid, { id, plan, userTurns: userTurns(session) });
+          return { text: pendingNote(id, [`新建作品《${plan.title}》，这段对话用它`, ...p.items.map((i) => i.text)]) };
+        },
+      },
+      when: (sid) => c.chatStart && !workFor(sid) && !layers.isBot(sid),
+    },
+    {
+      tool: {
+        name: 'lore_edit',
+        description: '按用户说的改设定集：新建或修改人物、设定，记某一章的情节，删除，改书名，把章节往回拨。新增少量直接生效；改掉已有内容、删除、一次加很多会先请用户确认。undo 填批号可整批撤销。',
+        parameters: {
+          type: 'object',
+          properties: {
+            changes: { type: 'array', items: CHANGE, description: '1–40 条改动' },
+            undo: { type: 'string', description: '要撤销的批号（之前返回的「第 b-… 批」）' },
+          },
+        },
+        output: textOut,
+        async execute(args, exec) {
+          const w = execWork(exec);
+          if (!w) return { text: NO_WORK };
+          if (args?.undo) {
+            try {
+              const r = mutateWork(w.id, (x) => {
+                const u = undoEdits(x, String(args.undo));
+                if (!u.ok) throw new Error(u.error);
+                return u;
+              });
+              return { text: `撤销了：\n${r.undone.map((x) => `- ${x}`).join('\n')}` };
+            } catch (e) {
+              return { text: e.message };
+            }
+          }
+          if (!Array.isArray(args?.changes) || !args.changes.length) return { text: 'changes 至少要有一条（或者给 undo）' };
+          try {
+            return await edit(exec, w, args.changes);
+          } catch (e) {
+            return { text: `没改成：${e.message}` };
+          }
+        },
+      },
+      when: (sid) => !!workFor(sid),
+    },
+    {
+      tool: {
+        name: 'lore_confirm',
+        description: '只在设定集说「等用户确认」、而用户在下一句里同意了时用：确认那批改动。',
+        parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        output: textOut,
+        async execute(args, exec) {
+          const session = exec?.agent?.session;
+          const sid = rootId(session);
+          const id = String(args?.id ?? '');
+          const now = userTurns(session);
+          const st = startPending.get(sid);
+          if (st && st.id === id) {
+            if (now <= st.userTurns) return { text: '要等用户在下一句里同意了才能确认。' };
+            startPending.delete(sid);
+            try {
+              return { text: startText(startWork(sid, st.plan)) };
+            } catch (e) {
+              return { text: `没建成：${e.message}` };
+            }
+          }
+          const w = execWork(exec);
+          const p = w?.pending.find((x) => x.id === id && x.kind === 'edit');
+          if (!p) return { text: '找不到这批待确认的改动（可能已经确认或不要了）。' };
+          if (p.sessionId === sid && now <= (p.userTurns ?? 0)) return { text: '要等用户在下一句里同意了才能确认。' };
+          const again = planEdits(w, p.data.changes);
+          const r = mutateWork(w.id, (x) => {
+            x.pending = x.pending.filter((y) => y.id !== id);
+            return applyEdits(x, again.items, { sessionId: sid, source: 'chat-reviewed' });
+          });
+          return { text: [r.done.length ? `确认了，已经改好（第 ${r.batchId} 批）：\n${r.done.map((x) => `- ${x}`).join('\n')}` : '', [...r.failed, ...again.errors].length ? `没改成：\n${[...r.failed, ...again.errors].map((x) => `- ${x}`).join('\n')}` : ''].filter(Boolean).join('\n') || '没有要改的。' };
+        },
+      },
+      when: (sid) => !!workFor(sid) || startPending.has(sid),
+    },
+  ];
+
   ctx.inject(['tools'], (sub) => {
     for (const t of tools)
       sub.effect(() =>
         sub.tools.register(t, {
           when: ({ agent }) => !!workFor(rootId(agent?.session)),
+        }),
+      );
+    for (const { tool, when } of editTools)
+      sub.effect(() =>
+        sub.tools.register(tool, {
+          when: ({ agent }) => !!agent?.session && !isSub(agent.session) && when(rootId(agent.session)),
         }),
       );
   });
@@ -446,6 +694,13 @@ export function apply(ctx, config = {}) {
         w.updatedAt = Date.now();
         return { id: b.id };
       }),
+    'undo-edits': (b) =>
+      mutateWork(b.work, (w) => {
+        const r = undoEdits(w, String(b.batchId ?? ''));
+        if (!r.ok) throw new Error(r.error);
+        return r;
+      }),
+    'upsert-plot': (b) => mutateWork(b.work, (w) => applyEdits(w, planEdits(w, [{ ...b, kind: 'plot' }]).items, { source: 'user' })),
     'accept-pending': (b) => mutateWork(b.work, (w) => acceptPending(w, b.id === 'all' ? 'all' : String(b.id ?? ''))),
     'dismiss-pending': (b) => mutateWork(b.work, (w) => dismissPending(w, b.id === 'all' ? 'all' : String(b.id ?? ''))),
     'undo-auto': (b) =>

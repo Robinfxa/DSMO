@@ -10,6 +10,9 @@ export const LIMITS = Object.freeze({
   entries: 2000,
   states: 5000,
   relations: 1000,
+  plot: 1000,
+  /** 每轮注入里「前情」那一行的上限（字）。 */
+  plotLine: 150,
   aliases: 8,
   /** 常驻人物名单（字）。 */
   roster: 200,
@@ -55,6 +58,8 @@ export function emptyWork({ title, now = Date.now(), id } = {}) {
     pending: [],
     autoTurns: [],
     lastAuto: null,
+    plot: [],
+    batches: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -64,7 +69,7 @@ export function emptyWork({ title, now = Date.now(), id } = {}) {
 export function normalizeWork(w) {
   if (!w || typeof w !== 'object' || w.v !== 1 || typeof w.id !== 'string') return null;
   const base = emptyWork({ title: w.title, id: w.id, now: w.createdAt ?? Date.now() });
-  return { ...base, ...w, cursor: { chapter: int(w.cursor?.chapter) }, settings: { ...base.settings, ...(w.settings ?? {}) }, characters: arr(w.characters), states: arr(w.states), lore: arr(w.lore), relations: arr(w.relations), imports: arr(w.imports), pending: arr(w.pending), autoTurns: arr(w.autoTurns), lastAuto: w.lastAuto ?? null };
+  return { ...base, ...w, cursor: { chapter: int(w.cursor?.chapter) }, settings: { ...base.settings, ...(w.settings ?? {}) }, characters: arr(w.characters), states: arr(w.states), lore: arr(w.lore), relations: arr(w.relations), imports: arr(w.imports), pending: arr(w.pending), autoTurns: arr(w.autoTurns), lastAuto: w.lastAuto ?? null, plot: arr(w.plot), batches: arr(w.batches) };
 }
 const arr = (x) => (Array.isArray(x) ? x : []);
 
@@ -329,6 +334,54 @@ const hint = (work, name) => {
   return s.length ? `，最像的是：${s.join('、')}` : '';
 };
 
+// ---------------- 情节（§15.3） ----------------
+
+/** 一条情节：第 from 章（到第 to 章）的梗概。 */
+export function plotOf(raw = {}) {
+  const from = int(raw.from, NaN);
+  if (!Number.isInteger(from)) throw new Error('情节要写是第几章（from）');
+  const to = raw.to === undefined || raw.to === null || raw.to === '' ? undefined : int(raw.to, NaN);
+  if (to !== undefined && (!Number.isInteger(to) || to < from)) throw new Error('情节的 to 要不小于 from');
+  const summary = long(raw.summary, 300);
+  if (!summary) throw new Error('情节梗概是空的');
+  return { from, ...(to !== undefined && to !== from ? { to } : {}), ...(raw.title ? { title: clip(raw.title, 30) } : {}), summary };
+}
+export function addPlot(work, raw, { now = Date.now(), source = 'user' } = {}) {
+  if (work.plot.length >= LIMITS.plot) throw new Error(`情节最多 ${LIMITS.plot} 条`);
+  const p = { id: rid('p'), ...plotOf(raw), source, createdAt: now };
+  work.plot.push(p);
+  work.plot.sort((a, b) => a.from - b.from || a.createdAt - b.createdAt);
+  work.updatedAt = now;
+  return p;
+}
+const plotEnd = (p) => p.to ?? p.from;
+const plotRange = (p) => (p.to !== undefined ? `第 ${p.from}–${p.to} 章` : `第 ${p.from} 章`);
+/** 第 chapter 章的情节（覆盖这一章的）。 */
+export const plotAt = (work, chapter) => work.plot.filter((p) => p.from <= chapter && plotEnd(p) >= chapter);
+/** 句号处截断到 n 字以内（一句都放不下就整句不要）。 */
+function sentences(text, n) {
+  if (text.length <= n) return text;
+  const cut = text.slice(0, n);
+  const i = Math.max(cut.lastIndexOf('。'), cut.lastIndexOf('！'), cut.lastIndexOf('？'));
+  return i > 0 ? cut.slice(0, i + 1) : '';
+}
+/** 「前情」：当前章之前最近的一两条梗概，≤ plotLine 字。 */
+export function plotLine(work, chapter) {
+  const before = work.plot.filter((p) => plotEnd(p) < chapter).sort((a, b) => plotEnd(b) - plotEnd(a)).slice(0, 2).reverse();
+  if (!before.length) return '';
+  const head = '- 前情：';
+  const room = LIMITS.plotLine - head.length;
+  const parts = [];
+  for (const p of [...before].reverse()) {
+    const label = `${plotRange(p)}，`;
+    const left = room - parts.reduce((n, x) => n + x.length + 1, 0) - label.length;
+    const body = sentences(p.summary, left);
+    if (!body) break;
+    parts.unshift(label + body);
+  }
+  return parts.length ? head + parts.join('；') : '';
+}
+
 // ---------------- 匹配 ----------------
 
 const isLatin = (s) => /^[\x00-\x7f]+$/.test(s);
@@ -463,6 +516,7 @@ export function compose(work, { latest = '', tail = '', sticky, budget = LIMITS.
   }
   const placed = [];
   for (const c of [...direct, ...fromTail, ...lingering]) if (put(charBlock(work, c, chapter), c.name)) placed.push(c);
+  put(plotLine(work, chapter));
   for (const e of [...green, ...greenSticky]) put(e.content.length > LIMITS.entryInject ? null : `- ${e.title}：${e.content}`, e.title);
   for (let i = 0; i < placed.length; i++)
     for (let j = i + 1; j < placed.length; j++) {
@@ -497,10 +551,18 @@ export function nextSticky(sticky, hits, turns = LIMITS.sticky) {
 /** lore_lookup：完整人物卡、第 N 章时的状态（或变化线）、关系、相关设定。 */
 export function lookup(work, names, { chapter, history = false } = {}) {
   const ch = chapter === undefined || chapter === null ? work.cursor.chapter : int(chapter, work.cursor.chapter);
-  const list = (Array.isArray(names) ? names : String(names ?? '').split(/[、,，\s]+/)).map((s) => s.trim()).filter(Boolean).slice(0, 5);
-  if (!list.length) return '要给 names：人物或设定的名字，多个用「、」隔开。';
+  // 「第 20 章」中间的空格不算分隔
+  const list = (Array.isArray(names) ? names : String(names ?? '').replace(/第\s*(\d+)\s*章/g, '第$1章').split(/[、,，\s]+/)).map((s) => s.trim()).filter(Boolean).slice(0, 5);
+  if (!list.length) return '要给 names：人物或设定的名字，或者「第 N 章」（查情节），多个用「、」隔开。';
   const out = [`（《${work.title}》第 ${ch} 章时${ch !== work.cursor.chapter ? `；现在写到第 ${work.cursor.chapter} 章` : ''}）`];
   for (const n of list) {
+    const asked = /^第?\s*(\d+)\s*章$/.exec(n);
+    if (asked) {
+      const c = Number(asked[1]);
+      const ps = plotAt(work, c);
+      out.push(ps.length ? ps.map((p) => `【${plotRange(p)}${p.title ? `·${p.title}` : ''}】${p.summary}`).join('\n') : `【第 ${c} 章】还没有记情节。`);
+      continue;
+    }
     const f = findSubject(work, n);
     if (!f) {
       out.push(`【${n}】找不到${hint(work, n)}。`);

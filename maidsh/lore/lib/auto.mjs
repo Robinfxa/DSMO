@@ -3,6 +3,7 @@
 // 纯逻辑：调模型、读会话由插件外壳负责。
 
 import { addCharacter, addEntry, checkFacts, findSubject, normQuote, recordStates, relationAt, stateAt } from './core.mjs';
+import { applyEdits, planEdits } from './edit.mjs';
 import { parseLenient } from './shared/json.mjs';
 
 export const AUTO = Object.freeze({
@@ -205,6 +206,15 @@ export function acceptPending(work, which, { now = Date.now() } = {}) {
   let accepted = 0;
   const errors = [];
   for (const p of list) {
+    if (p.kind === 'edit') {
+      // 聊天里提的重要改动（没弹出复核卡片时放进来的）：在页面上收下 = 用户确认
+      const again = planEdits(work, p.data.changes);
+      const r = applyEdits(work, again.items, { now, sessionId: p.sessionId, source: 'chat-reviewed' });
+      accepted += r.done.length ? 1 : 0;
+      errors.push(...r.failed, ...again.errors);
+      work.pending = work.pending.filter((y) => y.id !== p.id);
+      continue;
+    }
     try {
       const x = p.kind === 'character' ? addCharacter(work, p.data, { now, source: `auto:${p.turnId}` }) : addEntry(work, p.data, { now, source: `auto:${p.turnId}` });
       // 收下的也算那一轮的，撤销那一轮时一起撤

@@ -1,6 +1,6 @@
 {
   "name": "dsmo-lore",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "设定集：写小说、跑团时让 AI 记得人物是谁、写到第几章时处在什么状态、世界有哪些规矩；兼容 SillyTavern 角色卡和世界书",
   "license": "MIT",
   "type": "module",

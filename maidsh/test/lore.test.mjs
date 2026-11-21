@@ -283,3 +283,105 @@ test('auto: a finished turn is sorted into the work; new names wait; short repli
   assert.ok(!full.characters.some((c) => c.name === '苏九') && !full.states.length);
   assert.equal((await h.call(`${lore.API}/mutate`, { action: 'undo-auto', work: w.id, turnId: 'a5' })).ok, false);
 });
+
+// ---------- 在聊天里建设定、记情节（LORE-DESIGN §15） ----------
+
+const chatSession = (id, userCount = 1) => ({
+  id,
+  header: {},
+  requestHeader: () => ({ config: { provider: 'deepseek-official', model: 'deepseek-flash' } }),
+  deriveMessages: () => Array.from({ length: userCount }, (_, i) => ({ id: `u${i}`, role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '……' }] })),
+});
+
+test('chat: start a work from a conversation (review card), then edit it — light edits apply, heavy ones wait for 确认', async () => {
+  const h = host();
+  const asked = [];
+  let answer = '确认';
+  h.root.provide('userQuestions', { ask: async (req) => (asked.push(req), { answers: [{ id: req.questions[0].id, selected: [answer] }] }) });
+  const dir = tmp();
+  await h.root.plugin(lore, { dataDir: dir });
+  await settle();
+  const s = chatSession('chat-9');
+  const vis = (name, sess = s) => h.tools.get(name).opts.when({ agent: { session: sess } });
+  assert.equal(await vis('lore_start'), true, 'no work yet: lore_start is there');
+  assert.equal(await vis('lore_edit'), false);
+  const run = (name, args, sess = s) => h.tools.get(name).def.execute(args, { agent: { id: sess.id, session: sess } });
+  let r = await run('lore_start', {
+    title: '长夜',
+    characters: [{ name: '沈砚', aliases: ['阿砚'], summary: '落魄琴师，嘴冷心热。', main: true }],
+    entries: [{ title: '青州', keys: ['青州'], content: '北境门户。' }],
+    plot: [{ from: 1, to: 8, summary: '沈砚在青州卖琴为生。' }],
+    chapter: 9,
+  });
+  assert.equal(asked.length, 1, 'creating a work always asks');
+  assert.equal(asked[0].questions[0].intent.kind, 'approval');
+  assert.match(asked[0].questions[0].detail, /新建作品《长夜》[\s\S]*新人物：沈砚[\s\S]*新设定：青州[\s\S]*情节 第 1–8 章/);
+  assert.match(r.text, /建好了《长夜》，这段对话从现在起用它/);
+  const w = (await h.call(`${lore.API}/works`)).value[0];
+  assert.equal(w.chapter, 9);
+  assert.equal((await h.call(`${lore.API}/binding?sessionId=chat-9`)).value.from, 'conversation');
+  assert.equal(await vis('lore_start'), false, 'now it uses a work: lore_edit instead');
+  assert.equal(await vis('lore_edit'), true);
+  assert.match(h.contexts.get('dsmo-lore').text(ac(session('chat-9', '写阿砚'))), /- 前情：第 1–8 章，沈砚在青州卖琴为生。/);
+  // 小改直接生效；改已有的性格要复核，这次点「不要」
+  answer = '不要';
+  r = await run('lore_edit', { changes: [{ kind: 'character', name: '林晚', summary: '知府之女。' }, { kind: 'character', name: '沈砚', appearance: '左眉有疤' }, { kind: 'character', name: '沈砚', summary: '冷面琴师。' }] });
+  assert.match(r.text, /已经改好（第 b-[a-z0-9]+ 批[\s\S]*新人物：林晚[\s\S]*补 沈砚 的外貌/);
+  assert.match(r.text, /用户没同意，这些没改：\n- 改 沈砚 的简介/);
+  assert.equal(asked.length, 2);
+  let full = (await h.call(`${lore.API}/work?id=${w.id}`)).value;
+  assert.equal(full.characters.find((c) => c.name === '沈砚').card.summary, '落魄琴师，嘴冷心热。');
+  // 这次点「确认」
+  answer = '确认';
+  r = await run('lore_edit', { changes: [{ kind: 'character', name: '沈砚', summary: '冷面琴师。' }, { kind: 'remove', target: '青州' }] });
+  assert.match(r.text, /用户确认了，已经改好/);
+  full = (await h.call(`${lore.API}/work?id=${w.id}`)).value;
+  assert.equal(full.characters.find((c) => c.name === '沈砚').card.summary, '冷面琴师。');
+  assert.equal(full.lore.length, 0);
+  // 整批撤销
+  const batch = /第 (b-[a-z0-9]+) 批/.exec(r.text)[1];
+  r = await run('lore_edit', { undo: batch });
+  assert.match(r.text, /撤销了/);
+  full = (await h.call(`${lore.API}/work?id=${w.id}`)).value;
+  assert.equal(full.lore[0].title, '青州');
+  // 记早于现在章节的状态：也要复核
+  const before = asked.length;
+  r = await run('lore_record_state', { chapter: 3, changes: [{ subject: '沈砚', key: '位置', value: '青州城内' }] });
+  assert.equal(asked.length, before + 1);
+  assert.match(r.text, /改第 3 章的状态/);
+  // Bot 的对话、关掉 chatStart：没有 lore_start
+  await h.call(`${lore.API}/binding`, { action: 'set-bots', sessionIds: ['bot-1'] });
+  assert.equal(await vis('lore_start', chatSession('bot-1')), false);
+});
+
+test('chat: no card to show → the change waits; confirming in the same turn is refused, the next turn works', async () => {
+  const h = host(); // 没有 userQuestions：弹不出卡片
+  await h.root.plugin(lore, { dataDir: tmp() });
+  await settle();
+  const run = (name, args, sess) => h.tools.get(name).def.execute(args, { agent: { id: sess.id, session: sess } });
+  let r = await run('lore_start', { title: '雾港' }, chatSession('c1', 1));
+  const sid = /lore_confirm（id: (s-[a-z0-9]+)）/.exec(r.text)[1];
+  assert.match(r.text, /同一轮里不能确认/);
+  assert.equal((await h.call(`${lore.API}/works`)).value.length, 0, 'nothing created yet');
+  assert.equal(await h.tools.get('lore_confirm').opts.when({ agent: { session: chatSession('c1') } }), true);
+  r = await run('lore_confirm', { id: sid }, chatSession('c1', 1));
+  assert.match(r.text, /要等用户在下一句里同意/);
+  r = await run('lore_confirm', { id: sid }, chatSession('c1', 2));
+  assert.match(r.text, /建好了《雾港》/);
+  // 作品里的重要改动：同样等下一轮；也能在页面的「待确认」里收下
+  r = await run('lore_edit', { changes: [{ kind: 'rename', title: '雾港夜话' }] }, chatSession('c1', 2));
+  const pid = /lore_confirm（id: (p-[a-z0-9]+)）/.exec(r.text)[1];
+  const w = (await h.call(`${lore.API}/works`)).value[0];
+  assert.equal(w.pending, 1);
+  r = await run('lore_confirm', { id: pid }, chatSession('c1', 2));
+  assert.match(r.text, /要等用户/);
+  assert.equal((await h.call(`${lore.API}/mutate`, { action: 'accept-pending', work: w.id, id: pid })).value.accepted, 1);
+  assert.equal((await h.call(`${lore.API}/works`)).value[0].title, '雾港夜话');
+});
+
+test('chat: chatStart off hides lore_start', async () => {
+  const h = host();
+  await h.root.plugin(lore, { dataDir: tmp(), chatStart: false });
+  await settle();
+  assert.equal(await h.tools.get('lore_start').opts.when({ agent: { session: chatSession('x') } }), false);
+});

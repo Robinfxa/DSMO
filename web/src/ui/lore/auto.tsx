@@ -51,15 +51,15 @@ export function LastTurn({ workId, last, onChanged }: { workId: string; last: La
   );
 }
 
-const pendingName = (p: Pending) => (p.kind === 'character' ? `新人物：${p.data.name}` : `新设定：${p.data.title}`);
-const pendingWhat = (p: Pending) => (p.kind === 'character' ? p.data.card?.summary : p.data.content) ?? '';
+const pendingName = (p: Pending) => (p.kind === 'edit' ? `聊天里要改的 ${p.data.texts?.length ?? 0} 处` : p.kind === 'character' ? `新人物：${p.data.name}` : `新设定：${p.data.title}`);
+const pendingWhat = (p: Pending) => (p.kind === 'edit' ? (p.data.texts ?? []).join('\n') : (p.kind === 'character' ? p.data.card?.summary : p.data.content) ?? '');
 
 /** The new people and entries the chat brought up: 收下 / 不要, one by one or all. */
 export function PendingList({ work, onChanged }: { work: Work; onChanged: () => void }) {
   const list = work.pending ?? [];
   if (!list.length) return null;
   const one = (p: Pending, accept: boolean) =>
-    void act(() => mutate<{ accepted?: number; errors?: string[] }>(accept ? 'accept-pending' : 'dismiss-pending', { work: work.id, id: p.id }), (r) => (r.errors?.length ? r.errors.join('；') : accept ? `收下了：${p.data.name ?? p.data.title}` : '不要了')).then(onChanged);
+    void act(() => mutate<{ accepted?: number; errors?: string[] }>(accept ? 'accept-pending' : 'dismiss-pending', { work: work.id, id: p.id }), (r) => (r.errors?.length ? r.errors.join('；') : accept ? (p.kind === 'edit' ? '改好了' : `收下了：${p.data.name ?? p.data.title}`) : '不要了')).then(onChanged);
   return (
     <div class="lo-auto">
       <div class="lo-auto-h">

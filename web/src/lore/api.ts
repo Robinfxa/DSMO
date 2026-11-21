@@ -62,8 +62,9 @@ export interface LastAuto {
 }
 export interface Pending {
   id: string;
-  kind: 'character' | 'entry';
-  data: { name?: string; title?: string; aliases?: string[]; card?: { summary?: string }; keys?: string[]; content?: string };
+  /** edit：聊天里提的重要改动，没弹出复核卡片时放进来（LORE-DESIGN §15.5） */
+  kind: 'character' | 'entry' | 'edit';
+  data: { name?: string; title?: string; aliases?: string[]; card?: { summary?: string }; keys?: string[]; content?: string; texts?: string[] };
   quote: string;
   turnId: string;
   sessionId: string;
