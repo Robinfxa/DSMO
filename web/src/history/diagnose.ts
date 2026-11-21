@@ -1,6 +1,6 @@
 // 复制排查信息（对话的「更多」菜单）：用户说「串窗口了」时，拿到这一段对话里每一轮额外塞给模型的东西。
 // DSH 把每一轮的附加内容原样记在对话记录里：runtime-context 快照按段落标出是谁加的（maidsh、设定集……），
-// 系统提示词（含自动读进来的 AGENTS.md）记成 system/message。这里只读这一段对话的最近记录，
+// 系统提示词（含自动读进来的 AGENTS.md）记成 system/message，全文放在最后。这里只读这一段对话的最近记录，
 // 不碰别的对话；用户自己看过再决定发不发。
 //
 // 看法：串过来的内容出现在某一轮的「塞给模型」里 → 看段落名就知道是哪个插件；
@@ -64,7 +64,8 @@ export function formatDiagnostic(recs: Rec[], head: string[]): string {
   let cur: string[] | null = null;
   const lastSection = new Map<string, string>();
   const seenOther = new Set<string>();
-  let lastSystem = '';
+  // 系统提示词很长（DSH 自带的就有 6000 字），放在最后：聊天软件截断时，先丢的是它而不是每一轮的内容。
+  const systems: string[] = [];
   const push = (line: string) => {
     if (!cur) turns.push((cur = ['（这段记录开头之前的内容）']));
     cur.push(line);
@@ -101,9 +102,9 @@ export function formatDiagnostic(recs: Rec[], head: string[]): string {
       }
     } else if (type === 'system/message') {
       const text = textOf(o(d.message).content);
-      if (text && text !== lastSystem) {
-        lastSystem = text;
-        push(`  [系统提示词（含 AGENTS.md 等），${text.length} 字]\n${indent(clip(text, CLIP_SYSTEM))}`);
+      if (text && text !== systems[systems.length - 1]) {
+        systems.push(text);
+        push(`  [系统提示词${systems.length > 1 ? `换了（第 ${systems.length} 版）` : ''}，${text.length} 字，全文在最后]`);
       }
     } else if (type === 'assistant/message') {
       const text = textOf(d.content ?? o(d.message).content);
@@ -112,7 +113,8 @@ export function formatDiagnostic(recs: Rec[], head: string[]): string {
   }
   const shown = turns.slice(-MAX_TURNS);
   if (turns.length > shown.length) head.push(`共 ${turns.length} 轮，下面是最近 ${shown.length} 轮`);
-  return [...head, '', ...shown.map((t) => t.join('\n'))].join('\n');
+  const tail = systems.map((t, i) => `══ 系统提示词${systems.length > 1 ? ` 第 ${i + 1} 版` : ''}（含 AGENTS.md 等），${t.length} 字 ══\n${clip(t, CLIP_SYSTEM)}`);
+  return [...head, '', ...shown.map((t) => t.join('\n')), ...(tail.length ? ['', ...tail] : [])].join('\n');
 }
 
 const indent = (s: string) =>
