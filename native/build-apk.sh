@@ -91,7 +91,9 @@ fi
 # (web_update.dart, native/BRIDGE).
 defines=("--dart-define=API_DEMO_BRIDGE=$(tr -dc 0-9 < "$here/BRIDGE")")
 [ -n "${API_DEMO_UPDATE_REPO:-}" ] && defines+=("--dart-define=API_DEMO_UPDATE_REPO=$API_DEMO_UPDATE_REPO")
-DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh -f "$abi" -- "${defines[@]}"
+# --no-companion: since v1.3.0 dsh-Go's release builds put the licensed 伙伴 (whale-girl) pack in the
+# APK and stop without it. It isn't ours to ship, and DSMO hides 伙伴小屋 (patch 0012).
+DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh -f "$abi" --no-companion -- "${defines[@]}"
 
 apk="$dsh/app/build/app/outputs/flutter-apk/app-$abi-release.apk"
 mkdir -p "$repo/dist-apk"
