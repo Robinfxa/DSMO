@@ -1,7 +1,7 @@
-From 6cef517d47c3e60571c1ce85a4cc5d97d5663602 Mon Sep 17 00:00:00 2001
+From 8ea00939a81c18f38c028f9b0ebd414b2798337e Mon Sep 17 00:00:00 2001
 From: API Demo <api-demo@users.noreply.github.com>
 Date: Wed, 18 Nov 2026 16:37:25 -0500
-Subject: [PATCH] API Demo: import DeepSeek chat history as real sessions
+Subject: [PATCH 07/12] API Demo: import DeepSeek chat history as real sessions
 
 dsh-go-bridge gets GET|POST /dsh-go/v1/sessions/import (capability
 session-import). The page parses the export and sends normalized
@@ -35,7 +35,7 @@ Claude-Session: https://claude.ai/code/session_01EvNzunV3oTNc3v18wvhEA9
  create mode 100644 runtime/tests/session-import.test.mjs
 
 diff --git a/runtime/bridge/dsh-go-bridge/lib/index.js b/runtime/bridge/dsh-go-bridge/lib/index.js
-index a14d55e..a8b0635 100644
+index a14d55e0..a8b06359 100644
 --- a/runtime/bridge/dsh-go-bridge/lib/index.js
 +++ b/runtime/bridge/dsh-go-bridge/lib/index.js
 @@ -5,6 +5,8 @@
@@ -82,7 +82,7 @@ index a14d55e..a8b0635 100644
        if (await companionRoutes.handle(req, res, path)) return;
 diff --git a/runtime/bridge/dsh-go-bridge/lib/session-import.js b/runtime/bridge/dsh-go-bridge/lib/session-import.js
 new file mode 100644
-index 0000000..bd27999
+index 00000000..bd27999f
 --- /dev/null
 +++ b/runtime/bridge/dsh-go-bridge/lib/session-import.js
 @@ -0,0 +1,247 @@
@@ -334,7 +334,7 @@ index 0000000..bd27999
 +  };
 +}
 diff --git a/runtime/bridge/dsh-go-bridge/package.json b/runtime/bridge/dsh-go-bridge/package.json
-index f71577d..0e47115 100644
+index f71577da..0e47115c 100644
 --- a/runtime/bridge/dsh-go-bridge/package.json
 +++ b/runtime/bridge/dsh-go-bridge/package.json
 @@ -15,6 +15,7 @@
@@ -346,7 +346,7 @@ index f71577d..0e47115 100644
      "lib/config-source.js",
      "lib/client.js",
 diff --git a/runtime/tests/bridge-http-errors.test.mjs b/runtime/tests/bridge-http-errors.test.mjs
-index 8bb1f28..8403c2e 100644
+index 8bb1f287..8403c2e7 100644
 --- a/runtime/tests/bridge-http-errors.test.mjs
 +++ b/runtime/tests/bridge-http-errors.test.mjs
 @@ -217,7 +217,7 @@ test('capabilities advertise implemented families independently of service avail
@@ -360,7 +360,7 @@ index 8bb1f28..8403c2e 100644
    assert.equal(response.headers.get('cache-control'), 'no-store');
 diff --git a/runtime/tests/session-import-live.py b/runtime/tests/session-import-live.py
 new file mode 100644
-index 0000000..13cce2f
+index 00000000..13cce2fc
 --- /dev/null
 +++ b/runtime/tests/session-import-live.py
 @@ -0,0 +1,124 @@
@@ -490,7 +490,7 @@ index 0000000..13cce2f
 +  print("PASS: real Host import, list titles and dates, restart, re-import skip, continued chat history", flush=True)
 diff --git a/runtime/tests/session-import.test.mjs b/runtime/tests/session-import.test.mjs
 new file mode 100644
-index 0000000..16531ff
+index 00000000..16531ff7
 --- /dev/null
 +++ b/runtime/tests/session-import.test.mjs
 @@ -0,0 +1,140 @@
@@ -635,5 +635,5 @@ index 0000000..16531ff
 +  assert.equal((await post('POST', { source: 'deepseek', conversations: [] })).status, 503);
 +});
 -- 
-2.43.0
+2.50.1 (Apple Git-155)
 

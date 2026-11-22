@@ -6,7 +6,7 @@
 - `native/brand/`：DSMO 的图标和标志。`make_brand.py` 从同一个图形生成启动图标（含 dsh-Go 的几个备用图标）和 App 内标志的母版（`masters/`）；`apply.sh` 拷进 dsh-Go 后用 dsh-Go 自己的 `app/tool/make_brand_mark.py` 生成启动画面、关于页等处的标志。dsh-Go 的品牌图形不是 AGPL，所以必须换掉。
 - `native/overlay/`：新增的文件，原样拷进 dsh-Go。`apply.sh` 会拒绝覆盖已有文件。
 
-基线：`native/BASE`（dsh-Go `246f503`，2026-11-18）。
+基线：`native/BASE`（dsh-Go v1.3.0，`da79802`，2026-11-21）。
 
 ## 补丁
 

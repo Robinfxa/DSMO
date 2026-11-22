@@ -1,7 +1,7 @@
-From 16b8d25f0fac684e0371c1aee61d6ef695428ecd Mon Sep 17 00:00:00 2001
+From 47ed9429b5df3e2e7b2e76ac75d08b2be72439fe Mon Sep 17 00:00:00 2001
 From: API Demo <api-demo@users.noreply.github.com>
 Date: Wed, 18 Nov 2026 08:40:20 -0500
-Subject: [PATCH] API Demo: one interface
+Subject: [PATCH 04/12] API Demo: one interface
 
 The bundled page is the only chat interface: a stored native choice from
 DSH Go is ignored and switching to the native interface is a no-op.
@@ -12,7 +12,7 @@ Pets are hidden for now: no pet is drawn in the app or over other apps.
  2 files changed, 10 insertions(+), 27 deletions(-)
 
 diff --git a/app/lib/pets/pet_prefs.dart b/app/lib/pets/pet_prefs.dart
-index a4e73cd..1d61bcc 100644
+index 2ca992ff..039a0bd8 100644
 --- a/app/lib/pets/pet_prefs.dart
 +++ b/app/lib/pets/pet_prefs.dart
 @@ -159,11 +159,9 @@ class PetPrefsController extends Notifier<PetPrefs> {
@@ -43,7 +43,7 @@ index a4e73cd..1d61bcc 100644
          size: PetSize.fromName(prefs.getString(keys.size)),
          customHeight: _customHeight(prefs.getDouble(keys.customHeight)),
 diff --git a/app/lib/state/ui_mode_state.dart b/app/lib/state/ui_mode_state.dart
-index 1b58982..bdcc0fb 100644
+index 1b58982c..bdcc0fbc 100644
 --- a/app/lib/state/ui_mode_state.dart
 +++ b/app/lib/state/ui_mode_state.dart
 @@ -8,7 +8,6 @@

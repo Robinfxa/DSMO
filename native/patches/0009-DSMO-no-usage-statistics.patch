@@ -1,7 +1,7 @@
-From 88df439ff0b44a1190164281ae9c777815c30fa2 Mon Sep 17 00:00:00 2001
+From 22843ee17b920a6ccc8f4d9c74c2e86676cc807c Mon Sep 17 00:00:00 2001
 From: DSMO <dsmo@users.noreply.github.com>
 Date: Wed, 18 Nov 2026 22:47:59 -0500
-Subject: [PATCH 9/9] DSMO: no usage statistics
+Subject: [PATCH 09/12] DSMO: no usage statistics
 
 dsh-Go's statistics go to its own server (go.dshtui.com). DSMO counts and
 reports nothing unless a build names its own endpoint with
@@ -15,7 +15,7 @@ Claude-Session: https://claude.ai/code/session_01EvNzunV3oTNc3v18wvhEA9
  1 file changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/app/lib/usage/usage_net.dart b/app/lib/usage/usage_net.dart
-index b456738..8cbf665 100644
+index b456738d..8cbf6657 100644
 --- a/app/lib/usage/usage_net.dart
 +++ b/app/lib/usage/usage_net.dart
 @@ -6,7 +6,6 @@ import 'dart:async';
@@ -44,5 +44,5 @@ index b456738..8cbf665 100644
  
  /// One POST; a seam so tests never touch the network.
 -- 
-2.43.0
+2.50.1 (Apple Git-155)
 

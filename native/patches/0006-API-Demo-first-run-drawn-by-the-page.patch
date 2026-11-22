@@ -1,7 +1,7 @@
-From 51c1c9b761100bc57c0654336186d5f50b7159c6 Mon Sep 17 00:00:00 2001
+From 7f8e49046a28d09c7fa1b6725394373f7e496a34 Mon Sep 17 00:00:00 2001
 From: API Demo <api-demo@users.noreply.github.com>
 Date: Wed, 18 Nov 2026 14:57:25 -0500
-Subject: [PATCH] API Demo: first run drawn by the bundled page
+Subject: [PATCH 06/12] API Demo: first run drawn by the bundled page
 
 RootGate keeps deciding the first-run steps and their order; with API Demo
 it publishes the current step and its callbacks (api_demo_setup.dart) and
@@ -13,7 +13,7 @@ stays from first run to home.
  1 file changed, 38 insertions(+), 2 deletions(-)
 
 diff --git a/app/lib/ui/shell/root_gate.dart b/app/lib/ui/shell/root_gate.dart
-index d55e314..f93bb78 100644
+index d55e314f..f93bb784 100644
 --- a/app/lib/ui/shell/root_gate.dart
 +++ b/app/lib/ui/shell/root_gate.dart
 @@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
@@ -92,5 +92,5 @@ index d55e314..f93bb78 100644
        ),
      );
 -- 
-2.43.0
+2.50.1 (Apple Git-155)
 

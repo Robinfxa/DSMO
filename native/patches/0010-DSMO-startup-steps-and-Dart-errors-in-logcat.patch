@@ -1,7 +1,7 @@
-From de1318a75d7dd79e6ecc7754bbdcc397225e6da1 Mon Sep 17 00:00:00 2001
+From 0310c6d848c160fc6bac9442d83b6d9c8f7ef8e2 Mon Sep 17 00:00:00 2001
 From: DSMO <dsmo@users.noreply.github.com>
 Date: Thu, 19 Nov 2026 04:20:26 -0500
-Subject: [PATCH] DSMO: startup steps and Dart errors in logcat
+Subject: [PATCH 10/12] DSMO: startup steps and Dart errors in logcat
 
 A launch that never got past the splash on a Galaxy S21 left nothing
 to read in logcat: StartupTrace prints only on iOS, and AppErrorLog
@@ -13,7 +13,7 @@ the trace once per distinct step.
  2 files changed, 9 insertions(+)
 
 diff --git a/app/lib/diagnostics/app_error_log.dart b/app/lib/diagnostics/app_error_log.dart
-index 563ed1e..758cada 100644
+index 563ed1e7..758cada7 100644
 --- a/app/lib/diagnostics/app_error_log.dart
 +++ b/app/lib/diagnostics/app_error_log.dart
 @@ -55,6 +55,8 @@ class AppErrorLog {
@@ -26,7 +26,7 @@ index 563ed1e..758cada 100644
          at: _clock(),
          source: source,
 diff --git a/app/lib/launch/startup_trace.dart b/app/lib/launch/startup_trace.dart
-index 0eeccbe..8b6a573 100644
+index 0eeccbe7..8b6a5737 100644
 --- a/app/lib/launch/startup_trace.dart
 +++ b/app/lib/launch/startup_trace.dart
 @@ -19,8 +19,15 @@ abstract final class StartupTrace {

@@ -1,8 +1,8 @@
-From d7e5e20de6449a7634d386b7aa52ba64e14b5195 Mon Sep 17 00:00:00 2001
+From cfd122b89ae8629a0957d23d191c97813f4ffe2a Mon Sep 17 00:00:00 2001
 From: DSMO <dsmo@users.noreply.github.com>
 Date: Fri, 20 Nov 2026 05:22:47 -0500
-Subject: [PATCH] DSMO: no hidden features' art, skills, widget or links before
- release
+Subject: [PATCH 12/12] DSMO: no hidden features' art, skills, widget or links
+ before release
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -26,7 +26,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  .../ccch1mneyyy/dsh_app/MainActivity.kt       |   1 -
  .../dsh_app/companion/CompanionWidget.kt      | 131 ------------------
  .../main/res/drawable/companion_widget_bg.xml |   9 --
- .../src/main/res/layout/companion_widget.xml  |  77 ----------
+ .../src/main/res/layout/companion_widget.xml  |  78 -----------
  .../values-zh/companion_widget_strings.xml    |  10 --
  .../res/values/companion_widget_strings.xml   |  10 --
  .../main/res/xml/companion_widget_info.xml    |  16 ---
@@ -34,8 +34,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  app/lib/ui/star/star_prompt_dialog.dart       |   3 +-
  app/lib/ui/star/star_prompt_host.dart         |   1 -
  app/lib/ui_config/ui_skill.dart               |   3 +-
- app/pubspec.yaml                              |   6 -
- 13 files changed, 9 insertions(+), 278 deletions(-)
+ app/pubspec.yaml                              |   7 -
+ 13 files changed, 9 insertions(+), 280 deletions(-)
  delete mode 100644 app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/companion/CompanionWidget.kt
  delete mode 100644 app/android/app/src/main/res/drawable/companion_widget_bg.xml
  delete mode 100644 app/android/app/src/main/res/layout/companion_widget.xml
@@ -44,7 +44,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  delete mode 100644 app/android/app/src/main/res/xml/companion_widget_info.xml
 
 diff --git a/app/android/app/src/main/AndroidManifest.xml b/app/android/app/src/main/AndroidManifest.xml
-index 72d9d448..cabd7ac3 100644
+index 48a5f080..90d538ae 100644
 --- a/app/android/app/src/main/AndroidManifest.xml
 +++ b/app/android/app/src/main/AndroidManifest.xml
 @@ -298,19 +298,6 @@
@@ -68,10 +68,10 @@ index 72d9d448..cabd7ac3 100644
          <receiver android:name=".phone.a11y.A11yKeeper$Receiver" android:exported="false">
              <intent-filter>
 diff --git a/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt b/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt
-index f7f94904..688577cf 100644
+index fb9ca9f7..57ab0688 100644
 --- a/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt
 +++ b/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/MainActivity.kt
-@@ -66,7 +66,6 @@ class MainActivity : FlutterActivity() {
+@@ -71,7 +71,6 @@ class MainActivity : FlutterActivity() {
              engine.plugins.add(io.github.ccch1mneyyy.dsh_app.usage.UsagePlugin())
              engine.plugins.add(io.github.ccch1mneyyy.dsh_app.companion.CompanionVoicePlugin())
              engine.plugins.add(io.github.ccch1mneyyy.dsh_app.speech.SpeechPlugin())
@@ -233,10 +233,10 @@ index 00bda645..00000000
 -</shape>
 diff --git a/app/android/app/src/main/res/layout/companion_widget.xml b/app/android/app/src/main/res/layout/companion_widget.xml
 deleted file mode 100644
-index 4542e8be..00000000
+index f306ce6f..00000000
 --- a/app/android/app/src/main/res/layout/companion_widget.xml
 +++ /dev/null
-@@ -1,77 +0,0 @@
+@@ -1,78 +0,0 @@
 -<?xml version="1.0" encoding="utf-8"?>
 -<!-- 伙伴小屋 on the home screen (CompanionWidget.kt): the little pixel whale, her name, what
 -     she's doing, the last thing she said, and how well she knows you. Tapping opens the room. -->
@@ -268,7 +268,7 @@ index 4542e8be..00000000
 -        android:orientation="vertical">
 -
 -        <LinearLayout
--            android:layout_width="match_parent"
+-            android:layout_width="wrap_content"
 -            android:layout_height="wrap_content"
 -            android:gravity="center_vertical"
 -            android:orientation="horizontal">
@@ -277,6 +277,7 @@ index 4542e8be..00000000
 -                android:id="@+id/companion_widget_name"
 -                android:layout_width="wrap_content"
 -                android:layout_height="wrap_content"
+-                android:layout_weight="1"
 -                android:ellipsize="end"
 -                android:maxLines="1"
 -                android:textColor="#FFF2FBFF"
@@ -441,10 +442,10 @@ index 671223fc..504e2b5a 100644
  });
  
 diff --git a/app/pubspec.yaml b/app/pubspec.yaml
-index cf7ce3c1..7d4ba79d 100644
+index 83d94b97..35cf7b64 100644
 --- a/app/pubspec.yaml
 +++ b/app/pubspec.yaml
-@@ -168,7 +168,6 @@ flutter:
+@@ -170,7 +170,6 @@ flutter:
      - assets/api_demo/assets/
      # Whale-tail activity sprites (lib/ui/chat/widgets/whale_tail.dart),
      # generated by tool/make_whale_sprites.py.
@@ -452,18 +453,19 @@ index cf7ce3c1..7d4ba79d 100644
      # The tavern's own sample card (林晚), offered on its empty home.
      - assets/tavern/
      # Engine-side auth bridge (ChatGPT / Claude sign-in), copied into the guest at
-@@ -180,10 +179,7 @@ flutter:
+@@ -182,11 +181,7 @@ flutter:
      # Glass-gradient feature tiles (lib/ui/common/feature_tile.dart), 288px WebP.
      # The vector styles' SVG masters in assets/tiles/ are not bundled.
      - assets/tiles/glassy/
 -    - assets/pets/deepy-whale/
 -    - assets/pets/whale-girl/
+-    - assets/pets/pink-fish/
      # The star prompt's whale girl (lib/ui/star/star_prompt_dialog.dart), 576px WebP.
 -    - assets/star/
      - assets/islands/
      # 伙伴小屋's page (lib/ui/companion). Its Live2D runtime and models are a
      # separate download, see docs/design/companion.md.
-@@ -192,8 +188,6 @@ flutter:
+@@ -195,8 +190,6 @@ flutter:
      - assets/skills/dsh-go-plugin/
      - assets/skills/dsh-go-guide/
      - assets/skills/dsh-go-support/

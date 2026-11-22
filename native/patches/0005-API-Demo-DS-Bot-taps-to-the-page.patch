@@ -1,8 +1,8 @@
-From 3fa9829c12bc56f48df7072dfd5485766af1722a Mon Sep 17 00:00:00 2001
+From 83227f26c3c402876110c008adf7e377a2edcbd4 Mon Sep 17 00:00:00 2001
 From: API Demo <api-demo@users.noreply.github.com>
 Date: Wed, 18 Nov 2026 14:46:12 -0500
-Subject: [PATCH] API Demo: DS Bot notification taps can be taken by the app's
- home
+Subject: [PATCH 05/12] API Demo: DS Bot notification taps can be taken by the
+ app's home
 
 A hook before openDsBotTap pushes dsh-Go's own Bot pages, so the bundled
 page can open the Bot or group itself.
@@ -11,7 +11,7 @@ page can open the Bot or group itself.
  1 file changed, 4 insertions(+)
 
 diff --git a/app/lib/ui/bots/bot_alerts.dart b/app/lib/ui/bots/bot_alerts.dart
-index 51c1f06..fc0bbdc 100644
+index 51c1f06a..fc0bbdc0 100644
 --- a/app/lib/ui/bots/bot_alerts.dart
 +++ b/app/lib/ui/bots/bot_alerts.dart
 @@ -46,11 +46,15 @@ class _BotAlertsHostState extends ConsumerState<BotAlertsHost> with WidgetsBindi
@@ -31,5 +31,5 @@ index 51c1f06..fc0bbdc 100644
    container.read(activeHostProvider.notifier).select(tap.host);
    final navigator = Navigator.of(context, rootNavigator: true);
 -- 
-2.43.0
+2.50.1 (Apple Git-155)
 
