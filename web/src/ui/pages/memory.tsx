@@ -1,4 +1,4 @@
-// 长期记忆 (plugin 「长期记忆」): what dsh-plugin-memory-share keeps and puts into every
+// 长期记忆 (plugin 「长期记忆」): what dsmo-memory-share (our fork of dsh-plugin-memory-share) keeps and puts into every
 // conversation. The package registers a Remote namespace on the engine:
 //
 //   memoryShare/list                → { entries: [{id, text, scope, tier, tags, …}], total, counts, dataDir }

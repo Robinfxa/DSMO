@@ -789,7 +789,7 @@
     },
     {
       "tier": 3,
-      "integrity": "sha256-2JJu619cuJSSbacDKTdHTtpUJFcf3QVSd4T2G4LJE18=",
+      "integrity": "sha256-S/JrfDVylfFaRuiL8jvwHr31kvTuFl2ivJqRXocyznU=",
       "manifest": {
         "v": 1,
         "title": "长期记忆",
@@ -803,15 +803,18 @@
           "prompt.memory"
         ],
         "engine": {
-          "package": "dsh-plugin-memory-share",
-          "version": "0.6.0",
+          "package": "dsmo-memory-share",
+          "version": "0.6.1",
           "shows": {
             "sider": [
               "长期记忆"
             ]
-          }
+          },
+          "replaces": [
+            "dsh-plugin-memory-share"
+          ]
         },
-        "description": "AI 会把值得记住的事存下来：你的名字和称呼、喜好和忌口、发生过的事、你们约好的事。之后每次对话一开始就带着这些记忆，不用它自己想起来去查，换一个新对话也记得。\n\n想让它记住什么，直接说「记住……」；想让它忘掉，说「忘掉……」。记住了什么，在「设置 › 陪伴 › 长期记忆」里能看到，可以改、可以删。常用的记忆每次都带上，其他的聊到相关话题时才带，避免越记越长。\n\n引擎部分是社区插件 dsh-plugin-memory-share 0.6.0（MIT 许可），装在当前主机上；记忆存在主机的 ~/.dsh/memory-share/memories.json 里，可以直接打开查看和修改。",
+        "description": "AI 会把值得记住的事存下来：你的名字和称呼、喜好和忌口、发生过的事、你们约好的事。之后每次对话一开始就带着这些记忆，不用它自己想起来去查，换一个新对话也记得。\n\n想让它记住什么，直接说「记住……」；想让它忘掉，说「忘掉……」。记住了什么，在「设置 › 陪伴 › 长期记忆」里能看到，可以改、可以删。常用的记忆每次都带上，其他的聊到相关话题时才带，避免越记越长。\n\n引擎部分是 dsmo-memory-share 0.6.1：社区插件 dsh-plugin-memory-share（作者 ShOpenMind，MIT 许可）的分支，每段对话只在开头带一次记忆，长对话不会越聊越大（对话中途新记的事，下一段对话带上）。装在当前主机上；记忆存在主机的 ~/.dsh/memory-share/memories.json 里，可以直接打开查看和修改。",
         "highlights": [
           "新开对话也记得你",
           "说「记住」「忘掉」就行",
@@ -873,7 +876,7 @@
           }
         },
         "id": "@api-demo/memory-share",
-        "version": "1.1.1",
+        "version": "1.2.0",
         "license": "MIT",
         "official": true
       }

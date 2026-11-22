@@ -122,13 +122,25 @@ export class MockHost {
     ['llm-pi-ai', { value: { providers: {} }, revision: 1 }],
     ['agent-default-model', { value: {}, revision: 1 }],
   ]);
-  /** dsh-plugin-memory-share's memories.json, as the prototype pretends it. */
+  /** dsmo-memory-share's (dsh-plugin-memory-share's) memories.json, as the prototype pretends it. */
   private memories = [
     { id: 'mxiukgc20ed', text: '用户叫小林，喜欢别人叫他林子。', scope: 'user', key: '', tier: 'hot', tags: ['称呼'], createdAt: Date.now() - 864e5 * 20, updatedAt: Date.now() - 864e5 * 20 },
     { id: 'mxiukg60478', text: '回答用中文，代码和注释用英文。', scope: 'user', key: '', tier: 'hot', tags: ['偏好'], createdAt: Date.now() - 864e5 * 9, updatedAt: Date.now() - 864e5 * 9 },
     { id: 'mxiukgk9a11', text: '不吃香菜，喜欢辣。', scope: 'user', key: '', tier: 'cold', tags: ['饮食'], createdAt: Date.now() - 864e5 * 4, updatedAt: Date.now() - 864e5 * 4 },
     { id: 'mxiukgj6176', text: '这个仓库用 pnpm + Node 22，测试命令是 pnpm test。', scope: 'workspace', key: '/root/work/app', tier: 'cold', tags: ['项目'], createdAt: Date.now() - 864e5 * 2, updatedAt: Date.now() - 864e5 * 2 },
   ];
+  /** e2e: window.__mockSeedBundles = ['pkg@1.0.0', …] are on this host from the start (an older install). */
+  private seeded = false;
+  private seedBundles() {
+    if (this.seeded) return;
+    this.seeded = true;
+    const seed = (globalThis as { __mockSeedBundles?: string[] }).__mockSeedBundles ?? [];
+    for (const spec of seed) {
+      const name = spec.replace(/@[^@/]+$/, '');
+      const version = /@([\w.+-]+)$/.exec(spec.replace(/^@/, ''))?.[1] ?? '1.0.0';
+      if (!this.bundles.some((b) => b.name === name)) this.bundles.push({ name, version, official: false, installed: true, enabled: true, removable: true, source: spec, description: '从 npm 安装' });
+    }
+  }
   private bundles = [
     { name: '@deepseek-ai/dsh-subagent', version: '0.2.2', official: true, installed: true, enabled: true, removable: false, description: '子代理：把任务分给另一个对话去做' },
     { name: '@deepseek-ai/dsh-schedule', version: '0.2.2', official: true, installed: true, enabled: true, removable: false, description: '自动化任务' },
@@ -343,7 +355,8 @@ export class MockHost {
       case 'memoryShare/list':
       case 'memoryShare/update':
       case 'memoryShare/forget': {
-        if (!this.bundles.some((b) => b.name === 'dsh-plugin-memory-share' && b.installed)) throw new DshRemoteError('gateway/unknown-endpoint', `No endpoint ${endpoint}`);
+        this.seedBundles();
+        if (!this.bundles.some((b) => (b.name === 'dsmo-memory-share' || b.name === 'dsh-plugin-memory-share') && b.installed)) throw new DshRemoteError('gateway/unknown-endpoint', `No endpoint ${endpoint}`);
         if (endpoint === 'memoryShare/update') {
           const m = this.memories.find((x) => x.id === args.id);
           if (m) Object.assign(m, { text: String(args.text ?? ''), updatedAt: Date.now() });
@@ -361,6 +374,7 @@ export class MockHost {
 
       // the engine's plugin manager
       case 'pluginManager/listBundles':
+        this.seedBundles();
         return [
           ...this.bundles,
           ...mockHostBundles().map((name) => ({ name, version: '0.1.0', official: false, installed: true, enabled: true, removable: true, description: 'dsh-Go 示例插件：今日用量' })),
@@ -375,8 +389,20 @@ export class MockHost {
         if (!/^(@[a-z0-9-]+\/)?[a-z0-9.-]+(@[\w.-]+)?$/.test(spec)) throw new DshRemoteError('pluginManager/bad-spec', '包名不合规');
         return { name: spec.replace(/@[^@/]+$/, ''), version: '1.0.0', description: '（原型）从 npm 读到的包说明', unpackedSize: 182000 };
       }
+      case 'pluginManager/updateBundle': {
+        // remove the installed version, install [version]; `from` is '' when this host lacks it
+        this.seedBundles();
+        const name = str(args.name) ?? '';
+        const version = str(args.version) ?? '';
+        const known = this.bundles.find((x) => x.name === name && x.installed);
+        if (!known) return { from: '', to: version, step: 'check' };
+        const from = String(known.version ?? '');
+        Object.assign(known, { version, source: `${name}@${version}` });
+        return { from, to: version, step: 'install', result: { application: 'applied', changed: true } };
+      }
       case 'pluginManager/installBundle':
       case 'pluginManager/removeBundle': {
+        this.seedBundles();
         const install = endpoint.endsWith('installBundle');
         const spec = str(args.spec) ?? str(args.name) ?? str(req.spec) ?? '';
         const name = spec.replace(/@[^@/]+$/, '');

@@ -58,6 +58,12 @@ export interface ApiDemoManifest {
      * different from the package's (the persona library starts with its sample persona on).
      */
     setup?: { path: string; body: Record<string, unknown> };
+    /**
+     * Engine packages this one takes the place of (a fork under another name: 长期记忆 moved from
+     * dsh-plugin-memory-share to dsmo-memory-share). Installing or updating removes them from the
+     * host first, so the two never run side by side; their data on the host stays.
+     */
+    replaces?: string[];
   };
 }
 export interface PluginGuide {
@@ -278,6 +284,23 @@ export const pluginBusy = (id: string) => pluginJobs.value[id];
 export const installPlugin = (id: string): Promise<InstallOutcome> => enqueue(id, 'install', () => installNow(id));
 export const updatePlugin = (id: string): Promise<InstallOutcome> => enqueue(id, 'update', () => updateNow(id));
 
+/** Removes the engine packages [p] replaces that this host still has; throws when one stays. */
+async function dropReplaced(p: ApiDemoManifest): Promise<boolean> {
+  const old = p.engine?.replaces ?? [];
+  if (!old.length) return false;
+  const have = new Set((await getClient().listBundles()).map((b) => String(b.name)));
+  let restart = false;
+  for (const name of old) {
+    if (!have.has(name)) continue;
+    try {
+      restart = (await removeEngineBundle(name)).restart || restart;
+    } catch (e) {
+      throw new Error(`旧的引擎插件 ${name} 没能卸掉：${(e as Error).message}`);
+    }
+  }
+  return restart;
+}
+
 async function installNow(id: string): Promise<InstallOutcome> {
   const p = findPlugin(id);
   if (!p) throw new Error('找不到这个插件');
@@ -285,8 +308,9 @@ async function installNow(id: string): Promise<InstallOutcome> {
   let restart = false;
   let setupDone: boolean | undefined;
   if (p.engine) {
+    restart = await dropReplaced(p);
     // Engine half → the current host. Official-only market (Q8): the bundle comes from the pinned version.
-    restart = bundleOutcome(await getClient().installBundle(`${p.engine.package}@${p.engine.version}`)).restart;
+    restart = bundleOutcome(await getClient().installBundle(`${p.engine.package}@${p.engine.version}`)).restart || restart;
     void loadContributions();
     if (p.engine.setup) setupDone = !restart && (await runEngineSetup(p));
   }
@@ -346,6 +370,7 @@ async function updateNow(id: string): Promise<InstallOutcome> {
   validateManifest(p);
   let restart = false;
   if (p.engine) {
+    const dropped = await dropReplaced(p);
     // DSH refuses installBundle over an installed package (`already-installed`): updateBundle
     // removes the old version and installs the new one; the plugin's data on the host stays.
     const u = (await getClient().updateBundle(p.engine.package, p.engine.version)) as Record<string, unknown>;
@@ -358,6 +383,7 @@ async function updateNow(id: string): Promise<InstallOutcome> {
     } else {
       restart = bundleOutcome((u.result ?? {}) as Record<string, unknown>).restart;
     }
+    restart ||= dropped;
     void loadContributions();
   }
   let skills = x.made?.skills;
@@ -451,6 +477,12 @@ export async function removePlugin(id: string, { force = false } = {}): Promise<
     } catch (e) {
       if (!force) throw e;
     }
+    // the package this one replaced, if the host still has it (it would keep running)
+    try {
+      restart = (await dropReplaced(p)) || restart;
+    } catch (e) {
+      if (!force) throw e;
+    }
     void loadContributions();
   }
   const made = installed.value.find((x) => x.id === id)?.made;
@@ -540,6 +572,9 @@ export function validateManifest(p: ApiDemoManifest) {
 
 /** `engine.setup` may only reach the package's own routes, with a small JSON body. */
 export function checkEngineSetup(p: Pick<ApiDemoManifest, 'engine'>) {
+  const r = p.engine?.replaces;
+  if (r !== undefined && (!Array.isArray(r) || r.length > 4 || r.some((n) => typeof n !== 'string' || !/^(@[a-z0-9-]+\/)?[a-z0-9.-]+$/.test(n) || n === p.engine!.package)))
+    throw new Error('engine.replaces 要是别的引擎包名（最多 4 个）');
   const setup = p.engine?.setup;
   if (!setup) return;
   const own = `/api/${p.engine!.package}/`;

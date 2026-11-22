@@ -5,7 +5,8 @@
 
 import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
-import { backPage, confirm, errText, openPage, pages, prefs, showToast, toast } from '../state/store';
+import { backPage, closeOverlay, confirm, errText, openOverlay, openPage, pages, prefs, showToast, toast } from '../state/store';
+import { ENGINE_DATA } from './engineData';
 import { Switch } from '../ui/common';
 import { MIc } from '../ui/mobile/MIc';
 import type { MIconName } from '../ui/mobile/icons';
@@ -761,7 +762,15 @@ export function PluginGuidePage({ id }: { id: string }) {
 }
 
 function uninstall(p: ApiDemoManifest) {
-  const go = async (force = false) => {
+  const go = async (force = false, wipe = false) => {
+    const data = ENGINE_DATA[p.id];
+    if (wipe && data) {
+      try {
+        await data.wipe();
+      } catch (e) {
+        return showToast(`没能删掉它的数据：${errText(e)}。插件还在，可以再试一次`);
+      }
+    }
     if (p.engine && !force) showToast(`正在卸载「${p.title}」…`);
     let out: { restart: boolean };
     try {
@@ -780,14 +789,44 @@ function uninstall(p: ApiDemoManifest) {
     while (pages.value.length && /^plugin(-manage|-guide)?:/.test(pages.value[pages.value.length - 1]) && pages.value[pages.value.length - 1].endsWith(p.id)) backPage();
     showToast(force ? `已从 DSMO 移除「${p.title}」，引擎里的还在` : out.restart ? `已卸载「${p.title}」，重启引擎后才完全停下` : `已卸载「${p.title}」`);
   };
-  confirm(
-    `卸载「${p.title}」？`,
-    p.engine
-      ? '插件会从 DSMO 和引擎里删掉，它在 DSMO 里的设置和数据也会删除。它在引擎里存的东西（比如记忆、作品）会留着，重新安装后还能接着用。'
-      : '插件和它在这台设备上的数据都会删除，之后可以重新安装。',
-    '卸载',
-    () => void go(),
-  );
+  // An engine plugin whose data DSMO can delete too (engineData.ts): three plain choices, so that
+  // closing the sheet never uninstalls. Otherwise the usual confirm.
+  void (async () => {
+    const data = ENGINE_DATA[p.id];
+    let n = 0;
+    if (data && p.engine)
+      try {
+        n = await data.count();
+      } catch {
+        n = 0; // not running: nothing DSMO can reach
+      }
+    if (!data || n === 0)
+      return confirm(
+        `卸载「${p.title}」？`,
+        p.engine
+          ? '插件会从 DSMO 和引擎里删掉，它在 DSMO 里的设置和数据也会删除。它在引擎里存的东西（比如记忆、作品）会留着，重新安装后还能接着用。'
+          : '插件和它在这台设备上的数据都会删除，之后可以重新安装。',
+        '卸载',
+        () => void go(),
+      );
+    const item = (icon: MIconName, label: string, fn: () => void, danger = false) => (
+      <button class={`lo-opt ${danger ? 'danger' : ''}`} type="button" onClick={() => (closeOverlay(), fn())}>
+        <MIc n={icon} />
+        <span class="lo-opt-t">{label}</span>
+      </button>
+    );
+    openOverlay({
+      kind: 'sheet',
+      title: `卸载「${p.title}」？`,
+      body: () => (
+        <div class="lo-pick">
+          <p class="plg-note">插件会从 DSMO 和引擎里删掉。{data.describe(n)}可以一起删掉（找不回来），也可以留在主机上，以后重新安装还能接着用。</p>
+          {item('trash', `卸载，也删掉${data.describe(n)}`, () => void go(false, true), true)}
+          {item('check', `卸载，${data.keep}`, () => void go())}
+        </div>
+      ),
+    });
+  })();
 }
 
 // ---------------------------------------------------------------- 管理 (second level)

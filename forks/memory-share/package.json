@@ -1,0 +1,81 @@
+{
+  "name": "dsmo-memory-share",
+  "version": "0.6.1",
+  "description": "DSMO 用的 dsh-plugin-memory-share 分支：每段对话只在开头渲染一次记忆（bootSnapshot 默认 session），系统提示词整段对话不变，长对话不再越聊越大。其余同上游 0.6.0：dsh-plugin-MemoryShare — 跨会话共享的长期记忆（冷热两档：hot 每会话常驻、cold 按当前话题加载）：被动注入系统提示词，配 memory_save / memory_update / memory_recall / memory_forget 四个工具、成本审计（--audit），以及「设置 → 插件 → 记忆」管理页。",
+  "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "ShOpenMind",
+    "url": "https://github.com/ShOpenMind"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Robinfxa/DSMO.git",
+    "directory": "forks/memory-share"
+  },
+  "homepage": "https://github.com/Robinfxa/DSMO/tree/main/forks/memory-share#readme",
+  "bugs": {
+    "url": "https://github.com/Robinfxa/DSMO/issues"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./remote": "./lib/remote.js",
+    "./typert": "./lib/typert.host.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "memory",
+    "long-term-memory",
+    "dsh-plugin",
+    "dsh-bundle",
+    "dsh-market",
+    "agent-memory"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "zod": "^4.4.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-gateway"
+      ],
+      "external": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-gateway"
+      ]
+    }
+  },
+  "bin": {
+    "dsmo-memory-share": "bin/status.mjs"
+  },
+  "contributors": [
+    {
+      "name": "DSMO",
+      "url": "https://github.com/Robinfxa/DSMO"
+    }
+  ]
+}

@@ -165,6 +165,11 @@ export function checkManifest(m, { panelHtml = {}, listing = false } = {}) {
     const shows = m.engine.shows || {};
     for (const k of Object.keys(shows)) if (!['pills', 'sider', 'strip'].includes(k)) e(`engine.shows 不认识 ${k}`);
     for (const t of [...(shows.pills || []), ...(shows.sider || []), ...(shows.strip || [])]) if (typeof t !== 'string' || t.length > 16) e('engine.shows 每项 16 字以内');
+    // Packages this one takes the place of (a fork under another name): removed from the host first.
+    if (m.engine.replaces !== undefined) {
+      const r = m.engine.replaces;
+      if (!Array.isArray(r) || r.length > 4 || r.some((n) => typeof n !== 'string' || !/^(@[a-z0-9-]+\/)?[a-z0-9.-]+$/.test(n) || n === m.engine.package)) e('engine.replaces 要是别的引擎包名（最多 4 个）');
+    }
     // One JSON POST the app sends once the package runs: only to the package's own routes.
     if (m.engine.setup !== undefined) {
       const st = m.engine.setup || {};
