@@ -514,6 +514,36 @@ export function VoiceSettingsPage() {
 
 // ================================================================ 更新
 
+/** dsh-Go's UpdateProblem (update_state.dart), said in words. */
+const UPDATE_PROBLEM: Record<string, string> = {
+  network: '网络不通，没能下载',
+  unavailable: '下载地址暂时打不开',
+  checksum: '下载的安装包和发布的校验值对不上，已删掉，请重新下载',
+  noChecksum: '这个版本没有校验值，不能安装',
+  storage: '安装包没能存到手机里',
+  noSpace: '手机空间不够',
+  permissionUnavailable: '这台手机打不开「安装未知应用」的设置，请到系统设置 › 应用 › DSMO 里打开',
+  installCancelled: '安装取消了',
+  installUnconfirmed: '没等到系统的安装确认',
+  signature: '安装包的签名和已装的不一样，不能覆盖安装',
+  notDsh: '下载的不是 DSMO 的安装包',
+  downgrade: '这个安装包比已装的旧',
+  incompatible: '这台手机装不了这个安装包',
+  invalid: '安装包坏了，请重新下载',
+  blocked: '系统拦下了这次安装',
+  installFailed: '安装没成功',
+};
+
+/** 「安装未知应用」: the direct page when this APK knows how (update.requestPermission), else 应用信息. */
+async function openInstallPermission() {
+  try {
+    await local('update.requestPermission');
+  } catch {
+    await local('access.openAppInfo');
+    showToast('在「应用信息」里找到「安装未知应用」并打开，回来后会接着安装');
+  }
+}
+
 export function UpdatePage() {
   const { data, error, reload } = useLocal<Record<string, unknown>>('update.get', {}, 1000);
   if (!data) return <Loading error={error} />;
@@ -548,9 +578,23 @@ export function UpdatePage() {
               <button class="plg-btn pri wide" type="button" onClick={() => act(() => local('update.install')).then(reload)}>
                 安装
               </button>
+            ) : task === 'needsPermission' ? (
+              <>
+                <p class="plg-note">安装包已经下好。要先允许 DSMO 安装应用：打开「安装未知应用」，回到这里会接着安装。</p>
+                <button class="plg-btn pri wide" type="button" onClick={() => act(openInstallPermission).then(reload)}>
+                  去允许安装
+                </button>
+                <button class="plg-btn" type="button" onClick={() => act(() => local('update.install')).then(reload)}>
+                  已允许，继续安装
+                </button>
+              </>
             ) : task === 'installing' ? (
               <button class="plg-btn pri wide" type="button" disabled>
                 正在安装…
+              </button>
+            ) : task === 'verifying' ? (
+              <button class="plg-btn pri wide" type="button" disabled>
+                正在核对安装包…
               </button>
             ) : data.noticeOnly ? (
               <p class="plg-note">这个版本要到发布页手动下载安装。</p>
@@ -565,7 +609,7 @@ export function UpdatePage() {
               </>
             )}
           </div>
-          {data.problem ? <p class="plg-note warn">{String(data.problem)}</p> : null}
+          {data.problem ? <p class="plg-note warn">{UPDATE_PROBLEM[String(data.problem)] ?? String(data.problem)}</p> : null}
         </section>
       ) : (
         <div class="plg-actions">

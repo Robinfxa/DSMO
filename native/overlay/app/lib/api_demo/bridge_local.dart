@@ -262,6 +262,10 @@ class ApiDemoLocal {
       case 'update.install':
         await ref.read(appUpdateProvider.notifier).install();
         return null;
+      case 'update.requestPermission':
+        // The system's 「安装未知应用」 switch for this app; coming back resumes the install (onAppResumed).
+        await ref.read(appUpdateProvider.notifier).requestInstallPermission();
+        return null;
       case 'update.skip':
         await ref.read(appUpdateProvider.notifier).skipLatest();
         return null;
