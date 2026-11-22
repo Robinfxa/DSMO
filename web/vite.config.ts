@@ -18,9 +18,13 @@ export default defineConfig(({ mode, command }) => {
     base: './',
     plugins: [preact(), ...(mode === 'prototype' ? [viteSingleFile()] : [])],
     define: { __PROTOTYPE__: JSON.stringify(prototype), __BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')) },
+    css: { postcss: { plugins: [insetFallback()] } },
     build: {
       outDir: mode === 'prototype' ? 'dist-proto' : 'dist',
       target: 'es2020',
+      // the oldest WebView seen so far (vivo NEX 3S, Android 10): keeps esbuild from folding
+      // insetFallback's top / right / bottom / left back into `inset` when it minifies
+      cssTarget: 'chrome83',
       assetsInlineLimit: mode === 'prototype' ? 100_000_000 : 4096,
     },
     server: {
@@ -30,6 +34,43 @@ export default defineConfig(({ mode, command }) => {
     test: { environment: 'jsdom', include: ['test/**/*.test.ts'] },
   };
 });
+
+/**
+ * `inset` is Chrome 87+. Older Android WebViews (vivo NEX 3S: Chrome 83) drop it, so `.m-root
+ * { position: fixed; inset: 0 }` had no size and the whole page was a blank background. Every
+ * `inset` becomes top / right / bottom / left, which mean the same everywhere (esbuild's own
+ * lowering skips most forms, and drops longhands written before an `inset`).
+ */
+function insetFallback() {
+  /** Splits a value on top-level spaces (not inside calc() and the like). */
+  const parts = (v: string) => {
+    const out: string[] = [];
+    let depth = 0;
+    let cur = '';
+    for (const ch of v.trim()) {
+      if (ch === '(') depth++;
+      if (ch === ')') depth--;
+      if (/\s/.test(ch) && depth === 0) {
+        if (cur) out.push(cur);
+        cur = '';
+      } else cur += ch;
+    }
+    if (cur) out.push(cur);
+    return out;
+  };
+  return {
+    postcssPlugin: 'dsmo-inset-fallback',
+    Declaration: {
+      inset(decl: { value: string; important: boolean; cloneBefore: (o: { prop: string; value: string; important: boolean }) => unknown; remove: () => void }) {
+        const p = parts(decl.value);
+        if (p.length < 1 || p.length > 4) return;
+        const [t, r = t, b = t, l = r] = p;
+        for (const [prop, value] of [['top', t], ['right', r], ['bottom', b], ['left', l]]) decl.cloneBefore({ prop, value, important: decl.important });
+        decl.remove();
+      },
+    },
+  };
+}
 
 function engineProxy(engine: string, token: string): Record<string, ProxyOptions> {
   let cookie = '';
