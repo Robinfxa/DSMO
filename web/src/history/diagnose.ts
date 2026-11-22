@@ -44,14 +44,33 @@ export async function showDiagnostic(sessionId: string, title?: string) {
 }
 
 /** 这一段对话的排查信息（纯文本）。 */
+/** Why a conversation has no records to show (the engine's answer to session/projections). */
+const CUT_NOTE: Record<string, string> = {
+  missing: '引擎里找不到这段对话的存档（可能是还没存盘就断了，或者存档读不出来）',
+  migration: '这段对话的存档是旧格式，引擎第一次打开时要先整段转换；对话很大时转换很吃内存',
+  empty: '这段对话还没有记录',
+  other: '引擎没给出这段对话的记录位置',
+};
+
 export async function diagnosticText(sessionId: string, title?: string): Promise<string> {
-  const recs = (await getClient().latestRecords(sessionId, MAX_RECORDS)) as Rec[];
+  const client = getClient();
+  const { records, cut, kind } = await client.recordsWithCut(sessionId, MAX_RECORDS);
+  const recs = records as Rec[];
+  // what the session list knows about it (works even when its log can't be read)
+  const summary = await client
+    .listSessions()
+    .then((l) => l.find((x) => x.sessionId === sessionId))
+    .catch(() => undefined);
   const info = nativeInfo.value;
   return formatDiagnostic(recs, [
     'DSMO 排查信息（只含这一段对话）',
     `生成于 ${when(Date.now())} · 页面 ${info?.webVersion ?? __BUILD__} · App ${info?.appVersion ?? 'web'}`,
     `对话「${title || '新对话'}」 · ${sessionId.replace(/^session-/, '').slice(0, 8)}${hasModule('core') ? ` · 陪伴${isScopeOff(sessionId) ? '已关' : '开着'}` : ''}`,
     `已装插件：${installed.value.filter((p) => p.enabled).map((p) => `${p.id.replace('@api-demo/', '')} ${p.version}`).join('，') || '无'}`,
+    summary
+      ? `列表里：最后更新 ${when(summary.updatedAt)}${summary.running ? ' · 正在运行' : ''}${summary.blank ? ' · 空白' : ''}${summary.agentAvailable ? '' : ' · 引擎里没在打开'}`
+      : '对话列表里没有这段对话',
+    ...(cut === 'ok' ? [] : [`读不到记录：${CUT_NOTE[cut] ?? cut}${kind ? `（${kind}）` : ''}`]),
   ]);
 }
 

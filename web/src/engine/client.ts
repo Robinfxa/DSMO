@@ -475,13 +475,24 @@ export class DshClient {
   }
   /** The last [max] raw records of a session (`session/projections` for the cut, then `session/page`). */
   async latestRecords(sessionId: string, max = 200) {
-    const p = obj(await this.call('session/projections', { request: { sessionId } }));
-    const through = typeof p.asOfSeq === 'number' ? p.asOfSeq : -1;
-    if (through < 0) return [];
-    const v = obj(await this.call('session/page', { request: { address: { kind: 'session', sessionId }, throughSeq: through, maxMessages: max } }));
-    return list(v.records).map((r) => obj(obj(r).event));
+    return (await this.recordsWithCut(sessionId, max)).records;
   }
-
+  /**
+   * [latestRecords] plus why there are none: `session/projections` answers null when the engine
+   * has no stored log for the session (`missing`), and `migration-required` without a cut when the
+   * log is in an older format the engine converts on first open (`migration`).
+   */
+  async recordsWithCut(sessionId: string, max = 200): Promise<{ records: Record<string, unknown>[]; cut: 'ok' | 'empty' | 'missing' | 'migration' | 'other'; kind?: string }> {
+    const raw = await this.call('session/projections', { request: { sessionId } });
+    if (raw === null || raw === undefined) return { records: [], cut: 'missing' };
+    const p = obj(raw);
+    const kind = str(p.kind);
+    if (kind === 'migration-required') return { records: [], cut: 'migration', kind };
+    const through = typeof p.asOfSeq === 'number' ? p.asOfSeq : -1;
+    if (through < 0) return { records: [], cut: kind === 'sequenced' ? 'empty' : 'other', kind };
+    const v = obj(await this.call('session/page', { request: { address: { kind: 'session', sessionId }, throughSeq: through, maxMessages: max } }));
+    return { records: list(v.records).map((r) => obj(obj(r).event)), cut: 'ok', kind };
+  }
   // ---------- terminals ----------
 
   async terminalShells(sessionId: string) {
