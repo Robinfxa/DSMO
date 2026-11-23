@@ -415,6 +415,30 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
     return null;
   }
 
+  /// 自救面板的「检查界面更新」：马上问一次仓库（不等五分钟），有新的就下载、换上、重新加载。
+  /// 页面在黑屏 / 白屏时自己切不过去（它要等「不碍事」），所以这里由 App 直接换。
+  Future<String> _updateFromRescue() async {
+    final update = ApiDemoWebUpdate.instance;
+    await update.check(force: true);
+    final next = await update.active();
+    final serving = _web?.version ?? '安装包里的';
+    final bridge = _bridge;
+    final proxy = _proxy;
+    if (next == null || next.version == _web?.version) return '没有更新的界面（现在用的是 $serving）。确定有新版的话，检查网络后再试';
+    if (bridge == null || proxy == null || !mounted) return '页面还没准备好，稍后再试';
+    _web = next;
+    proxy.webRoot = next.dir;
+    setState(() {
+      _rescue = false;
+      _chip = false;
+    });
+    _pageLog.clear();
+    _watchStart(bridge);
+    unawaited(bridge.controller.reload());
+    _armRescue(bridge);
+    return '已换成界面 ${next.version}，正在重新加载';
+  }
+
   Future<bool> _onBack() async {
     final bridge = _bridge;
     if (bridge == null) return false;
@@ -489,6 +513,7 @@ class _ApiDemoHomeState extends ConsumerState<ApiDemoHome> with WidgetsBindingOb
         RescuePanel(
           info: _diagnostics(),
           onSwitch: () => unawaited(_switchDisplay()),
+          onUpdate: _updateFromRescue,
           onReload: () {
             hide();
             final bridge = _bridge;

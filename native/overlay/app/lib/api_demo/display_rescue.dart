@@ -101,10 +101,13 @@ class RescueChip extends StatelessWidget {
 
 /// 自救面板。
 class RescuePanel extends StatelessWidget {
-  const RescuePanel({super.key, required this.info, required this.onSwitch, required this.onReload, required this.onClose, required this.onFine});
+  const RescuePanel({super.key, required this.info, required this.onSwitch, required this.onUpdate, required this.onReload, required this.onClose, required this.onFine});
 
   final DisplayDiagnostics info;
   final VoidCallback onSwitch;
+
+  /// 马上检查界面更新，有就换上；返回要告诉用户的一句话。
+  final Future<String> Function() onUpdate;
   final VoidCallback onReload;
   final VoidCallback onClose;
   final VoidCallback onFine;
@@ -132,6 +135,7 @@ class RescuePanel extends StatelessWidget {
             const SizedBox(height: 20),
             row('显示方式', info.modeText),
             row('页面', info.alive ? '已启动（页面代码在运行，只是可能没画出来）' : '没有启动（${info.page}）'),
+            row('界面版本', info.page),
             row('网页组件', info.webview),
             row('设备', info.device),
             if (info.log.isNotEmpty) ...[
@@ -151,6 +155,8 @@ class RescuePanel extends StatelessWidget {
               child: const Text('复制诊断信息'),
             ),
             const SizedBox(height: 8),
+            _UpdateButton(onUpdate: onUpdate),
+            const SizedBox(height: 8),
             OutlinedButton(onPressed: onReload, child: const Text('重新加载页面')),
             const SizedBox(height: 8),
             Row(children: [
@@ -162,4 +168,37 @@ class RescuePanel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 「检查界面更新」：下载要一会儿，按下后显示进度、不能连点。
+class _UpdateButton extends StatefulWidget {
+  const _UpdateButton({required this.onUpdate});
+
+  final Future<String> Function() onUpdate;
+
+  @override
+  State<_UpdateButton> createState() => _UpdateButtonState();
+}
+
+class _UpdateButtonState extends State<_UpdateButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    String text;
+    try {
+      text = await widget.onUpdate();
+    } on Object catch (e) {
+      text = '没能检查更新：$e';
+    }
+    if (mounted) setState(() => _busy = false);
+    messenger?.showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+        onPressed: _busy ? null : _run,
+        child: Text(_busy ? '正在检查和下载界面…' : '检查界面更新'),
+      );
 }
