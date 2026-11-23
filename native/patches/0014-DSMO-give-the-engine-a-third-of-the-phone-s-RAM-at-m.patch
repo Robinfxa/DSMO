@@ -1,0 +1,61 @@
+From c6ea4556be19d57a1c57c3f92c32dd9a5152b6ae Mon Sep 17 00:00:00 2001
+From: DSMO <dsmo@users.noreply.github.com>
+Date: Mon, 23 Nov 2026 05:56:33 -0500
+Subject: [PATCH] DSMO: give the engine a third of the phone's RAM, at most 4
+ GiB
+
+The engine's old-space limit was a quarter of physical RAM, at most 2 GiB, so
+long conversations ran out of heap on 8 GiB+ phones. Now a third, at most
+4 GiB: 8 GiB -> 2688 MiB, 12 GiB and up -> 4096 MiB.
+---
+ .../dsh_app/performance/PerformanceRules.kt            | 10 +++++++---
+ .../dsh_app/performance/PerformanceRulesTest.kt        | 10 ++++++----
+ 2 files changed, 13 insertions(+), 7 deletions(-)
+
+diff --git a/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/performance/PerformanceRules.kt b/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/performance/PerformanceRules.kt
+index 8ce8addb..5efad54f 100644
+--- a/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/performance/PerformanceRules.kt
++++ b/app/android/app/src/main/kotlin/io/github/ccch1mneyyy/dsh_app/performance/PerformanceRules.kt
+@@ -90,11 +90,15 @@ object PerformanceRules {
+         DeviceTier.LOW, DeviceTier.MEDIUM, DeviceTier.HIGH -> false
+     }
+ 
+-    /** Old-space budget, not RSS: reserve most physical RAM for Android, Flutter and tools. */
++    /**
++     * Old-space budget, not RSS: a third of physical RAM, at most 4 GiB, so long conversations
++     * fit on 8 GiB+ phones while most RAM stays with Android, Flutter and tools (DSMO; was a
++     * quarter, at most 2 GiB).
++     */
+     fun oldSpaceMiB(memoryBytes: Long?): Int {
+         if (memoryBytes == null || memoryBytes <= 0) return 512
+-        val quarter = memoryBytes / MIB / 4
+-        return (quarter / 128 * 128).coerceIn(512, 2048).toInt()
++        val third = memoryBytes / MIB / 3
++        return (third / 128 * 128).coerceIn(512, 4096).toInt()
+     }
+ 
+     /** Keep libuv's default ceiling of four; a light profile allows at most two workers. */
+diff --git a/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/performance/PerformanceRulesTest.kt b/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/performance/PerformanceRulesTest.kt
+index 365f7f97..7ab25c3d 100644
+--- a/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/performance/PerformanceRulesTest.kt
++++ b/app/android/app/src/test/kotlin/io/github/ccch1mneyyy/dsh_app/performance/PerformanceRulesTest.kt
+@@ -60,10 +60,12 @@ class PerformanceRulesTest {
+     @Test fun heapBudgetsReserveRamAndHaveAnUpperBound() {
+         assertEquals(512, PerformanceRules.oldSpaceMiB(null))
+         assertEquals(512, PerformanceRules.oldSpaceMiB(1024L * PerformanceRules.MIB))
+-        assertEquals(896, PerformanceRules.oldSpaceMiB(3800L * PerformanceRules.MIB))
+-        assertEquals(1408, PerformanceRules.oldSpaceMiB(5800L * PerformanceRules.MIB))
+-        assertEquals(2048, PerformanceRules.oldSpaceMiB(16L * 1024 * PerformanceRules.MIB))
+-        assertEquals(2048, PerformanceRules.oldSpaceMiB(Long.MAX_VALUE))
++        assertEquals(1152, PerformanceRules.oldSpaceMiB(3800L * PerformanceRules.MIB))
++        assertEquals(1920, PerformanceRules.oldSpaceMiB(5800L * PerformanceRules.MIB))
++        assertEquals(2688, PerformanceRules.oldSpaceMiB(8L * 1024 * PerformanceRules.MIB))
++        assertEquals(4096, PerformanceRules.oldSpaceMiB(12L * 1024 * PerformanceRules.MIB))
++        assertEquals(4096, PerformanceRules.oldSpaceMiB(16L * 1024 * PerformanceRules.MIB))
++        assertEquals(4096, PerformanceRules.oldSpaceMiB(Long.MAX_VALUE))
+     }
+ 
+     @Test fun poolDoesNotExceedAvailableCpusOrTheProfileBudget() {
+-- 
+2.50.1 (Apple Git-155)
+
