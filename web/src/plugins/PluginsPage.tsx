@@ -31,6 +31,8 @@ import {
   pluginCssSuspended,
   pluginDataSize,
   removePlugin,
+  removeStrayBundles,
+  strayEngineBundles,
   setPluginEnabled,
   setPluginOption,
   setTrialSkin,
@@ -397,6 +399,7 @@ function Installed() {
   return (
     <>
       {!q && pluginUpdates.value.length > 0 && <UpdateAll />}
+      {!q && <Strays />}
       {!all.length && !q && (
         <div class="plg-empty">
           <span>还没有装插件</span>
@@ -449,6 +452,56 @@ function Installed() {
       )}
     </>
   );
+}
+
+/**
+ * Market plugins DSMO no longer has whose engine half the engine still runs: uninstalled while
+ * DSMO couldn't finish it (an engine without live recomposition refuses to remove a running
+ * plugin, and older DSMO said 已卸载 anyway). One tap removes them.
+ */
+function Strays() {
+  const [list, setList] = useState<{ pkg: string; title: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const load = () => void strayEngineBundles().then(setList, () => setList([]));
+  useEffect(load, [installed.value]);
+  if (!list.length) return null;
+  const names = [...new Set(list.map((x) => `「${x.title}」`))].join('、');
+  const run = async () => {
+    setBusy(true);
+    try {
+      const restart = await removeStrayBundles(list.map((x) => x.pkg));
+      load();
+      afterRemoval(names, restart);
+    } catch (e) {
+      showToast(`没能卸掉：${errText(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="plg-group">
+      <div class="plg-row static">
+        <div class="plg-row-m">
+          <div class="plg-row-t">{names}没卸干净</div>
+          <div class="plg-row-s">在 DSMO 里卸载了，引擎里还装着、还在起作用</div>
+        </div>
+        <button class="plg-get" type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? '卸载中' : '卸掉'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** After an engine half was removed or switched off: one that keeps running until a restart says so. */
+function afterRemoval(what: string, restart: boolean) {
+  if (!restart) return showToast(`已卸载${what}`);
+  if (!onLocalHost.value) return showToast(`已卸载${what}，在主机上重启 DSH 后完全停下`);
+  confirm(`已卸载${what}`, '它要等本机引擎重启后才完全停下。现在重启吗？正在生成的回复会中断。', '重启引擎', () => {
+    void local('engine.restart')
+      .then(() => showToast('引擎正在重启'))
+      .catch((e) => showToast(errText(e)));
+  }, false);
 }
 
 /** 「N 个插件有更新 · 全部更新」 on 已安装. */
@@ -787,7 +840,9 @@ function uninstall(p: ApiDemoManifest) {
     }
     // Leave the detail / manage pages of the removed plugin.
     while (pages.value.length && /^plugin(-manage|-guide)?:/.test(pages.value[pages.value.length - 1]) && pages.value[pages.value.length - 1].endsWith(p.id)) backPage();
-    showToast(force ? `已从 DSMO 移除「${p.title}」，引擎里的还在` : out.restart ? `已卸载「${p.title}」，重启引擎后才完全停下` : `已卸载「${p.title}」`);
+    toast.value = null; // 正在卸载…
+    if (force) showToast(`已从 DSMO 移除「${p.title}」，引擎里的还在`);
+    else afterRemoval(`「${p.title}」`, out.restart);
   };
   // An engine plugin whose data DSMO can delete too (engineData.ts): three plain choices, so that
   // closing the sheet never uninstalls. Otherwise the usual confirm.

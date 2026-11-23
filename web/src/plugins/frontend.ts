@@ -445,6 +445,14 @@ export function retryAutoUpdates() {
  */
 async function removeEngineBundle(pkg: string): Promise<{ restart: boolean }> {
   const r = await getClient().removeBundle(pkg);
+  // An engine without live recomposition (the phone's: installs say 「重启后生效」) refuses to remove a
+  // bundle that is running (stop-profile), and it runs again after every restart. Switch it off
+  // instead (it no longer starts after the next restart) and finish the removal then.
+  if (r.application === 'failed' && String((r.error as Record<string, unknown> | undefined)?.code ?? '') === 'stop-profile') {
+    await getClient().setBundleEnabled(pkg, false);
+    await addPendingRemoval(pkg);
+    return { restart: true };
+  }
   const application = typeof r.application === 'string' ? r.application : 'applied';
   if (application === 'failed' || application === 'cancelled') {
     const err = (r.error && typeof r.error === 'object' ? r.error : {}) as Record<string, unknown>;
@@ -460,6 +468,80 @@ async function removeEngineBundle(pkg: string): Promise<{ restart: boolean }> {
     throw new Error(application === 'cancelled' ? '卸载被取消了' : (why[code] ?? (diag || `引擎没能卸载（${code || '原因不明'}）`)));
   }
   return { restart: application === 'restart-required' };
+}
+
+// ------------------------------------------------------------------ removals finished after a restart
+
+const PENDING = 'engine-removals';
+
+async function pendingRemovals(): Promise<string[]> {
+  try {
+    const v = JSON.parse((await native.storageGet(PENDING)) ?? '[]') as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+async function setPendingRemovals(list: string[]) {
+  await native.storageSet(PENDING, list.length ? JSON.stringify([...new Set(list)]) : null);
+}
+async function addPendingRemoval(pkg: string) {
+  await setPendingRemovals([...(await pendingRemovals()), pkg]);
+}
+
+/**
+ * The engine came back (or the page started): remove the bundles that were switched off because
+ * they were running when uninstalled. One that is still running (no restart yet) waits.
+ */
+export async function finishPendingRemovals() {
+  const list = await pendingRemovals();
+  if (!list.length) return;
+  const left: string[] = [];
+  for (const pkg of list) {
+    // reinstalled in DSMO meanwhile: keep it
+    if (installed.value.some((x) => findPlugin(x.id)?.engine?.package === pkg)) continue;
+    try {
+      if (!(await getClient().listBundles()).some((b) => b.name === pkg && b.installed !== false)) continue;
+      const r = await getClient().removeBundle(pkg);
+      if (r.application === 'failed' || r.application === 'cancelled') left.push(pkg);
+    } catch {
+      left.push(pkg);
+    }
+  }
+  await setPendingRemovals(left);
+  if (left.length < list.length) void loadContributions();
+}
+
+/**
+ * Engine packages of market plugins that the engine still has although DSMO doesn't (uninstalled
+ * before DSMO could finish it on an engine like the phone's). Listed for the person to remove; not
+ * removed by themselves: after the app's data is cleared DSMO's list is empty too.
+ */
+export async function strayEngineBundles(): Promise<{ pkg: string; title: string }[]> {
+  const ours = new Map<string, string>();
+  for (const p of OFFICIAL) {
+    if (!p.engine) continue;
+    ours.set(p.engine.package, p.title);
+    for (const old of p.engine.replaces ?? []) ours.set(old, p.title);
+  }
+  const claimed = new Set<string>();
+  for (const x of installed.value) {
+    const e = findPlugin(x.id)?.engine;
+    if (!e) continue;
+    claimed.add(e.package);
+  }
+  const pending = new Set(await pendingRemovals());
+  return (await getClient().listBundles())
+    .filter((b) => b.installed !== false && ours.has(String(b.name)) && !claimed.has(String(b.name)) && !pending.has(String(b.name)))
+    .map((b) => ({ pkg: String(b.name), title: ours.get(String(b.name))! }));
+}
+
+/** Removes stray bundles (strayEngineBundles); true when the engine must restart to finish. */
+export async function removeStrayBundles(pkgs: string[]): Promise<boolean> {
+  let restart = false;
+  for (const pkg of pkgs) restart = (await removeEngineBundle(pkg)).restart || restart;
+  void loadContributions();
+  return restart;
 }
 
 /**

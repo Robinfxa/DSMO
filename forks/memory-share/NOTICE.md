@@ -8,4 +8,4 @@
 
 代价：对话中途新记下的事，要到下一段对话才自动带上；当前对话里模型存的时候已经看到，也能用 `memory_recall` 查到。想要上游的行为，在插件配置里设 `bootSnapshot: live`。
 
-包名、加载名改成了 `dsmo-memory-share`；记忆文件仍是 `$DSH_HOME/memory-share/memories.json`，接口仍是 `memoryShare/*`，从上游换过来记忆都在。
+包名、加载名和配置里那一行的 id 都改成了 `dsmo-memory-share`（0.6.2 起；id 和上游相同时，没有热加载的引擎会把上游的包当成还在运行，卸不掉）；记忆文件仍是 `$DSH_HOME/memory-share/memories.json`，接口仍是 `memoryShare/*`，从上游换过来记忆都在。

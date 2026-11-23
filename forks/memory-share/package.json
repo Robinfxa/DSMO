@@ -1,6 +1,6 @@
 {
   "name": "dsmo-memory-share",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "DSMO 用的 dsh-plugin-memory-share 分支：每段对话只在开头渲染一次记忆（bootSnapshot 默认 session），系统提示词整段对话不变，长对话不再越聊越大。其余同上游 0.6.0：dsh-plugin-MemoryShare — 跨会话共享的长期记忆（冷热两档：hot 每会话常驻、cold 按当前话题加载）：被动注入系统提示词，配 memory_save / memory_update / memory_recall / memory_forget 四个工具、成本审计（--audit），以及「设置 → 插件 → 记忆」管理页。",
   "type": "module",
   "license": "MIT",

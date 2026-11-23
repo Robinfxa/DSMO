@@ -1,4 +1,4 @@
 # 仅追加本插件的加载行，不替换、不覆盖任何官方 DSH 组件。
 - insert:
-    - id: memory-share
+    - id: dsmo-memory-share
       name: dsmo-memory-share
