@@ -15,6 +15,10 @@ on:
         description: owner/repo for in-app updates (optional)
         default: ''
         type: string
+      version:
+        description: App version (e.g. 1.3.1) when releasing more than once on the same dsh-Go version (optional; empty = dsh-Go's)
+        default: ''
+        type: string
 
 jobs:
   apk:
@@ -83,6 +87,7 @@ jobs:
         env:
           ABI: ${{ inputs.abi }}
           API_DEMO_UPDATE_REPO: ${{ inputs.update_repo }}
+          DSMO_VERSION: ${{ inputs.version }}
           DSMO_KEYSTORE_PASSWORD: ${{ secrets.DSMO_KEYSTORE_PASSWORD }}
           DSMO_KEY_ALIAS: ${{ secrets.DSMO_KEY_ALIAS }}
           # GitHub's runners reach Google's and Maven Central's repositories directly;
