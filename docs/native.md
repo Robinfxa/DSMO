@@ -21,6 +21,7 @@
 | 0007 导入历史对话 | `runtime/bridge/dsh-go-bridge`：新增 `lib/session-import.js`（`GET|POST /dsh-go/v1/sessions/import`，能力名 `session-import`），把 DeepSeek 等网页导出的对话写成引擎里真正的会话；加了测试 `runtime/tests/session-import.test.mjs` 和真机测试 `session-import-live.py`。不改 DSH 本身，见下面「导入历史对话」 |
 | 0008 改名 DSMO | 由 `native/brand/rename_strings.py` 生成（换 dsh-Go 版本时重跑它，不要手工合并）：`AppInfo` 的名称和字标、`android:label`、默认包名 `io.github.dsmo.app`；界面文案（中英文 75 条）、安卓字符串和通知标题里的「DSH Go」改成 DSMO，系统设置的无障碍列表里显示「DSMO 手机操控」；App 自己的文件夹改成「下载/DSMO」「图片/DSMO」「视频/DSMO」（常量、显示的路径、给智能体的存储说明一起改）。仍然写 DSH Go 的：原作者署名、dsh-Go 插件协议和它的版本要求、两个 App 都能打开的分享格式、匿名使用统计（发到 dsh-Go 的服务器）、给 AI 的 dsh-Go 使用说明 |
 | 0009 不发匿名统计 | `usage_net.dart`：dsh-Go 的匿名统计发到它自己的服务器（go.dshtui.com），DSMO 默认不统计也不发送；只有构建时用 `--dart-define=DSH_USAGE_ENDPOINT=` 指定了自己的地址才会开启，欢迎页的开关也随之出现 |
+| 0013 分叉时分块写盘 | 给 DSH 引擎加一个补丁 `runtime/patches/dsmo-materialize-chunked.diff`（登记在 `series` 末尾、`pins.json` 的 0.2.2-rc.1 和安卓补丁集里）：新会话第一次写盘（重新生成 / 修改重发 / 分叉都会把整段记录复制成新会话）不再把整段记录拼成一个字符串、整块压缩，改成每约 1 MB 一个独立的压缩块。长对话一分叉，内存里曾同时有好几份完整记录，手机上把引擎的 2 GB 撑爆；改后 92 MB 的对话分叉峰值从 +640 MB 降到 +250 MB。格式不变（追加本来就是一块一块的）。换 DSH 版本时要重新核对 pins |
 
 Kotlin 包名（`namespace`）故意不改，否则要搬一堆文件。
 

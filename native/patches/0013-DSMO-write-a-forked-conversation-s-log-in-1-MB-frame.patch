@@ -1,0 +1,93 @@
+From 9ee3c6a7f7d1445ac82c158f0f59038540174410 Mon Sep 17 00:00:00 2001
+From: DSMO <dsmo@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 22:03:01 -0500
+Subject: [PATCH 13/13] DSMO: write a forked conversation's log in 1 MB frames
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+重新生成会把长对话分叉，分叉时引擎把整段记录拼成一个字符串再整块压缩，
+同一段对话在内存里同时存在好几份，长对话在手机上把引擎内存（2 GB）撑爆。
+改成每约 1 MB 的事件一个独立压缩块：格式不变（追加本来就是一块一块的），
+瞬时峰值从整段的好几倍降到几 MB。
+---
+ runtime/patches/dsmo-materialize-chunked.diff | 27 +++++++++++++++++++
+ runtime/patches/pins.json                     | 11 +++++++-
+ runtime/patches/series                        |  1 +
+ 3 files changed, 38 insertions(+), 1 deletion(-)
+ create mode 100644 runtime/patches/dsmo-materialize-chunked.diff
+
+diff --git a/runtime/patches/dsmo-materialize-chunked.diff b/runtime/patches/dsmo-materialize-chunked.diff
+new file mode 100644
+index 00000000..d422b9ae
+--- /dev/null
++++ b/runtime/patches/dsmo-materialize-chunked.diff
+@@ -0,0 +1,27 @@
++--- a/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js
+++++ b/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js
++@@ -3352,5 +3352,19 @@
++-		const body = eventLines(events) + "\n";
++-		if (this.compression === "none") return header + body;
++-		const headerFrame = await compressZstdFrame(header);
++-		const eventFrame = await compressZstdFrame(body);
++-		return Buffer.concat([headerFrame, eventFrame]);
+++		if (this.compression === "none") return header + eventLines(events) + "\n";
+++		// [DSMO] One frame per ~1 MB of JSONL instead of the whole log as one string and one frame:
+++		// a fork of a long conversation (regenerate) held the log's text several times over at once
+++		// and ran a phone's engine out of memory. Frames are independent; appends add more anyway.
+++		const frames = [await compressZstdFrame(header)];
+++		let batch = [];
+++		let size = 0;
+++		for (const event of events) {
+++			const line = eventLine(event);
+++			batch.push(line);
+++			size += line.length;
+++			if (size >= 1048576) {
+++				frames.push(await compressZstdFrame(batch.join("\n") + "\n"));
+++				batch = [];
+++				size = 0;
+++			}
+++		}
+++		if (batch.length > 0) frames.push(await compressZstdFrame(batch.join("\n") + "\n"));
+++		return Buffer.concat(frames);
+diff --git a/runtime/patches/pins.json b/runtime/patches/pins.json
+index 0591d376..1eb198bb 100644
+--- a/runtime/patches/pins.json
++++ b/runtime/patches/pins.json
+@@ -78,6 +78,14 @@
+         }
+       }
+     },
++    "dsmo-materialize-chunked.diff": {
++      "0.2.2-rc.1": {
++        "node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js": {
++          "after": "702eba295fb5c5482ef7cb9a1788d7196029617690e497b838e002b85cc833ac",
++          "before": "267a53ae30ee0e6d33097f7c78fb94c25f905bbffb4896c258d856f1973bc4d3"
++        }
++      }
++    },
+     "fork-default-effort.diff": {
+       "0.2.2-rc.1": {
+         "node_modules/@deepseek-ai/dsh-api-session-controller/lib/index.js": {
+@@ -2515,7 +2523,8 @@
+       "deepseek-refusal.diff",
+       "deepseek-unnamed-stream-error.diff",
+       "web-empty-reply-notice.diff",
+-      "profile-root-installation-precedence.diff"
++      "profile-root-installation-precedence.diff",
++      "dsmo-materialize-chunked.diff"
+     ],
+     "ohos": [
+       "cordis-effect-dispose-completion.diff",
+diff --git a/runtime/patches/series b/runtime/patches/series
+index b69808fe..db7caa9d 100644
+--- a/runtime/patches/series
++++ b/runtime/patches/series
+@@ -196,3 +196,4 @@ ohos-piai-empty-models.diff
+ ohos-mcp-start-close.diff
+ ohos-jobs-active.diff
+ ohos-piai-text-preabort.diff
++dsmo-materialize-chunked.diff
+-- 
+2.50.1 (Apple Git-155)
+
