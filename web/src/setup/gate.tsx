@@ -6,7 +6,7 @@
 import { joinGroup } from '../community';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { local } from '../bridge/native';
-import { errText, openPage, prefs, setPref, showToast } from '../state/store';
+import { errText, getClient, openPage, prefs, setPref, showToast } from '../state/store';
 import { Switch } from '../ui/common';
 import { MIc } from '../ui/mobile/MIc';
 import type { MIconName } from '../ui/mobile/icons';
@@ -433,7 +433,48 @@ function Access() {
   );
 }
 
+/**
+ * The phone's own copy of the DeepSeek key can go unreadable (some ROMs lose the Keystore key when
+ * the app is cleared from recents), and dsh-Go then asks for it again although the engine still has
+ * it in its credential file — that copy is the one requests use. So before asking, look there: if
+ * the engine has a key, carry on without one on the phone. 'checking' until the engine answered or
+ * [ENGINE_WAIT_MS] passed.
+ */
+const ENGINE_WAIT_MS = 15000;
+export async function engineHasKey(): Promise<boolean> {
+  const c = await getClient().describeCredentials(['DEEPSEEK_API_KEY']);
+  return c.DEEPSEEK_API_KEY?.configured === true;
+}
+function useSavedKey(st: SetupState): 'checking' | 'none' {
+  const ready = st.runtime.setup === 'ready';
+  const [state, setState] = useState<'checking' | 'none'>(ready ? 'checking' : 'none');
+  const since = useRef(Date.now());
+  const busy = useRef(false);
+  const e = engine.value;
+  useEffect(() => {
+    if (state !== 'checking') return;
+    if (!ready || Date.now() - since.current > ENGINE_WAIT_MS) return setState('none');
+    if (!e?.loopback) {
+      if (e?.phase !== 'starting') void local('setup.startEngine').catch(() => {});
+    } else if (e.phase === 'running' && !busy.current) {
+      busy.current = true;
+      void engineHasKey()
+        .then(async (has) => {
+          if (!has) return setState('none');
+          await local('setup.skipKey');
+          showToast('引擎里已经存着 API Key，接着用');
+          await doStep('keyDone');
+        })
+        .catch(() => setState('none'));
+    }
+    const t = setTimeout(() => setState((x) => (x === 'checking' && Date.now() - since.current > ENGINE_WAIT_MS ? 'none' : x)), ENGINE_WAIT_MS + 200);
+    return () => clearTimeout(t);
+  }, [state, ready, e?.loopback, e?.phase]);
+  return state;
+}
+
 function Connect({ st }: { st: SetupState }) {
+  const saved = useSavedKey(st);
   const [mode, setMode] = useState<'choose' | 'key' | 'wait'>('choose');
   const [key, setKey] = useState('');
   const [show, setShow] = useState(false);
@@ -495,6 +536,12 @@ function Connect({ st }: { st: SetupState }) {
         <button class="plg-btn eg-wide" type="button" onClick={() => setMode('choose')}>
           取消
         </button>
+      </Center>
+    );
+  if (saved === 'checking')
+    return (
+      <Center icon="phone" title="正在查找已保存的 Key" sub="看看本机引擎里是不是已经存着">
+        <div class="eg-spin" />
       </Center>
     );
   const signing = isActive(attempt?.phase);

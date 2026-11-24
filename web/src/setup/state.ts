@@ -47,6 +47,8 @@ export interface SetupState {
   usage: { enabled: boolean; available?: boolean };
   connected: boolean;
   hasApiKey: boolean;
+  /** Why the phone's copy is missing: 'ok', 'empty' or 'error:<code>' (App 1.3.3+). */
+  keyRead?: string;
   theme: string;
 }
 

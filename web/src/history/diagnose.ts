@@ -10,6 +10,8 @@ import { errText, getClient, nativeInfo, openOverlay, showToast, toast } from '.
 import { installed } from '../plugins/frontend';
 import { isScopeOff } from '../maidsh/scope';
 import { hasModule } from '../maidsh/api';
+import { inApp, local } from '../bridge/native';
+import type { SetupState } from '../setup/state';
 
 /** 最多读这么多条记录、列这么多轮（够看最近一段，不至于太长）。 */
 const MAX_RECORDS = 600;
@@ -62,6 +64,7 @@ export async function diagnosticText(sessionId: string, title?: string): Promise
     .then((l) => l.find((x) => x.sessionId === sessionId))
     .catch(() => undefined);
   const info = nativeInfo.value;
+  const key = await keyLine();
   return formatDiagnostic(recs, [
     'DSMO 排查信息（只含这一段对话）',
     `生成于 ${when(Date.now())} · 页面 ${info?.webVersion ?? __BUILD__} · App ${info?.appVersion ?? 'web'}`,
@@ -70,8 +73,30 @@ export async function diagnosticText(sessionId: string, title?: string): Promise
     summary
       ? `列表里：最后更新 ${when(summary.updatedAt)}${summary.running ? ' · 正在运行' : ''}${summary.blank ? ' · 空白' : ''}${summary.agentAvailable ? '' : ' · 引擎里没在打开'}`
       : '对话列表里没有这段对话',
+    key,
     ...(cut === 'ok' ? [] : [`读不到记录：${CUT_NOTE[cut] ?? cut}${kind ? `（${kind}）` : ''}`]),
   ]);
+}
+
+/** Where the DeepSeek key is: the phone's encrypted copy (what decides whether first run asks for it)
+ *  and the engine's credential file (what requests use). Never the key itself. */
+async function keyLine(): Promise<string> {
+  const phone = inApp()
+    ? await local<SetupState>('setup.get').then(
+        (s) => (s.hasApiKey ? '有' : s.keyRead === 'empty' ? '没有' : s.keyRead?.startsWith('error:') ? `读取失败（${s.keyRead.slice(6)}）` : '没有'),
+        () => '不清楚',
+      )
+    : '（不在 App 里）';
+  const engine = await getClient()
+    .describeCredentials(['DEEPSEEK_API_KEY'])
+    .then(
+      (c) => {
+        const k = c.DEEPSEEK_API_KEY;
+        return k?.configured ? `已存${k.source ? `（${k.source}）` : ''}` : '没有';
+      },
+      () => '没问到',
+    );
+  return `API Key：手机里 ${phone} · 引擎里 ${engine}`;
 }
 
 /** 记录 → 文字（[head] 是开头几行）。 */

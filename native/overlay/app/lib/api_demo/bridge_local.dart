@@ -42,6 +42,7 @@ import '../state/connection_state.dart' show sshTransportFactoryProvider;
 import '../state/hosts_state.dart';
 import '../state/notify_state.dart';
 import '../state/phone_state.dart';
+import '../secrets/secure_storage.dart';
 import '../state/settings_state.dart';
 import '../state/update_state.dart';
 import '../state/voice_settings.dart';
@@ -444,6 +445,18 @@ class ApiDemoLocal {
     return null;
   }
 
+  /// Reads the saved DeepSeek key only to tell whether it is there or what failed.
+  static Future<String> _keyRead() async {
+    try {
+      final v = await const AppSecureStorage().read(key: 'deepseek_api_key');
+      return v == null || v.isEmpty ? 'empty' : 'ok';
+    } on PlatformException catch (e) {
+      return 'error:${e.code}';
+    } on Object catch (e) {
+      return 'error:${e.runtimeType}';
+    }
+  }
+
   Future<Map<String, Object?>> _setupState() async {
     final spec = apiDemoSetup.value;
     final s = ref.read(localRuntimeProvider);
@@ -490,6 +503,9 @@ class ApiDemoLocal {
       'usage': {'enabled': ref.read(usageStatsProvider).enabled, 'available': UsageBuild.active},
       'connected': settings.hasModelAccess || prefs.keySkipped,
       'hasApiKey': settings.hasApiKey,
+      // Why the phone's copy of the key is missing (diagnostics): 'empty', or the
+      // storage error's code. Never the key itself.
+      'keyRead': settings.hasApiKey ? 'ok' : await _keyRead(),
       'theme': settings.themeMode.name,
     };
   }

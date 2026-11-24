@@ -61,7 +61,8 @@ export class MockEngine {
   private followers = new Set<Follower>();
   private eventsStreams = new Map<FakeSocket, { streamId: string; clientId: string }>();
   private pendingWaterfalls = new Map<string, { sessionId: string; request: Record<string, unknown>; event: string }>();
-  private credentials: Record<string, string> = {};
+  /** e2e: window.__mockSeedCredentials = { REF: 'value' } is in the engine's credential file from the start. */
+  private credentials: Record<string, string> = { ...((globalThis as { __mockSeedCredentials?: Record<string, string> }).__mockSeedCredentials ?? {}) };
   private jobs = new Map<string, { id: string; label: string; status: string; startedAt: number; sessionId: string }>();
   private jobWatchers = new Set<{ sock: FakeSocket; streamId: string; sessionId: string }>();
   private pinned: string[] = [];

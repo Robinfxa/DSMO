@@ -57,7 +57,7 @@ App → 页面   window.__apiDemo.reply(id, ok, value)
 | `engine.recover` | `{action:'retry'|'startNormal'|'leaveSafe'|'enterSafe'|'restoreLkg'|'dismiss', moveAside?}` | 故障卡片和安全模式卡片的按钮，走 dsh-Go 的 EngineControl；确认框在网页里 |
 | `engine.preflight` / `engine.lastKnownGood` / `engine.failureLog` | — | 进安全模式前要移开的全局文件 / 恢复配置会改什么（`text` 是 dsh-Go 的说明） / 失败前后的日志 |
 | `engine.setAutoSafe` / `engine.repairPrompt` | `{value}` / — | 自动进入安全模式开关 / 「帮我修复」放进输入框的话 |
-| `setup.get` | — | `{spec:{step, chooseRuntime, beside, actions}|null, runtime:{setup, phase, progress, etaSeconds, upgrade}, local:{available, detail, warn, suggestRemote}, usage:{enabled, available}, connected, hasApiKey, theme}`；`usage.available` 为 false 时（DSMO 默认，补丁 0009）不发任何统计，欢迎页也不显示开关 |
+| `setup.get` | — | `{spec:{step, chooseRuntime, beside, actions}|null, runtime:{setup, phase, progress, etaSeconds, upgrade}, local:{available, detail, warn, suggestRemote}, usage:{enabled, available}, connected, hasApiKey, keyRead, theme}`；`keyRead` 说明手机里那份 DeepSeek Key 的状态（`ok` / `empty` / `error:<错误码>`，只用于排查，从不带 Key 本身；App 1.3.3 起）；`usage.available` 为 false 时（DSMO 默认，补丁 0009）不发任何统计，欢迎页也不显示开关 |
 | `setup.do` | `{action}` | 调 RootGate 当前步骤的回调（`welcomeDone`、`local`、`appearanceDone`、`accessDone`、`runtimeDone`、`keyDone`、`finished`） |
 | `setup.install` / `setup.startEngine` | — | 开始解压运行环境 / 运行环境就绪后启动引擎（账号登录要用） |
 | `setup.setApiKey` / `setup.skipKey` | `{key}` / — | 首次启动里填 Key（存进 dsh-Go 的安全存储）/ 稍后设置 |

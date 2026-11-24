@@ -87,6 +87,9 @@ export function createMockLocal(userSkills: Map<string, Record<string, string>> 
   if (hash.includes('first-run')) {
     Object.assign(engine, { phase: 'notInstalled', installedVersion: null });
     Object.assign(setup, { step: 'welcome', chooseRuntime: true, connected: false, hasApiKey: false });
+  } else if (hash.includes('lost-key')) {
+    // the phone's copy of the key is unreadable after a cold start; the engine may still have it
+    Object.assign(setup, { step: 'apiKey', connected: false, hasApiKey: false });
   } else if (hash.includes('engine-failed')) {
     Object.assign(engine, { phase: 'error', failure: CRASH, loopback: null });
     logs.push('[dsh] loading plugin dsh-plugin-reviewer@1.4.0', "[dsh] fatal: TypeError: Cannot read properties of undefined (reading 'rows')", '[dsh] exited with code 1');
@@ -176,6 +179,7 @@ export function createMockLocal(userSkills: Map<string, Record<string, string>> 
           usage: { enabled: setup.usage, available: location.hash.includes('usage') },
           connected: setup.connected,
           hasApiKey: setup.hasApiKey,
+          keyRead: setup.hasApiKey ? 'ok' : hash.includes('lost-key') ? 'error:Exception' : 'empty',
           theme: setup.theme,
         };
       }
